@@ -1,0 +1,10 @@
+
+# AI configuration files
+.claude/
+.cursor/
+.spec-workflow/
+.cursorrules
+.cursorindexingignore
+.specstory/
+.qoder/
+.serena/
