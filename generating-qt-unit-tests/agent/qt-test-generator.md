@@ -1,11 +1,12 @@
 ---
-description: Generate Qt unit test framework and test code for CMake projects using Google Test
+description: Generate Qt unit test framework and test code for CMake projects using Google Test with codebase-memory-mcp knowledge graph
 mode: subagent
 tools:
   read: true
   write: true
   edit: true
   bash: true
+  codebase-memory-mcp: true
 permission:
   read: allow
   write: allow
@@ -83,11 +84,39 @@ If fails -> analyze errors -> fix CMakeLists or test code -> retry (max 10 loops
 
 ## Phase 2: Test Generation
 
-### 1. Analyze Classes (LSP)
+### 1. Analyze Classes (MCP Primary)
 
-- `lsp_document_symbols` -> class structure, methods, signals/slots, virtual/overloaded
-- `lsp_goto_definition` -> function implementations
-- `lsp_find_references` -> dependencies
+**Use codebase-memory-mcp tools (primary approach)**:
+
+```python
+# Check project index status
+status = codebase_memory_mcp.index_status(project="project-name")
+if status == "not_found":
+    codebase_memory_mcp.index_repository(
+        repo_path="/abs/path/to/project",
+        mode="moderate"
+    )
+
+# Batch fetch classes and methods
+classes = codebase_memory_mcp.search_graph(
+    project="project-name",
+    label="Class",
+    file_pattern="src/lib/ui/*"
+)
+
+methods = codebase_memory_mcp.search_graph(
+    project="project-name",
+    label="Method",
+    qn_pattern=".*ClassName.*"
+)
+
+# Get function source code (with signature)
+snippet = codebase_memory_mcp.get_code_snippet(
+    qualified_name="project.src.lib.ui.MyClass.method"
+)
+```
+
+**LSP as fallback**: Use `lsp_goto_definition` when precise type inference is needed
 
 **Filter by access level**: Only generate tests for **public** and **protected** methods.
 NEVER generate test cases for **private** methods -- they are inaccessible from test code.
@@ -99,14 +128,30 @@ DMainWindow, or any DTK Widget class. If yes:
 - If class has no testable public/protected methods beyond constructor, generate stub-only
   placeholder tests
 
-### 2. Analyze Source Dependencies
+### 2. Analyze Source Dependencies (Use MCP trace_path)
 
-Before generating CMakeLists, trace `#include` chains for the target header:
-1. Read the target header file
-2. For each `#include "relative/path.h"`, record the source directory
-3. Recurse one level into included headers (e.g., `mainwindow.h` includes `device/scannerdevice.h`)
-4. Collect all required source directories into a deduplicated list
-5. In CMakeLists.txt, glob `*.cpp` from each required source directory
+**Use MCP to trace dependency chains (replaces manual #include recursion)**:
+
+```python
+# Trace outbound call chain from method
+callees = codebase_memory_mcp.trace_path(
+    function_name="MyClass::method",
+    direction="outbound",
+    depth=2
+)
+
+# Collect source directories to compile based on callees
+source_dirs = set()
+for callee in callees:
+    file_path = callee.file_path
+    if file_path.startswith("src/"):
+        source_dirs.add(dirname(file_path))
+```
+
+**Advantages**:
+- Single query replaces multi-level `#include` recursion
+- Automatically covers indirect dependencies
+- Avoids omissions
 
 **Rule**: If module A's source `#include`s headers from module B, the test CMakeLists must
 compile both A's and B's source files. Missing transitive deps cause `undefined reference` errors.
@@ -143,7 +188,7 @@ Analyze existing CMake patterns in project. Merge new `add_subdirectory()` into 
 If test file exists:
 1. Read existing test file
 2. Extract tested functions from `TEST_F` names
-3. LSP extract all functions
+3. Use MCP search_graph to extract all functions
 4. Generate tests only for gap
 5. Append with comment: `// === Auto-generated tests ===`
 
@@ -159,7 +204,7 @@ cd build-autotests && cmake --build . -j$(nproc)
 |---------|-----|
 | `undefined reference to` | Add `target_link_libraries` |
 | `No such file or directory` | Add `target_include_directories` |
-| `stub.set_lamda` fail | Re-read signature via LSP |
+| `stub.set_lamda` fail | Use MCP get_code_snippet to re-read signature |
 | `expected primary-expression` | Check return/param types |
 | `CMake Error` | Fix CMakeLists.txt syntax |
 
