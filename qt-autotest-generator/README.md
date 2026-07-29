@@ -119,7 +119,7 @@ Claude Code、Cursor、opencode 等兼容 AgentSkills 的客户端，具体落�
 为 /home/user/my-qt-app 的 src/lib/core 模块生成单元测试
 ```
 
-技能会自动：项目准备（拉取代码）→ 环境检查 → 搭建框架 → 逐类分析 → 追踪依赖 → 生成测试 → 编译验证 → 覆盖率自检 → 生成报告。
+技能会自动：项目准备（拉取代码）→ 环境检查 → 搭建框架 → 逐类分析 → 追踪依赖 → 生成测试 → 编译验证 → 覆盖率自检 → 生成报告 → 提交测试代码（不 push）。
 
 ---
 
@@ -128,7 +128,7 @@ Claude Code、Cursor、opencode 等兼容 AgentSkills 的客户端，具体落�
 ### Subagent 流程
 
 ```
-[project_preparer] → environment_check → framework_builder → [逐类循环] → report_generator
+[project_preparer] → environment_check → framework_builder → [逐类循环] → report_generator → code_committer
   (用户提供 repo_url 时)                                    ↓
                                               class_analyzer → dependency_tracer → test_writer
                                               → build_verifier → self_checker

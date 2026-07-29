@@ -27,7 +27,9 @@ compatibility:
 7. **不问用户确认** —— 直接执行，不用 `ask` 工具
 8. **逐类闭环** —— 每个类独立走完 分析→追踪→生成→验证→自检；单类失败记录跳过，不阻塞其他类
 9. **不修源码** —— 疑似源码缺陷只标红交还用户，技能只负责测试
-10. **subagent 间不靠内存传状态** —— 一切状态写 `autotests/.ut-session.json`
+10. **不修源码** —— 疑似源码缺陷只标红交还用户，技能只负责测试
+11. **只 commit 不 push** —— 测试验证通过后自动提交测试代码，但不 push 到远端
+12. **subagent 间不靠内存传状态** —— 一切状态写 `autotests/.ut-session.json`
 
 ---
 
@@ -53,7 +55,8 @@ compatibility:
 - 派发时携带：当前 phase、目标项目路径、目标类/模块、`.ut-session.json` 路径。
 - subagent 完成后读 `.ut-session.json` 判断下一步。
 - 单类失败时记录原因、标记跳过、继续下一个类。
-- 全部类完成且覆盖率达标后，派发 `report_generator` 收尾。
+- 全部类完成且覆盖率达标后，派发 `report_generator` 收尾
+- `report_generator` 完成后，派发 `code_committer` 提交测试代码（只 commit，不 push）
 
 ### reconcile（对账）逻辑 —— 每次触发必先执行
 
@@ -93,7 +96,7 @@ compatibility:
 | 增量补全 | 全类完成 + 覆盖有缺口 | `incremental_updater` → `build_verifier` → `self_checker` |
 | 修复失败 | 有 failed 类 | `failure_repairer` → `build_verifier` → `self_checker` |
 | 源码变更对账 | baseline 漂移 | reconcile → 按差异路由 |
-| 全部完成 | 全类完成 + 覆盖达标 | `report_generator`（固定收尾） |
+| 全部完成 | 全类完成 + 覆盖达标 | `report_generator`（固定收尾） → `code_committer` |
 
 ### 逐类循环流程
 
@@ -109,7 +112,7 @@ compatibility:
   self_check 不过 → failure_repairer → 重验
   failure_repairer 耗尽 → 标记 failed + failure_reason → 跳过 → 下一类
 
-全部类 done → 检查覆盖率缺口 → 有缺口则 incremental_updater → 无则 report_generator
+全部类 done → 检查覆盖率缺口 → 有缺口则 incremental_updater → 无则 report_generator → code_committer
 ```
 
 ### 并行处理策略
@@ -152,6 +155,7 @@ compatibility:
 | 编译验证 | `agent/build_verifier.md` | 强制编译+运行、错误分类→修复表、重试预算 |
 | 自检 | `agent/self_checker.md` | 覆盖率/命名/SPDX/stub 正确性；内部执行不入交付 |
 | 报告生成 | `agent/report_generator.md` | 固定收尾出 HTML/CSV 报告（含源码缺陷清单） |
+| 代码提交 | `agent/code_committer.md` | 测试验证通过后提交 autotests/ 到 git（只 commit，不 push） |
 | 增量补全 | `agent/incremental_updater.md` | 图谱差集补缺失用例、CMake 智能合并 |
 | 失败修复 | `agent/failure_repairer.md` | 失败修复 + 根因分类 + 源码缺陷标红 |
 
@@ -244,8 +248,8 @@ subagent 间唯一的状态传递媒介。结构：
 □ 逐类循环：每类走 class_analyzer → dependency_tracer → test_writer → build_verifier → self_checker
 □ 单类失败：已记录 failure_reason + 跳过 + 继续下一类
 □ build_verifier 后读双信号：失败→failure_repairer；覆盖缺口→incremental_updater；全过→下一类或收尾
-□ 全类完成 + 覆盖达标：已派发 report_generator（固定收尾，含源码缺陷清单）
+□ 全类完成 + 覆盖达标：已派发 report_generator → code_committer
 □ 疑似源码缺陷：已在 session 标 failure_reason，报告里标红交还用户，未自行修源码
 □ 源码缺陷通知：report_generator 返回 source_defect_count > 0 时，已向用户输出醒目提示
-□ session 文件每次 subagent 回交后已更新
+□ 测试代码已提交：code_committer 已 commit autotests/ 目录，未 push
 ```

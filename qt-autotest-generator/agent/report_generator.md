@@ -167,8 +167,8 @@ python3 report_generator/main.py \
 ## 回交协议
 
 向路由器返回：
-- `pass` + 报告路径：路由器向用户展示报告路径，流程闭环
-- `fail`：附错误摘要
+- `pass` + 报告路径：报告生成完成，路由器派发 `code_committer` 提交测试代码
+- `fail` + 错误摘要：路由器决定是否重试
 
 ## 硬性限制
 
