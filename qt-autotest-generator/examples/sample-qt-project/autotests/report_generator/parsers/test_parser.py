@@ -18,7 +18,7 @@ from typing import Dict, List
 class TestOutputParser:
     """Parser for test execution output and results"""
     
-    def __init__(self, report_dir: Path, results_dir: Path | None = None):
+    def __init__(self, report_dir: Path, results_dir: Path = None):
         self.report_dir = report_dir
         self.results_dir = results_dir
     
@@ -183,7 +183,7 @@ class TestOutputParser:
                     elif best_run_match is None:  # If no better match found yet, record this one
                         best_run_match = run_match
                         best_failed_match = failed_match
-            if best_run_match and best_failed_match and not re.match(r'^\s*\d+:', content[best_run_match.end():best_failed_match.start()]):
+            if best_run_match and not re.match(r'^\s*\d+:', content[best_run_match.end():best_failed_match.start()]):
                 break  # Found best match, exit
         
         if best_run_match and best_failed_match:
@@ -248,7 +248,7 @@ class TestOutputParser:
         
         return failures
     
-    def parse_gtest_xml_dir(self, results_dir: Path | None = None) -> Dict:
+    def parse_gtest_xml_dir(self, results_dir: Path = None) -> Dict:
         """Parse gtest XML output files in a results directory.
         
         Each file is named test_<classname>.xml and contains a <testsuites>

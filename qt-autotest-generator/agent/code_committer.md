@@ -58,7 +58,19 @@ git status --porcelain
 - `__pycache__/` — Python 缓存
 - 任何源码修改（技能不修源码）
 
-### 2. 精确暂存
+### 2. 校验 git 身份
+
+提交前必须确认 git 已配置 `user.name` 和 `user.email`，否则 commit 会失败：
+
+```bash
+cd "$PROJECT_PATH"
+git config user.name >/dev/null 2>&1 || git config user.name "qt-autotest-generator"
+git config user.email >/dev/null 2>&1 || git config user.email "autotest@uniontech.com"
+```
+
+仅在未配置时写入默认值，不覆盖用户已有配置。若项目级未配置但全局已配置，git 会自动继承全局值，上述命令不会触发。
+
+### 3. 精确暂存
 
 只 `git add` 测试相关文件，不动源码：
 
@@ -86,7 +98,7 @@ git add autotests/README.md 2>/dev/null || true
 git add CMakeLists.txt 2>/dev/null || true
 ```
 
-### 3. 生成提交信息
+### 4. 生成提交信息
 
 从 session 读取统计信息，生成提交信息：
 
@@ -127,7 +139,7 @@ Log: 新增 <project> 单元测试
 Influence: 新增 <done> 个类的单元测试，覆盖率 <tested>/<methods>
 ```
 
-### 4. 执行提交
+### 5. 执行提交
 
 ```bash
 git commit -m "<提交信息>"
@@ -139,7 +151,7 @@ git commit -m "<提交信息>"
 
 如果发现误暂存了源码文件 → 取消暂存（`git restore --staged <file>`），只保留 autotests/ 文件。
 
-### 5. 更新 session
+### 6. 更新 session
 
 ```json
 {

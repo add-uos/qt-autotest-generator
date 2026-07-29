@@ -72,7 +72,7 @@ CMAKE_BUILD_TYPE:STRING=Debug
         assert build_info["build_type"] == "Debug"
 
     def test_generate_report_success(self):
-        with patch.object(self.generator, 'parse_test_output', return_value={"passed": True}):
+        with patch.object(self.generator.test_parser, 'parse_all_results', return_value={"passed": True}):
             with patch.object(self.generator, 'parse_coverage_data', return_value={"success": True}):
                 with patch.object(self.generator, 'collect_build_info', return_value={}):
                     with patch.object(self.generator, 'generate_html_report', return_value="<html></html>"):
@@ -83,6 +83,6 @@ CMAKE_BUILD_TYPE:STRING=Debug
                             assert (self.report_dir / "test_data.json").exists()
 
     def test_generate_report_failure(self):
-        with patch.object(self.generator, 'parse_test_output', side_effect=Exception("test error")):
+        with patch.object(self.generator.test_parser, 'parse_all_results', side_effect=Exception("test error")):
             result = self.generator.generate_report(True, 5, True, 3)
             assert result is False

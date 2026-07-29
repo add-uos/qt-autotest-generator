@@ -26,7 +26,7 @@ from .generators.csv_generator import CsvReportGenerator
 class TestReportGenerator:
     """Main test report generator class"""
     
-    def __init__(self, build_dir: str, report_dir: str, project_root: str, results_dir: str | None = None):
+    def __init__(self, build_dir: str, report_dir: str, project_root: str, results_dir: str = None):
         self.build_dir = Path(build_dir)
         self.report_dir = Path(report_dir)
         self.project_root = Path(project_root)

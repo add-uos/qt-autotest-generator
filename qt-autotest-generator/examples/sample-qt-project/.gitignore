@@ -1,0 +1,7 @@
+# Qt Autotest Generator artifacts
+build-autotests/
+autotests/.results/
+autotests/.reports/
+autotests/.ut-session.json
+autotests/.pytest_cache/
+__pycache__/

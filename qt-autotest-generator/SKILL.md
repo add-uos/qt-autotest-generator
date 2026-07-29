@@ -27,7 +27,7 @@ compatibility:
 7. **不问用户确认** —— 直接执行，不用 `ask` 工具
 8. **逐类闭环** —— 每个类独立走完 分析→追踪→生成→验证→自检；单类失败记录跳过，不阻塞其他类
 9. **不修源码** —— 疑似源码缺陷只标红交还用户，技能只负责测试
-10. **不修源码** —— 疑似源码缺陷只标红交还用户，技能只负责测试
+10. **只 APPEND 不改已有** —— 修改根 CMakeLists.txt 和测试 CMake 时只追加新行，不注释/删除/修改已有代码
 11. **只 commit 不 push** —— 测试验证通过后自动提交测试代码，但不 push 到远端
 12. **subagent 间不靠内存传状态** —— 一切状态写 `autotests/.ut-session.json`
 
@@ -121,11 +121,11 @@ compatibility:
 
 - **并行粒度**：每个类独立走完 class_analyzer → dependency_tracer → test_writer → build_verifier → self_checker 全链
 - **并行上限**：同时处理不超过 `min(类数, 4)` 个类（避免编译资源争抢）
-- **状态隔离**：每个并行类独立读写 session 中自己的记录，不交叉
+- **状态隔离（分片 session）**：每个并行类写入独立的 `autotests/.ut-session.<classname>.json` 分片文件，**不并发写主 session**；全部并行类完成后，路由器按固定顺序将各分片合并回 `autotests/.ut-session.json`，再删除分片文件
 - **CMake 合并**：test_writer 的 CMake 智能合并是 append-only，多类并行追加不冲突
 - **编译隔离**：build_verifier 按类编译 `--target test_<classname>`，互不影响
 - **失败不阻塞**：单类失败标记后继续，不影响并行中的其他类
-- **收尾同步**：所有并行类完成后，路由器统一检查覆盖率缺口再决定收尾
+- **收尾同步**：所有并行类完成后，路由器统一合并分片、检查覆盖率缺口再决定收尾
 
 ### 迭代双信号触发
 

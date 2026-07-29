@@ -1,23 +1,3 @@
-#!/bin/bash
-# SPDX-FileCopyrightText: 2026 UnionTech Software Technology Co., Ltd.
-# SPDX-License-Identifier: GPL-3.0-or-later
-
-################################################################################
-# 生成 CMake 测试工具脚本
-################################################################################
-
-set -e
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AUTOTEST_ROOT="${AUTOTEST_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)/autotests}"
-
-GREEN='\033[0;32m'
-NC='\033[0m'
-
-generate_cmake_test_utils() {
-    mkdir -p "${AUTOTEST_ROOT}/cmake"
-
-    cat > "${AUTOTEST_ROOT}/cmake/UnitTestUtils.cmake" << 'CMAKEEOF'
 # UnitTestUtils.cmake - Universal C++ Unit Test CMake Utilities
 # Version: 5.0.0
 
@@ -170,9 +150,3 @@ function(ut_create_test_executable test_name)
 endfunction()
 
 message(STATUS "UT: Unit test utilities loaded")
-CMAKEEOF
-
-    echo -e "${GREEN}[✓]${NC} 生成 cmake/UnitTestUtils.cmake"
-}
-
-generate_cmake_test_utils

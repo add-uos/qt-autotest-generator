@@ -127,6 +127,7 @@ read("${SKILL_DIR}/resources/templates/cmake-submodule.txt")
 - `{ClassName}` → 类名
 - `{QT_VERSION}` → session 中的 qt_version
 - `{PROJECT_LIBRARIES}` → 从根 CMakeLists.txt 检测到的项目目标库（如 `dde-file-manager`）；无则留空
+- `{QT_EXTRA_LIBS}` → GUI 类填 `Qt${QT_VERSION}::Widgets`（及其他 GUI 模块）；纯 Core 模块填空字符串
 - `{source_module_path}` → dependency_tracer 的 source_dirs（glob `*.cpp`）
 
 ### 6. 智能合并 CMake

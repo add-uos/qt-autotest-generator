@@ -6,6 +6,9 @@ set(QT_VERSION "{QT_VERSION}")  # 5 或 6
 # 项目库名称（由 test_writer 从 dependency_tracer 的 source_dirs 推断填入）
 set(PROJECT_LIBRARIES "{PROJECT_LIBRARIES}")
 
+# {QT_EXTRA_LIBS} 由 test_writer 填入：GUI 类填 "Qt${QT_VERSION}::Widgets"，
+# 纯 Core 模块填空字符串。避免无条件链接 Widgets 导致 Core-only 项目编译失败。
+
 # 收集所有测试文件
 file(GLOB TEST_SOURCES "test_*.cpp")
 
@@ -26,7 +29,7 @@ target_link_libraries(test_{module_name}
     GTest::gtest
     GTest::gtest_main
     Qt${QT_VERSION}::Core
-    Qt${QT_VERSION}::Widgets
+    {QT_EXTRA_LIBS}
 )
 
 # 如果项目有自定义库，添加
@@ -45,6 +48,6 @@ target_include_directories(test_{module_name}
 )
 
 # 自动发现测试
-gtest_discover_tests(test_{module_name})
+gtest_discover_tests(test_{module_name} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 message(STATUS "UT: test_{module_name} configured with ${TEST_SOURCES}")

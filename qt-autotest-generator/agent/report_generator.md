@@ -26,21 +26,25 @@ permission:
 
 - `project_path`
 - `autotests/.ut-session.json`（完整状态）
-- `autotests/.results/test_*.xml`：各类的 gtest XML 输出
+- `autotests/.results/test_*.xml`：各类的 gtest XML 输出（由 build_verifier 产出）
+- `autotests/.reports/test_output.log`：ctest 合并输出（由 run-ut.sh 产出，若存在则优先解析）
 
 ## 工作步骤
 
 ### 1. 调用报告生成器
 
+报告生成器入口是 `report_generator/main.py`，已内置 `__main__` CLI 块，可直接调用。它会自动从 `.results/test_*.xml`（gtest XML）和 `.reports/test_output.log`（ctest 输出）两个来源合并解析测试结果：
+
 ```bash
 cd ${PROJECT_PATH}/autotests
-python3 report_generator/main.py \
+python3 -m report_generator.main \
   --build-dir ${PROJECT_PATH}/build-autotests \
   --report-dir ${PROJECT_PATH}/autotests/.reports \
-  --project-root ${PROJECT_PATH}
+  --project-root ${PROJECT_PATH} \
+  --results-dir ${PROJECT_PATH}/autotests/.results
 ```
 
-报告生成器（`resources/report_generator/`）会解析 gtest XML 和覆盖率数据，生成 HTML 和 CSV。
+若 `run-ut.sh` 已跑过（产出了 `test_output.log`），报告生成器优先用 ctest 合并输出；否则回退到逐类 gtest XML 解析。覆盖率数据从 `build-autotests/coverage/filtered.info` 自动检测。
 
 ### 2. 补充 session 维度的报告数据
 

@@ -12,3 +12,9 @@ add_library(sample-qt-project STATIC
 
 target_include_directories(sample-qt-project PUBLIC src)
 target_link_libraries(sample-qt-project PUBLIC Qt5::Core)
+
+option(BUILD_TESTS "Build unit tests" ON)
+if(BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(autotests)
+endif()

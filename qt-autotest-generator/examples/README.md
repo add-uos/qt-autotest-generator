@@ -9,12 +9,13 @@ sample-qt-project/
 ├── src/
 │   ├── CMakeLists.txt
 │   └── calculator.h          # 示例 Qt 类（仅头文件，内联实现）
-├── CMakeLists.txt             # 项目根 CMake
+├── CMakeLists.txt             # 项目根 CMake（含 BUILD_TESTS 开关）
 └── autotests/                 # 技能生成的测试框架
     ├── 3rdparty/stub/         # stub-ext（从 resources/stub/ 复制）
     ├── cmake/UnitTestUtils.cmake
     ├── run-ut.sh
     ├── report_generator/
+    ├── CMakeLists.txt          # 测试根 CMake
     ├── .ut-session.json       # session 状态文件示例
     ├── .results/              # gtest XML 输出
     ├── .reports/              # HTML/CSV 报告
@@ -26,5 +27,12 @@ sample-qt-project/
 ## 使用
 
 1. 将 `sample-qt-project/` 复制到独立目录
-2. 在 Agent 中触发：「为 sample-qt-project 生成单元测试」
-3. 技能会自动搭建 `autotests/` 并逐类生成测试
+2. 构建并运行测试：
+   ```bash
+   cd sample-qt-project
+   mkdir build && cd build
+   cmake .. -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
+   cmake --build . -j$(nproc)
+   ctest --output-on-failure
+   ```
+3. 或在 Agent 中触发：「为 sample-qt-project 生成单元测试」

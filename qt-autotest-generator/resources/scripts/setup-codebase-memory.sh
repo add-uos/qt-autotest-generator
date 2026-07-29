@@ -216,11 +216,10 @@ step_detect_or_install() {
 
 # 实际安装逻辑
 install_cbm() {
-    # 优先：源码编译（如果指定了 --source 或检测到本地源码仓库）
-    local local_source="${CBM_SOURCE_DIR:-/home/zhy/source/codebase-memory-mcp}"
-    if [ -d "$local_source" ] && [ -f "$local_source/scripts/build.sh" ]; then
-        log_info "检测到本地源码仓库: $local_source"
-        install_from_source "$local_source"
+    # 优先：源码编译（仅当 --source 显式指定时）
+    if [ -n "$CBM_SOURCE_DIR" ] && [ -d "$CBM_SOURCE_DIR" ] && [ -f "$CBM_SOURCE_DIR/scripts/build.sh" ]; then
+        log_info "检测到本地源码仓库: $CBM_SOURCE_DIR"
+        install_from_source "$CBM_SOURCE_DIR"
         return $?
     fi
 

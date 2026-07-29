@@ -5,16 +5,11 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 include(UnitTestUtils)
 
-enable_testing()
-
-# Google Test
 find_package(GTest REQUIRED)
 include(GoogleTest)
 
-# Third-party packages (detected from project)
-# {THIRD_PARTY_PACKAGES}
+find_package(Qt5 COMPONENTS Core REQUIRED)
 
-# Test subdirectories
-# {ADD_SUBDIRECTORIES}
+add_subdirectory(core)
 
 message(STATUS "UT: Unit tests configuration complete")

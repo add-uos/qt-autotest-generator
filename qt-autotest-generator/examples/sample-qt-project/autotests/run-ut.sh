@@ -1,32 +1,4 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: 2026 UnionTech Software Technology Co., Ltd.
-# SPDX-License-Identifier: GPL-3.0-or-later
-
-################################################################################
-# 生成测试运行脚本
-################################################################################
-
-set -e
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AUTOTEST_ROOT="${AUTOTEST_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)/autotests}"
-
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
-print_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
-
-print_step() {
-    echo -e "${BLUE}[STEP]${NC} $1"
-}
-
-generate_test_runner_script() {
-    cat > "${AUTOTEST_ROOT}/run-ut.sh" << 'EOF'
-#!/bin/bash
 
 ################################################################################
 # Unit Test Runner Script
@@ -372,15 +344,3 @@ echo "========================================"
 if [ "$TEST_PASSED" != true ]; then
     exit 1
 fi
-EOF
-
-    chmod +x "${AUTOTEST_ROOT}/run-ut.sh"
-    print_success "Generated autotests/run-ut.sh"
-    
-    # Copy report_generator to autotests/
-    print_step 4 "Copying report generator module..."
-    cp -r "${SCRIPT_DIR}/../report_generator" "${AUTOTEST_ROOT}/"
-    print_success "Report generator module copied"
-}
-
-generate_test_runner_script
