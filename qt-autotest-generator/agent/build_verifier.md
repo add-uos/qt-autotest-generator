@@ -66,8 +66,10 @@ cmake --build . -j$(nproc) --target test_<classname> 2>&1
 
 ```bash
 cd ${PROJECT_PATH}/build-autotests
-./autotests/<module>/test_<classname> --gtest_output=xml:${PROJECT_PATH}/autotests/.results/test_<classname>.xml 2>&1
+timeout 120 ./autotests/<module>/test_<classname> --gtest_output=xml:${PROJECT_PATH}/autotests/.results/test_<classname>.xml 2>&1
 ```
+
+**超时保护**：用 `timeout 120` 限制单类测试执行不超过 2 分钟。超时 → 判定为 `runtime_crash`（可能死循环或 stub 缺失导致真实 IO），记录 `timeout` 标记。
 
 捕获运行输出和退出码。
 

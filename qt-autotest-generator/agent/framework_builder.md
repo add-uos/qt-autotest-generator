@@ -109,7 +109,21 @@ endif()
 
 简洁使用指南（<300 字）：目录结构、构建/运行命令、GTest 依赖说明。
 
-### 9. 验证框架编译
+### 9. 更新项目 .gitignore
+
+在项目根 `.gitignore` 中追加（若不存在则创建）：
+
+```
+# Qt Autotest Generator artifacts
+build-autotests/
+autotests/.results/
+autotests/.reports/
+autotests/.ut-session.json
+```
+
+**绝不**忽略 `autotests/` 本身（测试代码应纳入版本控制），只忽略构建产物和临时状态文件。
+
+### 10. 验证框架编译
 
 ```bash
 mkdir -p ${PROJECT_PATH}/build-autotests
@@ -120,7 +134,7 @@ cmake --build . -j$(nproc)
 
 若失败 → 分析错误 → 修 CMakeLists → 重试（max 10 loops）。
 
-### 10. 更新 session
+### 11. 更新 session
 
 ```json
 {

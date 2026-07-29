@@ -27,6 +27,27 @@ permission:
 
 ## 工作步骤
 
+### 0. 验证项目类型
+
+确认目标项目根目录存在 `CMakeLists.txt`：
+
+```bash
+if [ ! -f "${project_path}/CMakeLists.txt" ]; then
+    # 硬终止：非 CMake 项目
+    # 检查是否有 .pro 文件（qmake）或 meson.build（meson）
+    if [ -f "${project_path}"/*.pro ]; then
+        echo "ERROR: qmake 项目不支持，请先迁移到 CMake"
+    elif [ -f "${project_path}/meson.build" ]; then
+        echo "ERROR: meson 项目不支持，请先迁移到 CMake"
+    else
+        echo "ERROR: 未找到 CMakeLists.txt，无法确定构建系统"
+    fi
+    exit 1
+fi
+```
+
+**硬终止**：非 CMake 项目不继续，不尝试适配。
+
 ### 1. 安装与配置 codebase-memory-mcp
 
 运行安装脚本（幂等，已安装则跳过）：

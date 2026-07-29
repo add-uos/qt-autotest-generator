@@ -1,0 +1,44 @@
+{
+  "project_path": "/home/user/sample-qt-project",
+  "project_name_in_graph": "home-user-sample-qt-project",
+  "baseline_commit": "a1b2c3d",
+  "qt_version": 5,
+  "classes": [
+    {
+      "name": "Calculator",
+      "qualified_name": "sample-qt-project.src.Calculator",
+      "file_path": "src/calculator.h",
+      "status": "done",
+      "methods_total": 9,
+      "methods_tested": 9,
+      "test_file": "autotests/core/test_calculator.cpp",
+      "build_result": "pass",
+      "run_result": "pass",
+      "failure_reason": null,
+      "skip_reason": null,
+      "is_gui": false,
+      "test_plan": [
+        {"name": "add", "access": "public", "complexity": 1, "planned_cases": 3},
+        {"name": "subtract", "access": "public", "complexity": 1, "planned_cases": 1},
+        {"name": "multiply", "access": "public", "complexity": 1, "planned_cases": 1},
+        {"name": "divide", "access": "public", "complexity": 3, "planned_cases": 2},
+        {"name": "isEmpty", "access": "public", "complexity": 1, "planned_cases": 1},
+        {"name": "pushValue", "access": "public", "complexity": 1, "planned_cases": 1},
+        {"name": "sum", "access": "public", "complexity": 4, "planned_cases": 2},
+        {"name": "clear", "access": "public", "complexity": 1, "planned_cases": 1},
+        {"name": "findMax", "access": "public", "complexity": 5, "planned_cases": 3}
+      ],
+      "stub_list": [],
+      "source_dirs": ["src"],
+      "self_check": {
+        "coverage": "pass",
+        "naming": "pass",
+        "spdx": "pass",
+        "stub": "pass"
+      }
+    }
+  ],
+  "last_phase": "report_generation",
+  "overall_status": "complete",
+  "report_path": "autotests/.reports/report.html"
+}

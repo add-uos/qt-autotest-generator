@@ -342,15 +342,15 @@ MCP 图谱覆盖 95% 的场景，但以下情况仍需 LSP：
 | 场景 | 为什么 MCP 不够 | 用什么 LSP 工具 |
 |------|---------------|---------------|
 | **精确类型推断** | 图谱存的是 AST 级别的签名，模板/宏展开需要语义分析 | `lsp_hover` / `lsp_goto_definition` |
-| **重载函数区分** | 同名方法图谱合并为一个节点，参数列表需精确签名 | `lsp_document_symbols` |
+| **重载函数区分** | 同名方法图谱合并为一个节点，参数列表需精确签名 | `lsp_symbols`(scope=document) |
 | **宏展开后的真实签名** | 图谱看的是源码字面量，宏展开后的签名看不到 | `lsp_goto_definition` |
-| **private/protected 区分** | 部分语言的图谱对访问修饰符支持不全 | `lsp_document_symbols` |
+| **private/protected 区分** | 部分语言的图谱对访问修饰符支持不全 | `lsp_symbols`(scope=document) |
 
 **判断流程**：
 
 ```
 1. 先用 MCP 获取结构（快，全局视角）
-2. 如果生成的测试代码涉及重载/模板/宏 → 用 LSP 补充精确签名
+2. 如果生成的测试代码涉及重载/模板/宏 → 用 `lsp_symbols`(scope=document) 或 `lsp_goto_definition` 补充精确签名
 3. 编译失败且错误指向签名不匹配 → 用 LSP 重新读签名
 ```
 

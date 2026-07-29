@@ -1,10 +1,15 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2025 UnionTech Software Technology Co., Ltd.
+# SPDX-License-Identifier: GPL-3.0-or-later
 
 ################################################################################
 # 生成测试运行脚本
 ################################################################################
 
 set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+AUTOTEST_ROOT="${AUTOTEST_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)/autotests}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'

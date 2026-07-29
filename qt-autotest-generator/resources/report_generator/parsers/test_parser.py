@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """
-Test output parser for DDE File Manager test reports
+Test output parser for Qt autotest reports
 """
 
 import re

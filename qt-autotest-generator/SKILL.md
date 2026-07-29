@@ -65,12 +65,17 @@ compatibility:
    c. 不同 → 源码已变更：
       - index_status(project) 若 "indexing" → 等待到 "ready"
       - 长时间不 ready → index_repository(mode="fast") 推一下
+      - 索引 ready 后验证新鲜度：query_graph 查一个已知类，
+        若返回的 file_path 对应的 git log 与当前 HEAD 一致则索引已同步；
+        若不一致 → index_repository(mode="fast") 强制刷新，等待 ready
       - 派发 class_analyzer(mode="diff") → 与 session 记录做方法级 diff
       - 新增方法 → incremental_updater
       - 签名/体变更 → test_writer（重新生成该类）→ build_verifier → self_checker
       - 方法删除 → failure_repairer（清理引用已删方法的测试）
       - 更新 session.baseline_commit
    d. 相同 → 看 session 状态决定下一步
+   e. 分支切换检测：git branch --show-current 与 session 记录的分支比较，
+      若不同 → 强制 index_repository(mode="fast") 刷新索引后重新对账
 ```
 
 ### 意图识别与路由表
@@ -100,6 +105,18 @@ compatibility:
 
 全部类 done → 检查覆盖率缺口 → 有缺口则 incremental_updater → 无则 report_generator
 ```
+
+### 并行处理策略
+
+当目标类数量 >= 5 时，路由器可并行派发多个类的处理链：
+
+- **并行粒度**：每个类独立走完 class_analyzer → dependency_tracer → test_writer → build_verifier → self_checker 全链
+- **并行上限**：同时处理不超过 `min(类数, 4)` 个类（避免编译资源争抢）
+- **状态隔离**：每个并行类独立读写 session 中自己的记录，不交叉
+- **CMake 合并**：test_writer 的 CMake 智能合并是 append-only，多类并行追加不冲突
+- **编译隔离**：build_verifier 按类编译 `--target test_<classname>`，互不影响
+- **失败不阻塞**：单类失败标记后继续，不影响并行中的其他类
+- **收尾同步**：所有并行类完成后，路由器统一检查覆盖率缺口再决定收尾
 
 ### 迭代双信号触发
 
@@ -182,7 +199,7 @@ subagent 间唯一的状态传递媒介。结构：
 | 测试类名 | `MyClassTest` |
 | 用例命名 | `{Feature}_{Scenario}_{ExpectedResult}` |
 | MCP 工具（主） | `search_graph`, `get_code_snippet`, `trace_path`, `query_graph`, `index_status`, `index_repository` |
-| LSP 工具（补充） | `lsp_document_symbols`, `lsp_goto_definition`（仅精确签名） |
+| LSP 工具（补充） | `lsp_symbols`(scope=document), `lsp_goto_definition`（仅精确签名） |
 | Stub 模板 | `resources/templates/stub-patterns.cpp` |
 | CMake 模板 | `resources/templates/cmake-*.txt` |
 | 编译重试 | per-error 3 次，max 10 loops |
@@ -215,5 +232,6 @@ subagent 间唯一的状态传递媒介。结构：
 □ build_verifier 后读双信号：失败→failure_repairer；覆盖缺口→incremental_updater；全过→下一类或收尾
 □ 全类完成 + 覆盖达标：已派发 report_generator（固定收尾，含源码缺陷清单）
 □ 疑似源码缺陷：已在 session 标 failure_reason，报告里标红交还用户，未自行修源码
+□ 源码缺陷通知：report_generator 返回 source_defect_count > 0 时，已向用户输出醒目提示
 □ session 文件每次 subagent 回交后已更新
 ```

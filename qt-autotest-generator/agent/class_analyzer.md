@@ -69,7 +69,7 @@ for cls in classes:
 **访问级别过滤**：
 - 只保留 **public** 和 **protected** 方法
 - **绝不**为 private 方法生成测试（不可访问）
-- 用 LSP `lsp_document_symbols` 补充确认访问级别（图谱对部分语言支持不全）
+- 用 LSP `lsp_symbols`(scope=document) 补充确认访问级别（图谱对部分语言支持不全）
 
 ### 4. GUI 继承识别
 
@@ -143,6 +143,19 @@ removed_methods = recorded_methods - current_methods       # 删除
   ]
 }
 ```
+
+### 8. 边界类处理
+
+以下特殊类需标记 `special_handling` 字段，供后续 subagent 参考：
+
+| 类特征 | 标记值 | 处理建议 |
+|--------|--------|---------|
+| 模板类（`template<typename T> class`） | `template` | test_writer 需指定具体类型实例化 |
+| Q_OBJECT 宏类 | `q_object` | dependency_tracer 需确认 MOC 处理 |
+| 匿名命名空间类 | `anonymous_ns` | 内部类，按需测试 |
+| 私有构造函数（单例/工厂） | `private_ctor` | test_writer 用 friend 或工厂创建实例 |
+| 纯虚抽象类 | `abstract` | test_writer 创建最小具体子类 |
+| PIMPL 模式 | `pimpl` | dependency_tracer 需追踪 Private 类 |
 
 ## 输出
 

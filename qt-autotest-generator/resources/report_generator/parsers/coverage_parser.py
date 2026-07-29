@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """
-Coverage data parser for DDE File Manager test reports
+Coverage data parser for Qt autotest reports
 """
 
 import os

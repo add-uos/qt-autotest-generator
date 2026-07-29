@@ -65,6 +65,9 @@ read("${SKILL_DIR}/resources/templates/cmake-submodule.txt")
 - `{header_file}` → 目标类头文件路径（相对项目根）
 - `{ClassName}` → 类名
 - `{Namespace}` / `{NamespaceEnd}` → 命名空间开闭（若有）
+- `{SetUpTestSuite}` / `{TearDownTestSuite}` → GUI 类填 QCoreApplication 初始化；非 GUI 类删除 SetUpTestSuite/TearDownTestSuite 整个函数
+- `{SetUpObject}` → 非 GUI 类填 `obj = new {ClassName}()`；GUI 类填空或 helper 构造
+- `{TearDownObject}` → 非 GUI 类填 `delete obj`；GUI 类填空
 - `{SetUpStubs}` → dependency_tracer 产出的 stub 初始化代码
 - `{TestCases}` → 生成的测试用例
 
@@ -97,6 +100,19 @@ read("${SKILL_DIR}/resources/templates/cmake-submodule.txt")
 - 创建最小具体子类用于测试
 - 用 `using BaseClass::protectedMethod;` 在测试子类中暴露 protected 方法
 
+**单例/工厂模式处理**（`special_handling=private_ctor`）：
+- 单例：通过 `Instance()` 获取实例，不直接 `new`；测试后需重置单例状态
+- 工厂：通过工厂方法创建实例，不绕过工厂直接构造
+- 若构造函数是 private/protected 且无工厂方法 → 标记 `needs_manual`，回交路由器
+
+**PIMPL 模式处理**（`special_handling=pimpl`）：
+- 只测 public 接口，不直接访问 Private 类
+- 若 Private 类有独立可测逻辑 → 单独为 Private 类生成测试
+
+**模板类处理**（`special_handling=template`）：
+- 为模板类指定具体类型参数（如 `MyTemplate<int>`、`MyTemplate<QString>`）
+- 优先用项目中已有的实例化类型
+
 **stub 选择**（来自 dependency_tracer 的 stub_list）：
 - 继承 QWidget → stub `show`、`hide`、`height`、`width`
 - 继承 QDialog → stub `exec`
@@ -109,9 +125,9 @@ read("${SKILL_DIR}/resources/templates/cmake-submodule.txt")
 读 `resources/templates/cmake-submodule.txt`，替换：
 - `{module_name}` → 模块名
 - `{ClassName}` → 类名
-- `{header_file}` → 头文件
 - `{QT_VERSION}` → session 中的 qt_version
-- 源码目录 → dependency_tracer 的 source_dirs（glob `*.cpp`）
+- `{PROJECT_LIBRARIES}` → 从根 CMakeLists.txt 检测到的项目目标库（如 `dde-file-manager`）；无则留空
+- `{source_module_path}` → dependency_tracer 的 source_dirs（glob `*.cpp`）
 
 ### 6. 智能合并 CMake
 

@@ -1,0 +1,17 @@
+# Qt Autotest Generator - Python Dependencies
+#
+# report_generator 仅使用 Python 标准库，无需第三方包。
+# 此文件保留用于声明系统级依赖和可选依赖。
+
+# === 系统级依赖（非 pip 安装） ===
+# - Python 3.8+
+# - CMake >= 3.16
+# - Qt5 或 Qt6 (含 Core, Widgets, Test 模块)
+# - Google Test (libgtest-dev 或源码编译)
+# - codebase-memory-mcp >= 0.8.0 (由 setup-codebase-memory.sh 自动安装)
+# - git
+# - gcc/g++ (支持 C++17)
+#
+# === 可选系统依赖 ===
+# - lcov + genhtml: 代码覆盖率报告 (run-ut.sh Step 5)
+# - ccache: 加速重复编译

@@ -19,12 +19,11 @@ import sys
 import os
 from pathlib import Path
 
-# Add report_generator to Python path
 script_dir = Path(__file__).parent
-report_generator_dir = script_dir.parent / "report_generator"
-sys.path.insert(0, str(report_generator_dir))
+resources_dir = script_dir.parent
+sys.path.insert(0, str(resources_dir))
 
-from main import TestReportGenerator
+from report_generator.main import TestReportGenerator
 
 
 def main():

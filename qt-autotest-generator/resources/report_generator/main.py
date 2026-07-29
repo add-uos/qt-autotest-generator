@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """
-Main test report generator for DDE File Manager
+Main test report generator for Qt autotest framework
 """
 
 import json

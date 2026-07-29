@@ -77,6 +77,46 @@ python3 report_generator/main.py \
 - `source_defect_logic` → "源码逻辑缺陷"
 - `needs_manual` → "需人工排查"
 
+### 3.1 源码缺陷通知
+
+若 `source_defects` 非空，在报告生成后向路由器返回通知信号：
+
+```json
+{
+  "source_defect_count": 3,
+  "notification": "发现 3 个疑似源码缺陷，已在报告中标红，请用户查看 report.html 第 3 节"
+}
+```
+
+路由器收到后向用户输出醒目提示，不静默跳过。
+
+### 4. 流程复盘数据（可选）
+
+从 session 聚合流程维度统计，追加到报告或单独生成 `autotests/.reports/process-summary.json`：
+
+```json
+{
+  "total_classes": 20,
+  "passed": 15,
+  "failed": 3,
+  "skipped": 2,
+  "failure_pattern": {
+    "compile_error": 1,
+    "source_defect_runtime": 2,
+    "source_defect_logic": 1,
+    "needs_manual": 1
+  },
+  "module_hotspots": [
+    {"module": "src/lib/ui", "failure_rate": 0.4, "count": 5},
+    {"module": "src/lib/core", "failure_rate": 0.0, "count": 8}
+  ],
+  "avg_repair_attempts": 2.3,
+  "classes_needing_manual": ["MyClass", "DataLoader", "ConfigParser"]
+}
+```
+
+用于识别：失败是否聚集在某模块、哪些类反复失败、测试策略是否需要调整。
+
 ### 4. 生成最终报告
 
 报告结构（HTML）：
