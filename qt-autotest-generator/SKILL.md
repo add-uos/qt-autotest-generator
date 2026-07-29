@@ -33,6 +33,7 @@ compatibility:
 
 ## 触发条件
 
+- **拉取项目生成单测**："拉取 https://github.com/foo/bar 的 dev 分支生成单测"、"clone 项目建测试" → 用户提供仓库地址 + 分支名，先派发 `project_preparer`
 - 首次为 Qt CMake 项目搭建单测框架："建单测"、"生成测试框架"、"add tests"
 - 批量为模块/类生成用例："为 src/lib/ui 生成测试"、"批量生成单测"
 - 增量补全缺失用例："补全测试"、"补全 MyClass 的测试"、"complete test coverage"
@@ -58,7 +59,10 @@ compatibility:
 
 ```
 1. 读 autotests/.ut-session.json（不存在 → 首次运行）
-2. 首次运行 → 派发 environment_check → framework_builder
+2. 首次运行：
+   a. 用户提供了 repo_url + branch → 派发 project_preparer（拉取代码+搭建环境）
+      project_preparer 完成后 → 派发 environment_check → framework_builder
+   b. 用户提供了本地 project_path → 派发 environment_check → framework_builder
 3. 有 session：
    a. git rev-parse HEAD → 当前 commit
    b. 与 session.baseline_commit 比较
@@ -82,6 +86,8 @@ compatibility:
 
 | 用户意图 | session 状态 | 路由到 |
 |---------|-------------|--------|
+| 用户提供 repo_url + branch 拉取项目 | 无 session | `project_preparer` → `environment_check` → `framework_builder` |
+| 用户提供本地 project_path | 无 session | `environment_check` → `framework_builder` |
 | 首次搭建 | 无 session | `environment_check` → `framework_builder` |
 | 批量生成 | 框架就绪 + 有未完成类 | `class_analyzer` → `dependency_tracer` → `test_writer` → `build_verifier` → `self_checker`（逐类循环） |
 | 增量补全 | 全类完成 + 覆盖有缺口 | `incremental_updater` → `build_verifier` → `self_checker` |
@@ -137,6 +143,7 @@ compatibility:
 
 | Subagent | 文件 | 职责 |
 |----------|------|------|
+| 项目准备 | `agent/project_preparer.md` | 拉取代码、校验基线、安装依赖、验证构建环境；用户提供 repo_url 时第一道前置 |
 | 环境门禁 | `agent/environment_check.md` | codebase-memory-mcp 安装+索引；失败硬终止 |
 | 框架搭建 | `agent/framework_builder.md` | autotests/ 脚手架、CMake、stub、runner、report_generator |
 | 类分析 | `agent/class_analyzer.md` | MCP 拉类+方法、GUI 识别、按复杂度规划用例数 |
@@ -158,7 +165,13 @@ subagent 间唯一的状态传递媒介。结构：
 {
   "project_path": "/abs/path/to/project",
   "project_name_in_graph": "home-user-project-name",
+  "repo_url": "https://github.com/foo/bar.git",
+  "branch": "dev",
   "baseline_commit": "abc1234",
+  "baseline_date": "2025-07-29",
+  "baseline_title": "feat: add new feature",
+  "pull_method": "git_clone",
+  "build_env": "verified",
   "qt_version": 5,
   "classes": [
     {
@@ -225,7 +238,8 @@ subagent 间唯一的状态传递媒介。结构：
 
 ```
 □ 已执行 reconcile：读 .ut-session.json，比对 git HEAD，判断源码是否变更
-□ 首次运行：已派发 environment_check（硬门禁）→ framework_builder
+□ 首次运行且用户提供了 repo_url：已派发 project_preparer（拉取代码+搭建环境）
+□ 首次运行且用户提供本地路径：已派发 environment_check → framework_builder
 □ codebase-memory 索引 ready 后才派发后续 subagent
 □ 逐类循环：每类走 class_analyzer → dependency_tracer → test_writer → build_verifier → self_checker
 □ 单类失败：已记录 failure_reason + 跳过 + 继续下一类

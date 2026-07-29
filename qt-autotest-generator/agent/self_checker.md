@@ -61,7 +61,7 @@ coverage_gap = all_method_names - tested_names
 
 测试文件首行必须有：
 ```cpp
-// SPDX-FileCopyrightText: 2025 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: 2026 UnionTech Software Technology Co., Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later
 ```
 

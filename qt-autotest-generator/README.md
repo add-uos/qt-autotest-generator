@@ -100,19 +100,26 @@ Claude Code、Cursor、opencode 等兼容 AgentSkills 的客户端，具体落�
 
 | 说法 | 触发模式 |
 |------|---------|
+| 拉取 https://github.com/foo/bar 的 dev 分支生成单测、clone 项目建测试 | 拉取项目（用户提供 repo_url + branch） |
 | 建单测、生成测试框架、add tests | 首次搭建 |
 | 为 src/lib/ui 生成测试、批量生成单测 | 批量生成 |
 | 补全测试、补全 MyClass 的测试 | 增量补全 |
 | 测试编译失败、修测试、fix test failures | 修复失败 |
 | 代码改了重新检查、重新对账、sync tests | 源码变更对账 |
 
-建议说明 **项目路径** 或 **模块/类名**。例如：
+建议说明 **项目路径** 或 **仓库地址 + 分支名**。例如：
+
+```
+拉取 https://github.com/deepin/terminal 的 dev 分支生成单测
+```
+
+或本地路径：
 
 ```
 为 /home/user/my-qt-app 的 src/lib/core 模块生成单元测试
 ```
 
-技能会自动：环境检查 → 搭建框架 → 逐类分析 → 追踪依赖 → 生成测试 → 编译验证 → 覆盖率自检 → 生成报告。
+技能会自动：项目准备（拉取代码）→ 环境检查 → 搭建框架 → 逐类分析 → 追踪依赖 → 生成测试 → 编译验证 → 覆盖率自检 → 生成报告。
 
 ---
 
@@ -121,13 +128,13 @@ Claude Code、Cursor、opencode 等兼容 AgentSkills 的客户端，具体落�
 ### Subagent 流程
 
 ```
-environment_check → framework_builder → [逐类循环] → report_generator
-                                          ↓
-                          class_analyzer → dependency_tracer → test_writer
-                          → build_verifier → self_checker
-                                          ↓
-                              失败 → failure_repairer → 重验
-                              缺口 → incremental_updater → 重验
+[project_preparer] → environment_check → framework_builder → [逐类循环] → report_generator
+  (用户提供 repo_url 时)                                    ↓
+                                              class_analyzer → dependency_tracer → test_writer
+                                              → build_verifier → self_checker
+                                                              ↓
+                                                  失败 → failure_repairer → 重验
+                                                  缺口 → incremental_updater → 重验
 ```
 
 ### 状态传递
@@ -169,6 +176,6 @@ subagent 间通过 `autotests/.ut-session.json` 传递状态，不靠内存。
 
 <div align="center">
 
-GPL-3.0-or-later License © 2025 UnionTech Software Technology Co., Ltd.
+GPL-3.0-or-later License © 2026 UnionTech Software Technology Co., Ltd.
 
 </div>
