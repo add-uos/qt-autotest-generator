@@ -27,7 +27,11 @@ permission:
 
 ## 工作步骤
 
-### 1. 覆盖率完整性自检
+### 1. 覆盖率自检（方法名差集 + lcov 函数覆盖率门禁）
+
+覆盖率自检分两层：
+
+#### 1a. 方法名差集检查（结构性）
 
 用图谱拉全量方法，与测试文件中的 TEST_F 名做差集：
 
@@ -48,7 +52,36 @@ tested_names = extract_tested_methods(test_content)
 coverage_gap = all_method_names - tested_names
 ```
 
-**GUI 类豁免**：`is_gui=true` 且无可测方法（除构造函数）→ 跳过覆盖率自检。
+#### 1b. lcov 函数覆盖率门禁（百分比）
+
+读取 lcov 生成的 `build-autotests/coverage/filtered.info`，计算该类源文件对应的函数覆盖率百分比，与 `session.coverage_threshold`（默认 80）比对：
+
+```python
+threshold = session.get("coverage_threshold", 80)
+
+# 解析 lcov info 文件中目标类源文件的函数覆盖率
+func_coverage = parse_function_coverage_from_lcov(
+    info_file="build-autotests/coverage/filtered.info",
+    source_file=target_class.file_path
+)
+# 返回: { "function_coverage": 86.7, "functions_hit": 13, "functions_found": 15 }
+
+pct = func_coverage["function_coverage"]
+coverage_pass = pct >= threshold
+
+# 同时提取未被执行的函数名列表（lcov FNDA:0 行），供 incremental_updater 精准补全
+uncovered_functions = parse_uncovered_functions_from_lcov(
+    info_file="build-autotests/coverage/filtered.info",
+    source_file=target_class.file_path
+)
+```
+
+**判定规则**：
+- `coverage_gap` 非空 → 回交路由器 → `incremental_updater`（传入 `coverage_gap`）
+- `pct < threshold` → 回交路由器 → `incremental_updater`（传入 `uncovered_functions`）
+- 两者都通过 → 覆盖率自检 pass
+
+**GUI 类豁免**：`is_gui=true` 且无可测方法（除构造函数）→ 跳过覆盖率自检（含 lcov 门禁）。
 
 ### 2. 命名规范自检
 
@@ -83,11 +116,12 @@ coverage_gap = all_method_names - tested_names
 
 | 自检项 | 结果 | 处理 |
 |-------|------|------|
-| 覆盖率有缺口 | gap 非空 | 回交路由器 → `incremental_updater` |
+| 方法名差集有缺口 | gap 非空 | 回交路由器 → `incremental_updater`（传入 gap） |
+| lcov 函数覆盖率 < 阈值 | pct < threshold | 回交路由器 → `incremental_updater`（传入 uncovered_functions） |
 | 命名不规范 | 有违规 | 回交路由器 → `test_writer` 修正 |
 | SPDX 缺失 | 无头 | 回交路由器 → `test_writer` 补 |
 | stub 问题 | 有问题 | 回交路由器 → `test_writer` 修正 |
-| 全部通过 | - | 回交路由器 → 标记 `status=done`，下一类 |
+| 全部通过 | - | 回交路由器 → 标记 `done`，下一类 |
 
 ### 7. 更新 session
 
@@ -95,8 +129,10 @@ coverage_gap = all_method_names - tested_names
 {
   "status": "done",           // 全过
   "methods_tested": 15,       // 实测方法数
+  "function_coverage": 86.7,  // lcov 函数覆盖率百分比
   "self_check": {
-    "coverage": "pass",
+    "coverage": "pass",       // pass=方法名差集空 且 函数覆盖率>=阈值
+    "coverage_threshold": 80,
     "naming": "pass",
     "spdx": "pass",
     "stub": "pass"
@@ -104,13 +140,17 @@ coverage_gap = all_method_names - tested_names
 }
 ```
 
-或自检未过：
+或自检未过（覆盖率不达标）：
 ```json
 {
   "status": "self_check_failed",
+  "methods_tested": 12,
+  "function_coverage": 60.0,
   "self_check": {
     "coverage": "fail",
-    "coverage_gap": ["methodX", "methodY"],
+    "coverage_threshold": 80,
+    "coverage_gap": ["methodX", "methodY"],          // 方法名差集缺口（若有）
+    "uncovered_functions": ["methodZ", "methodW"],   // lcov 未执行函数（若有）
     "naming": "pass",
     "spdx": "pass",
     "stub": "pass"
@@ -136,4 +176,5 @@ coverage_gap = all_method_names - tested_names
 - **不要修改项目源码**
 - **不要跳过 GUI 类豁免**：GUI 类无可测方法时不强制覆盖率
 - **不要自己拼 qualified_name**：从图谱返回值取
-- **不要忽略覆盖率缺口**：gap 非空必须回交，不能放过
+- **不要忽略 lcov 函数覆盖率门禁**：方法名差集为空但 lcov 函数覆盖率 < 阈值时，仍必须回交 `incremental_updater`
+- **不要忽略覆盖率阈值**：从 `session.coverage_threshold`（默认 80）读取，不硬编码

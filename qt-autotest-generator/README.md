@@ -47,7 +47,7 @@ Qt 项目代码量大，**单测覆盖率上不去**？<br>
 <tr><td nowrap width="1%"><strong>逐类生成</strong></td><td>按复杂度规划用例数（高复杂度多写边界+异常），AAA 模式，<code>{Feature}_{Scenario}_{ExpectedResult}</code> 命名</td></tr>
 <tr><td nowrap width="1%"><strong>依赖追踪</strong></td><td>MCP <code>trace_path</code> 自动追踪出向调用链，按决策矩阵决定 stub 哪些依赖、编入哪些源码目录</td></tr>
 <tr><td nowrap width="1%"><strong>强制验证</strong></td><td>编译+运行必须通过才报完成；失败自动分类修复，重试预算内尽力修</td></tr>
-<tr><td nowrap width="1%"><strong>覆盖率自检</strong></td><td>100% public/protected 方法覆盖；缺口自动补全；SPDX 头、命名规范、stub 正确性内部自检</td></tr>
+<tr><td nowrap width="1%"><strong>覆盖率自检</strong></td><td>lcov 函数覆盖率门禁（默认 80%，可由用户指定），低于阈值触发自动补全；SPDX 头、命名规范、stub 正确性内部自检</td></tr>
 <tr><td nowrap width="1%"><strong>增量对账</strong></td><td>源码变更后自动 diff，只补新增方法、只修签名变更、只清理已删方法引用</td></tr>
 <tr><td nowrap width="1%"><strong>源码缺陷标红</strong></td><td>疑似源码缺陷（编译不过/运行崩溃/逻辑矛盾）标红交还用户，不自行修源码</td></tr>
 <tr><td nowrap width="1%"><strong>HTML/CSV 报告</strong></td><td>固定收尾生成覆盖率总览、逐类结果、源码缺陷清单、跳过类清单</td></tr>
@@ -146,7 +146,7 @@ subagent 间通过 `autotests/.ut-session.json` 传递状态，不靠内存。
 1. codebase-memory-mcp 硬门禁 —— 无图谱不执行
 2. `autotests/` 固定目录名
 3. Google Test only
-4. 100% public/protected 覆盖
+4. 函数覆盖率门禁（默认 80%，可由用户指定）
 5. 强制编译+运行验证
 6. 内置 stub-ext，不从网络下载
 7. 不问用户确认，直接执行

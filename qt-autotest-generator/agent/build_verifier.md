@@ -128,6 +128,8 @@ coverage_gap = planned - tested
 
 若 `coverage_gap` 非空 → 信号 B 触发 `incremental_updater`。
 
+**注意**：此处只做方法名差集（结构性检查）。lcov 函数覆盖率百分比的完整门禁（与 `session.coverage_threshold` 比对）在 `self_checker` 中执行——build_verifier 不解析 lcov 数据，避免与 self_checker 重复。
+
 ## 输出
 
 - session 更新 `build_result` + `run_result` + `failure_reason` + `status`

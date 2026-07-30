@@ -1,5 +1,5 @@
 ---
-description: 读模板生成 Google Test 测试代码，AAA 模式，100% public/protected 覆盖
+description: 读模板生成 Google Test 测试代码，AAA 模式，覆盖 public/protected 方法
 mode: subagent
 tools:
   read: true

@@ -21,7 +21,7 @@ compatibility:
 1. **codebase-memory-mcp 硬门禁** —— 无图谱索引不执行，不降级 LSP；LSP 仅在图谱 ready 后做精确签名补充
 2. **`autotests/` 目录** —— 固定目录名，不用 `tests/`
 3. **Google Test only** —— 固定框架，不用 Qt Test / Catch2
-4. **100% public/protected 覆盖** —— 每个公开/受保护方法至少 1 个用例；GUI 类无可测方法时豁免
+4. **函数覆盖率门禁** —— lcov 函数覆盖率不低于阈值（默认 80%，可由用户指定）；每个公开/受保护方法至少 1 个用例；低于阈值触发 `incremental_updater` 补全。GUI 类无可测方法时豁免
 5. **强制编译+运行验证** —— 编译并跑通后才能报完成
 6. **内置 stub-ext** —— 从 `resources/stub/` 复制，不从网络下载
 7. **不问用户确认** —— 直接执行，不用 `ask` 工具
@@ -41,6 +41,7 @@ compatibility:
 - 增量补全缺失用例："补全测试"、"补全 MyClass 的测试"、"complete test coverage"
 - 修复失败用例："测试编译失败"、"修测试"、"fix test failures"
 - 源码变更后对账："代码改了重新检查"、"重新对账"、"sync tests"
+- **指定覆盖率阈值**："函数覆盖率 80%"、"覆盖率不低于 90%"、"coverage threshold 75%" → 写入 `session.coverage_threshold`，默认 80
 
 ---
 
@@ -109,10 +110,10 @@ compatibility:
   5. self_checker（单类：覆盖率/命名/SPDX/stub 自检）
   
   self_check 过 → 标记 done → 下一类
-  self_check 不过 → failure_repairer → 重验
+  self_check 不过（覆盖率缺口 / 函数覆盖率 < 阈值 / 命名 / SPDX / stub）→ incremental_updater 或 test_writer 修正
   failure_repairer 耗尽 → 标记 failed + failure_reason → 跳过 → 下一类
 
-全部类 done → 检查覆盖率缺口 → 有缺口则 incremental_updater → 无则 report_generator → code_committer
+全部类 done → 检查覆盖率缺口（方法名差集 + lcov 函数覆盖率是否达标）→ 有缺口则 incremental_updater → 无则 report_generator → code_committer
 ```
 
 ### 并行处理策略
@@ -133,9 +134,10 @@ compatibility:
 
 | 信号 | 来源 | 触发 |
 |------|------|------|
-| 编译/运行失败 | build_verifier 输出 | `failure_repairer` |
+| 编译/运行失败 | build_verifier | `failure_repairer` |
+| 全过 + 方法名差集非空 | self_checker 覆盖率差集 | `incremental_updater` |
+| 全过 + lcov 函数覆盖率 < 阈值 | self_checker 函数覆盖率门禁 | `incremental_updater`（传入未覆盖函数清单） |
 | 全过 + 覆盖达标 | build_verifier + self_checker | 下一类 or `report_generator` |
-| 全过 + 覆盖有缺口 | self_checker 覆盖率差集 | `incremental_updater` |
 
 - **自动检测**：build_verifier/self_checker 结束后路由器自动判断
 - **显式触发**：用户说"补全"/"修复"直接进对应 subagent
@@ -177,6 +179,7 @@ subagent 间唯一的状态传递媒介。结构：
   "pull_method": "git_clone",
   "build_env": "verified",
   "qt_version": 5,
+  "coverage_threshold": 80,
   "classes": [
     {
       "name": "MyClass",
@@ -185,6 +188,7 @@ subagent 间唯一的状态传递媒介。结构：
       "status": "done",
       "methods_total": 15,
       "methods_tested": 15,
+      "function_coverage": 86.7,
       "test_file": "autotests/ui/test_myclass.cpp",
       "build_result": "pass",
       "run_result": "pass",
@@ -204,6 +208,8 @@ subagent 间唯一的状态传递媒介。结构：
 - `run_result`: `pass` / `fail` / `not_run`
 - `failure_reason`: `null` / `compile_error` / `runtime_crash` / `source_defect_compile` / `source_defect_runtime` / `source_defect_logic` / `needs_manual`
 - `overall_status`: `incomplete` / `partial` / `complete`
+- `coverage_threshold`: 函数覆盖率门禁阈值，默认 80，可由用户指定；低于此值触发 `incremental_updater` 补全
+- `function_coverage`: lcov 解析出的该类函数覆盖率百分比；低于 `coverage_threshold` 则触发补全
 
 ---
 
@@ -220,6 +226,7 @@ subagent 间唯一的状态传递媒介。结构：
 | Stub 模板 | `resources/templates/stub-patterns.cpp` |
 | CMake 模板 | `resources/templates/cmake-*.txt` |
 | 编译重试 | per-error 3 次，max 10 loops |
+| 函数覆盖率阈值 | 默认 80%，可由用户指定；低于阈值触发 `incremental_updater` 补全 |
 | MCP 指南 | `resources/references/codebase-memory-guide.md` |
 
 ---
@@ -247,7 +254,7 @@ subagent 间唯一的状态传递媒介。结构：
 □ codebase-memory 索引 ready 后才派发后续 subagent
 □ 逐类循环：每类走 class_analyzer → dependency_tracer → test_writer → build_verifier → self_checker
 □ 单类失败：已记录 failure_reason + 跳过 + 继续下一类
-□ build_verifier 后读双信号：失败→failure_repairer；覆盖缺口→incremental_updater；全过→下一类或收尾
+□ build_verifier 后读双信号：失败→failure_repairer；方法名差集→incremental_updater；函数覆盖率<阈值→incremental_updater；全过→下一类或收尾
 □ 全类完成 + 覆盖达标：已派发 report_generator → code_committer
 □ 疑似源码缺陷：已在 session 标 failure_reason，报告里标红交还用户，未自行修源码
 □ 源码缺陷通知：report_generator 返回 source_defect_count > 0 时，已向用户输出醒目提示
