@@ -6,10 +6,14 @@ user-invocable: true
 argument-hint: "[项目路径 / 模块路径 / 类名]"
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash
 compatibility:
-  required_mcp:
+  # 知识图谱 MCP：远端优先，本地兜底（互斥使用其一）。
+  # 详见 resources/references/mcp-providers.md
+  required_mcp_any_of:
+    - name: remote-codebase-memory-mcp
+      purpose: "远端代码知识图谱，毫秒级类结构分析与依赖追踪；硬门禁，无图谱不执行"
     - name: codebase-memory-mcp
       min_version: "0.8.0"
-      purpose: "代码知识图谱，毫秒级类结构分析与依赖追踪；硬门禁，无图谱不执行"
+      purpose: "本地代码知识图谱，毫秒级类结构分析与依赖追踪；硬门禁，无图谱不执行"
 ---
 
 # Qt Autotest Generator
@@ -18,7 +22,7 @@ compatibility:
 
 ## 核心原则（Iron Laws）
 
-1. **codebase-memory-mcp 硬门禁** —— 无图谱索引不执行，不降级 LSP；LSP 仅在图谱 ready 后做精确签名补充
+1. **知识图谱 MCP 硬门禁** —— 无图谱索引不执行，不降级 LSP；LSP 仅在图谱 ready 后做精确签名补充。提供方在 `environment_check` 阶段一次性解析（**远端优先，本地兜底，互斥使用其一**），全流程通过 `session.mcp_provider` 调用，详见 `resources/references/mcp-providers.md`
 2. **`autotests/` 目录** —— 固定目录名，不用 `tests/`
 3. **Google Test only** —— 固定框架，不用 Qt Test / Catch2
 4. **函数覆盖率门禁** —— lcov 函数覆盖率不低于阈值（默认 80%，可由用户指定）；每个公开/受保护方法至少 1 个用例；低于阈值触发 `incremental_updater` 补全。GUI 类无可测方法时豁免
@@ -68,22 +72,27 @@ compatibility:
       project_preparer 完成后 → 派发 environment_check → framework_builder
    b. 用户提供了本地 project_path → 派发 environment_check → framework_builder
 3. 有 session：
-   a. git rev-parse HEAD → 当前 commit
-   b. 与 session.baseline_commit 比较
-   c. 不同 → 源码已变更：
-      - index_status(project) 若 "indexing" → 等待到 "ready"
-      - 长时间不 ready → index_repository(mode="fast") 推一下
-      - 索引 ready 后验证新鲜度：query_graph 查一个已知类，
-        若返回的 file_path 对应的 git log 与当前 HEAD 一致则索引已同步；
-        若不一致 → index_repository(mode="fast") 强制刷新，等待 ready
-      - 派发 class_analyzer(mode="diff") → 与 session 记录做方法级 diff
-      - 新增方法 → incremental_updater
-      - 签名/体变更 → test_writer（重新生成该类）→ build_verifier → self_checker
-      - 方法删除 → failure_repairer（清理引用已删方法的测试）
-      - 更新 session.baseline_commit
-   d. 相同 → 看 session 状态决定下一步
-   e. 分支切换检测：git branch --show-current 与 session 记录的分支比较，
-      若不同 → 强制 index_repository(mode="fast") 刷新索引后重新对账
+   a. 重新校验 MCP 提供方：读 `session.mcp_provider`，确认该提供方仍可用（`list_projects()` 可调通）且目标项目仍索引 ready。若提供方已失联（如远端断开），重新走 `environment_check` 解析
+   b. git rev-parse HEAD → 当前 commit
+   c. 与 session.baseline_commit 比较
+    d. 不同 → 源码已变更：
+       - index_status(project) 若 "indexing" → 等待到 "ready"
+       - 长时间不 ready：
+         · 本地提供方 → index_repository(mode="fast") 推一下
+         · 远端提供方 → 等待远端 watcher 自动同步；超时则向用户提醒「远端索引未同步，请在远端手动刷新」
+       - 索引 ready 后验证新鲜度：query_graph 查一个已知类，
+         若返回的 file_path 对应的 git log 与当前 HEAD 一致则索引已同步；
+         若不一致 → 同上按提供方类型处理（本地可 index_repository 刷新，远端只能等待/提醒）
+       - 派发 class_analyzer(mode="diff") → 与 session 记录做方法级 diff
+       - 新增方法 → incremental_updater
+       - 签名/体变更 → test_writer（重新生成该类）→ build_verifier → self_checker
+       - 方法删除 → failure_repairer（清理引用已删方法的测试）
+       - 更新 session.baseline_commit
+    e. 相同 → 看 session 状态决定下一步
+    f. 分支切换检测：git branch --show-current 与 session 记录的分支比较，
+       若不同 → 强制刷新索引后重新对账：
+         · 本地提供方 → index_repository(mode="fast")
+         · 远端提供方 → 等待远端 watcher 同步；超时则向用户提醒
 ```
 
 ### 意图识别与路由表
@@ -149,7 +158,7 @@ compatibility:
 | Subagent | 文件 | 职责 |
 |----------|------|------|
 | 项目准备 | `agent/project_preparer.md` | 拉取代码、校验基线、安装依赖、验证构建环境；用户提供 repo_url 时第一道前置 |
-| 环境门禁 | `agent/environment_check.md` | codebase-memory-mcp 安装+索引；失败硬终止 |
+| 环境门禁 | `agent/environment_check.md` | MCP 提供方解析（远端优先，本地兜底）、索引、验证；失败硬终止 |
 | 框架搭建 | `agent/framework_builder.md` | autotests/ 脚手架、CMake、stub、runner、report_generator |
 | 类分析 | `agent/class_analyzer.md` | MCP 拉类+方法、GUI 识别、按复杂度规划用例数 |
 | 依赖追踪 | `agent/dependency_tracer.md` | MCP trace_path 出向、stub 决策矩阵、收集源码目录 |
@@ -171,6 +180,8 @@ subagent 间唯一的状态传递媒介。结构：
 {
   "project_path": "/abs/path/to/project",
   "project_name_in_graph": "home-user-project-name",
+  "mcp_provider": "remote-codebase-memory-mcp",
+  "mcp_provider_type": "remote",
   "repo_url": "https://github.com/foo/bar.git",
   "branch": "dev",
   "baseline_commit": "abc1234",
@@ -203,6 +214,8 @@ subagent 间唯一的状态传递媒介。结构：
 ```
 
 字段说明：
+- `mcp_provider`：解析到的知识图谱 MCP 提供方（`remote-codebase-memory-mcp` 或 `codebase-memory-mcp`）
+- `mcp_provider_type`：`remote` 或 `local`
 - `status`: `pending` / `in_progress` / `done` / `failed` / `skipped`
 - `build_result`: `pass` / `fail` / `not_run`
 - `run_result`: `pass` / `fail` / `not_run`
@@ -221,13 +234,14 @@ subagent 间唯一的状态传递媒介。结构：
 | 测试文件 | `test_myclass.cpp` |
 | 测试类名 | `MyClassTest` |
 | 用例命名 | `{Feature}_{Scenario}_{ExpectedResult}` |
-| MCP 工具（主） | `search_graph`, `get_code_snippet`, `trace_path`, `query_graph`, `index_status`, `index_repository` |
+| MCP 工具（主） | 通过 `session.mcp_provider` 调用：`search_graph`, `get_code_snippet`, `trace_path`, `query_graph`, `index_status`；本地提供方额外支持 `index_repository` |
 | LSP 工具（补充） | `lsp_symbols`(scope=document), `lsp_goto_definition`（仅精确签名） |
 | Stub 模板 | `resources/templates/stub-patterns.cpp` |
 | CMake 模板 | `resources/templates/cmake-*.txt` |
 | 编译重试 | per-error 3 次，max 10 loops |
 | 函数覆盖率阈值 | 默认 80%，可由用户指定；低于阈值触发 `incremental_updater` 补全 |
-| MCP 指南 | `resources/references/codebase-memory-guide.md` |
+| MCP 提供方指南 | `resources/references/mcp-providers.md` |
+| MCP 使用指南 | `resources/references/codebase-memory-guide.md` |
 
 ---
 
@@ -236,6 +250,7 @@ subagent 间唯一的状态传递媒介。结构：
 - 用 `tests/` 而非 `autotests/`
 - 用 Qt Test / Catch2 框架
 - codebase-memory 未 ready 就开始生成
+- MCP 提供方未解析或混用多个提供方（必须互斥）
 - 未编译通过就报完成
 - 跳过 subagent 直接手写
 - 用 `ask` 工具问用户
@@ -251,12 +266,13 @@ subagent 间唯一的状态传递媒介。结构：
 □ 已执行 reconcile：读 .ut-session.json，比对 git HEAD，判断源码是否变更
 □ 首次运行且用户提供了 repo_url：已派发 project_preparer（拉取代码+搭建环境）
 □ 首次运行且用户提供本地路径：已派发 environment_check → framework_builder
+□ MCP 提供方已解析（远端优先，本地兜底），session.mcp_provider 已记录
 □ codebase-memory 索引 ready 后才派发后续 subagent
 □ 逐类循环：每类走 class_analyzer → dependency_tracer → test_writer → build_verifier → self_checker
-□ 单类失败：已记录 failure_reason + 跳过 + 继续下一类
-□ build_verifier 后读双信号：失败→failure_repairer；方法名差集→incremental_updater；函数覆盖率<阈值→incremental_updater；全过→下一类或收尾
+□ 单类失败：已记录 failure_reason + 跳过 + 继续下一个类
+□ build_verifier 后读双信号：失败→failure_repairer；方法名差集→incremental_updater；函数覆盖率<阈值→incremental_updater
 □ 全类完成 + 覆盖达标：已派发 report_generator → code_committer
-□ 疑似源码缺陷：已在 session 标 failure_reason，报告里标红交还用户，未自行修源码
+□ 疑似源码缺陷：已标 failure_reason，报告里标红，未自行修源码
 □ 源码缺陷通知：report_generator 返回 source_defect_count > 0 时，已向用户输出醒目提示
-□ 测试代码已提交：code_committer 已 commit autotests/ 目录，未 push
+□ 测试代码已提交：code_committer 已 commit autotests/，未 push
 ```

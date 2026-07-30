@@ -7,6 +7,7 @@ tools:
   edit: true
   bash: true
   codebase-memory-mcp: true
+  remote-codebase-memory-mcp: true
 permission:
   read: allow
   write: allow
@@ -15,6 +16,10 @@ permission:
 ---
 
 # Build Verifier · 编译验证
+
+## MCP 提供方
+
+本 subagent 通过 `session.mcp_provider` 记录的 MCP 提供方调用知识图谱工具（远端优先，本地兜底，互斥使用其一，详见 `resources/references/mcp-providers.md`）。下文示例中的 `codebase_memory_mcp.*` 调用均指当前解析到的提供方对应工具。
 
 ## 角色作用
 

@@ -42,7 +42,7 @@ Qt 项目代码量大，**单测覆盖率上不去**？<br>
 <tr><th align="left" nowrap width="1%">能力</th><th align="left">说明</th></tr>
 </thead>
 <tbody>
-<tr><td nowrap width="1%"><strong>知识图谱驱动</strong></td><td>基于 codebase-memory-mcp 毫秒级拉取类结构、方法签名、调用链、依赖关系；硬门禁，无图谱不执行</td></tr>
+<tr><td nowrap width="1%"><strong>知识图谱驱动</strong></td><td>基于 codebase-memory-mcp 知识图谱毫秒级拉取类结构、方法签名、调用链、依赖关系；硬门禁，无图谱不执行。<strong>支持远端（<code>remote-codebase-memory-mcp</code>）与本地两种提供方，远端优先</strong></td></tr>
 <tr><td nowrap width="1%"><strong>框架搭建</strong></td><td>自动创建 <code>autotests/</code> 目录：CMake 配置、stub-ext、测试运行脚本、报告生成器</td></tr>
 <tr><td nowrap width="1%"><strong>逐类生成</strong></td><td>按复杂度规划用例数（高复杂度多写边界+异常），AAA 模式，<code>{Feature}_{Scenario}_{ExpectedResult}</code> 命名</td></tr>
 <tr><td nowrap width="1%"><strong>依赖追踪</strong></td><td>MCP <code>trace_path</code> 自动追踪出向调用链，按决策矩阵决定 stub 哪些依赖、编入哪些源码目录</td></tr>
@@ -81,7 +81,7 @@ Claude Code、Cursor、opencode 等兼容 AgentSkills 的客户端，具体落�
 | CMake | >= 3.16 | 构建系统 |
 | Qt | 5 或 6 | Core + Widgets 模块 |
 | Google Test | 任意 | `libgtest-dev` 或源码编译 |
-| codebase-memory-mcp | >= 0.8.0 | 知识图谱 MCP，由 `setup-codebase-memory.sh` 自动安装 |
+| codebase-memory-mcp | >= 0.8.0 | 知识图谱 MCP（本地兜底，由 `setup-codebase-memory.sh` 自动安装）；或接入已索引本项目的 `remote-codebase-memory-mcp` 远端实例（远端优先） |
 | Python | >= 3.8 | 报告生成（仅用标准库） |
 | gcc/g++ | 支持 C++17 | 编译器 |
 
@@ -143,7 +143,7 @@ subagent 间通过 `autotests/.ut-session.json` 传递状态，不靠内存。
 
 ### Iron Laws
 
-1. codebase-memory-mcp 硬门禁 —— 无图谱不执行
+1. codebase-memory-mcp 硬门禁 —— 无图谱不执行（远端优先，本地兜底，互斥使用其一）
 2. `autotests/` 固定目录名
 3. Google Test only
 4. 函数覆盖率门禁（默认 80%，可由用户指定）
@@ -168,6 +168,7 @@ subagent 间通过 `autotests/.ut-session.json` 传递状态，不靠内存。
 
 - [技能入口与路由流程](SKILL.md)
 - [详细安装说明](INSTALL.md)
+- [MCP 提供方解析指南](resources/references/mcp-providers.md)
 - [codebase-memory-mcp 使用指南](resources/references/codebase-memory-guide.md)
 - [环境搭建指南](docs/setup-guide.md)
 - [示例项目](examples/README.md)

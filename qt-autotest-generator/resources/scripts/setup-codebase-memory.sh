@@ -4,6 +4,11 @@
 #
 # setup-codebase-memory.sh - codebase-memory-mcp 安装与配置脚本
 #
+# ⚠️ 调用条件：本脚本仅在 `environment_check` 解析到本地提供方
+#    （`codebase-memory-mcp`）时由 subagent 调用。若已解析到远端提供方
+#    （`remote-codebase-memory-mcp`），则跳过本脚本（远端无需本地安装/索引）。
+#    解析逻辑见 resources/references/mcp-providers.md。
+#
 # 职责：
 #   1. 检测 codebase-memory-mcp 是否已安装
 #   2. 未安装则安装（优先官方 install.sh，源码编译作为后备）

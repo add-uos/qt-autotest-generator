@@ -71,19 +71,24 @@ sudo apt install python3
 sudo apt install lcov
 ```
 
-### codebase-memory-mcp
+### codebase-memory-mcp（知识图谱）
 
-首次使用时，技能的 `environment_check` subagent 会自动调用 `setup-codebase-memory.sh` 安装。也可手动预装：
+本技能支持两种知识图谱 MCP 提供方，**远端优先，本地兜底，互斥使用**：
+
+| 提供方 | 说明 |
+|--------|------|
+| `remote-codebase-memory-mcp` | 远端/外部 MCP。已索引项目且 `index_status == "ready"` 时优先使用。**远端无法触发索引**，项目须已在远端索引好 |
+| `codebase-memory-mcp` | 本地 MCP。远端不可用或项目未在远端索引时，自动安装并为本机项目建立索引 |
+
+提供方解析在 `environment_check` 阶段完成，结果记录在 `session.mcp_provider`，详见
+`resources/references/mcp-providers.md`。
+
+若已接入远端实例（如 `remote-codebase-memory-mcp`）且目标项目已在远端索引，则**跳过本地安装**。
+否则 `environment_check` 会强制提醒用户并安装本地 `codebase-memory-mcp`：
 
 ```bash
 bash resources/scripts/setup-codebase-memory.sh
 ```
-
-退出码：
-- `0` → 成功
-- `1` → 安装失败
-- `2` → 配置失败
-- `3` → 验证失败
 
 ### 验证安装
 
