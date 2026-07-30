@@ -86,6 +86,10 @@ bash ${SKILL_DIR}/resources/scripts/generate-runner.sh
 - `{THIRD_PARTY_PACKAGES}` → 检测到的依赖的 `find_package` 命令
 - `{ADD_SUBDIRECTORIES}` → `add_subdirectory()` 调用（初始为空，后续 class_analyzer/test_writer 会补充）
 
+**覆盖率编译标志**：模板已内置 `-fprofile-arcs -ftest-coverage`（Debug 模式下启用）。
+不要删除此标志——`run-ut.sh` 的 step_5 (lcov --capture) 和 `report_generator` 的覆盖率解析都依赖它。
+若项目根 CMakeLists.txt 已有覆盖率标志，autotests 的标志不冲突（追加模式）。
+
 ### 7. 修改根 CMakeLists.txt
 
 **DANGER ZONE**：只 APPEND 新行，**绝不**修改或注释已有代码。
@@ -128,9 +132,12 @@ autotests/.ut-session.json
 ```bash
 mkdir -p ${PROJECT_PATH}/build-autotests
 cd ${PROJECT_PATH}/build-autotests
-cmake .. -DBUILD_TESTS=ON
+cmake .. -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
 cmake --build . -j$(nproc)
 ```
+
+**必须使用 `-DCMAKE_BUILD_TYPE=Debug`**：覆盖率编译标志（`-fprofile-arcs -ftest-coverage`）仅在 Debug 模式下启用。
+若不传 Debug，编译出的二进制无 gcov 插桩，`run-ut.sh` 的 lcov 步骤和 `report_generator` 的覆盖率解析将全部失效。
 
 若失败 → 分析错误 → 修 CMakeLists → 重试（max 10 loops）。
 

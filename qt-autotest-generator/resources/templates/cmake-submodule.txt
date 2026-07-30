@@ -9,6 +9,15 @@ set(PROJECT_LIBRARIES "{PROJECT_LIBRARIES}")
 # {QT_EXTRA_LIBS} 由 test_writer 填入：GUI 类填 "Qt${QT_VERSION}::Widgets"，
 # 纯 Core 模块填空字符串。避免无条件链接 Widgets 导致 Core-only 项目编译失败。
 
+# 代码覆盖率：Debug 模式下启用 gcov 插桩
+# run-ut.sh 的 step_5 (lcov --capture) 依赖此标志采集覆盖率数据
+# report_generator 从 build-autotests/coverage/filtered.info 解析覆盖率
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-arcs -ftest-coverage -O0")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lgcov")
+    message(STATUS "UT: Code coverage enabled for test_{module_name}")
+endif()
+
 # 收集所有测试文件
 file(GLOB TEST_SOURCES "test_*.cpp")
 
@@ -38,6 +47,11 @@ if(PROJECT_LIBRARIES)
         PRIVATE
         ${PROJECT_LIBRARIES}
     )
+endif()
+
+# 覆盖率库（Debug 模式下）
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_link_libraries(test_{module_name} PRIVATE gcov)
 endif()
 
 # 包含目录
