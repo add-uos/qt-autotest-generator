@@ -40,5 +40,24 @@
   ],
   "last_phase": "report_generation",
   "overall_status": "complete",
-  "report_path": "autotests/.reports/report.html"
+  "report_path": "autotests/.reports/report.html",
+  "committed_classes": ["Calculator"],
+  "last_batch_commit": "e5f6a7b",
+  "_comment_sha": "e5f6a7b 为示例占位 sha，实际由 git commit 返回",
+  "commit_history": [
+    {
+      "batch": 1,
+      "commit_sha": "e5f6a7b",
+      "classes": ["Calculator"],
+      "committed_at": "2026-08-04T10:30:00+08:00"
+    }
+  ],
+  "commit_check": {
+    "last_batch_commit": "e5f6a7b",
+    "completeness": "pass",
+    "no_source_leak": "pass",
+    "no_artifact_leak": "pass",
+    "commit_message_format": "pass",
+    "checked_at": "2026-08-04T10:30:05+08:00"
+  }
 }

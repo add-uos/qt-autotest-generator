@@ -128,14 +128,16 @@ Claude Code、Cursor、opencode 等兼容 AgentSkills 的客户端，具体落�
 ### Subagent 流程
 
 ```
-[project_preparer] → environment_check → framework_builder → [逐类循环] → report_generator → code_committer
-  (用户提供 repo_url 时)                                    ↓
-                                              class_analyzer → dependency_tracer → test_writer
-                                              → build_verifier → self_checker
-                                                              ↓
-                                                  失败 → failure_repairer → 重验
-                                                  缺口 → incremental_updater → 重验
+[project_preparer] → environment_check → framework_builder → [逐类循环] → [批次提交] → report_generator
+  (用户提供 repo_url 时)                                    ↓                ↓
+                                               class_analyzer → dependency_tracer → test_writer   code_committer
+                                               → build_verifier → self_checker                     → self_checker(commit_check)
+                                                               ↓                                                ↓
+                                                   失败 → failure_repairer → 重验              通过 → 下一批次或 report_generator
+                                                   缺口 → incremental_updater → 重验            未过 → code_committer 修正 → 重验
 ```
+
+每批次所有目标类 self_checker 处理完毕后立即派发 `code_committer` 增量提交本批次完成类，并派发 `self_checker(commit_check=true)` 做提交规范自检（已提交完整性 / 未误提交源码 / 未误提交构建产物 / 提交信息格式规范）。`report_generator` 收尾时测试代码已全部入库，不再触发 `code_committer`。
 
 ### 状态传递
 

@@ -21,6 +21,7 @@ permission:
 
 - session 中所有类 `status` 为 `done` / `failed` / `skipped`（无 `pending` / `in_progress`）
 - 路由器已确认无未完成类
+- 所有已完成批次均已通过 `self_checker(commit_check=true)`（`session.last_phase == "commit_checked"`）；存在未通过的提交规范自检时，必须先派发 `code_committer` 修正并重验通过
 
 ## 输入
 
@@ -171,7 +172,7 @@ python3 -m report_generator.main \
 ## 回交协议
 
 向路由器返回：
-- `pass` + 报告路径：报告生成完成，路由器派发 `code_committer` 提交测试代码
+- `pass` + 报告路径：报告生成完成，流程闭环（测试代码已在各批次 `code_committer` 中入库，`report_generator` 之后不再派发 `code_committer`）；路由器向用户展示报告路径与 commit 历史
 - `fail` + 错误摘要：路由器决定是否重试
 
 ## 硬性限制
@@ -182,3 +183,4 @@ python3 -m report_generator.main \
 - **不要自行修复源码缺陷**：只标红交还用户
 - **不要跳过报告生成**：这是固定收尾环节，不可选
 - **不要在报告里隐藏失败类**：failed/skipped 类必须如实列出
+- **不要触发 `code_committer`**：测试代码已在各批次 `code_committer` 中入库，`report_generator` 之后不再派发 `code_committer`

@@ -32,7 +32,7 @@ compatibility:
 8. **逐类闭环** —— 每个类独立走完 分析→追踪→生成→验证→自检；单类失败记录跳过，不阻塞其他类
 9. **不修源码** —— 疑似源码缺陷只标红交还用户，技能只负责测试
 10. **只 APPEND 不改已有** —— 修改根 CMakeLists.txt 和测试 CMake 时只追加新行，不注释/删除/修改已有代码
-11. **只 commit 不 push** —— 测试验证通过后自动提交测试代码，但不 push 到远端
+11. **批次提交 + 提交规范自检** —— 每批次（一轮批量生成/增量补全/失败修复）所有类 self_checker 通过后立即派发 `code_committer` 增量提交本批次完成类，并派发 `self_checker(commit_check=true)` 做提交规范自检；**只 commit，不 push**。最终 `report_generator` 收尾时测试代码已全部入库，不再触发 `code_committer`
 12. **subagent 间不靠内存传状态** —— 一切状态写 `autotests/.ut-session.json`
 
 ---
@@ -60,8 +60,8 @@ compatibility:
 - 派发时携带：当前 phase、目标项目路径、目标类/模块、`.ut-session.json` 路径。
 - subagent 完成后读 `.ut-session.json` 判断下一步。
 - 单类失败时记录原因、标记跳过、继续下一个类。
-- 全部类完成且覆盖率达标后，派发 `report_generator` 收尾
-- `report_generator` 完成后，派发 `code_committer` 提交测试代码（只 commit，不 push）
+- **批次提交时机**：每批次（一轮批量生成/增量补全/失败修复）所有目标类 self_checker 全部通过后，立即派发 `code_committer` 增量提交本批次完成类的测试代码；提交完成后再派发 `self_checker(commit_check=true)` 做提交规范自检（已提交完整性 / 未误提交源码 / 未误提交构建产物 / 提交信息格式规范），不通过则派发 `code_committer` 修正。
+- 全部类完成且覆盖率达标后，派发 `report_generator` 收尾（此时测试代码已在各批次提交中入库，`report_generator` 之后不再派发 `code_committer`）
 
 ### reconcile（对账）逻辑 —— 每次触发必先执行
 
@@ -102,11 +102,11 @@ compatibility:
 | 用户提供 repo_url + branch 拉取项目 | 无 session | `project_preparer` → `environment_check` → `framework_builder` |
 | 用户提供本地 project_path | 无 session | `environment_check` → `framework_builder` |
 | 首次搭建 | 无 session | `environment_check` → `framework_builder` |
-| 批量生成 | 框架就绪 + 有未完成类 | `class_analyzer` → `dependency_tracer` → `test_writer` → `build_verifier` → `self_checker`（逐类循环） |
-| 增量补全 | 全类完成 + 覆盖有缺口 | `incremental_updater` → `build_verifier` → `self_checker` |
-| 修复失败 | 有 failed 类 | `failure_repairer` → `build_verifier` → `self_checker` |
-| 源码变更对账 | baseline 漂移 | reconcile → 按差异路由 |
-| 全部完成 | 全类完成 + 覆盖达标 | `report_generator`（固定收尾） → `code_committer` |
+| 批量生成 | 框架就绪 + 有未完成类 | `class_analyzer` → `dependency_tracer` → `test_writer` → `build_verifier` → `self_checker`（逐类循环）→ **批次内全类 self_checker 通过** → `code_committer` → `self_checker(commit_check=true)` |
+| 增量补全 | 全类完成 + 覆盖有缺口 | `incremental_updater` → `build_verifier` → `self_checker` → **本批次 self_checker 通过** → `code_committer` → `self_checker(commit_check=true)` |
+| 修复失败 | 有 failed 类 | `failure_repairer` → `build_verifier` → `self_checker` → **本批次 self_checker 通过** → `code_committer` → `self_checker(commit_check=true)` |
+| 源码变更对账 | baseline 漂移 | reconcile → 按差异路由 → **本批次 self_checker 通过** → `code_committer` → `self_checker(commit_check=true)` |
+| 全部完成 | 全类完成 + 覆盖达标 | `report_generator`（固定收尾；测试代码已在各批次提交中入库，不再 `code_committer`） |
 
 ### 逐类循环流程
 
@@ -122,7 +122,11 @@ compatibility:
   self_check 不过（覆盖率缺口 / 函数覆盖率 < 阈值 / 命名 / SPDX / stub）→ incremental_updater 或 test_writer 修正
   failure_repairer 耗尽 → 标记 failed + failure_reason → 跳过 → 下一类
 
-全部类 done → 检查覆盖率缺口（方法名差集 + lcov 函数覆盖率是否达标）→ 有缺口则 incremental_updater → 无则 report_generator → code_committer
+本批次所有目标类 self_checker 处理完毕（含 done / failed / skipped）→ 派发 code_committer 增量提交本批次新完成的类 → 派发 self_checker(commit_check=true) 做提交规范自检
+  提交规范自检过 → 进入下一批次或检查覆盖率缺口
+  提交规范自检不过 → 派发 code_committer 修正（仅 message 不规范时 amend 本批次未 push 的 commit；文件误提交时必须新 commit 撤销）→ 再 self_checker(commit_check=true)
+
+全部类 done → 检查覆盖率缺口（方法名差集 + lcov 函数覆盖率是否达标）→ 有缺口则 incremental_updater → 无则 report_generator（测试代码已在各批次提交中入库，report_generator 之后不再 code_committer）
 ```
 
 ### 并行处理策略
@@ -135,7 +139,7 @@ compatibility:
 - **CMake 合并**：test_writer 的 CMake 智能合并是 append-only，多类并行追加不冲突
 - **编译隔离**：build_verifier 按类编译 `--target test_<classname>`，互不影响
 - **失败不阻塞**：单类失败标记后继续，不影响并行中的其他类
-- **收尾同步**：所有并行类完成后，路由器统一合并分片、检查覆盖率缺口再决定收尾
+- **收尾同步**：所有并行类完成后，路由器统一合并分片、检查覆盖率缺口；本批次无覆盖率缺口或缺口已交由 incremental_updater 处理后，再统一派发 `code_committer` 增量提交本批次完成类，并派发 `self_checker(commit_check=true)` 做提交规范自检
 
 ### 迭代双信号触发
 
@@ -164,9 +168,9 @@ compatibility:
 | 依赖追踪 | `agent/dependency_tracer.md` | MCP trace_path 出向、stub 决策矩阵、收集源码目录 |
 | 测试生成 | `agent/test_writer.md` | 读模板生成测试代码、AAA、命名、protected 暴露 |
 | 编译验证 | `agent/build_verifier.md` | 强制编译+运行、错误分类→修复表、重试预算 |
-| 自检 | `agent/self_checker.md` | 覆盖率/命名/SPDX/stub 正确性；内部执行不入交付 |
 | 报告生成 | `agent/report_generator.md` | 固定收尾出 HTML/CSV 报告（含源码缺陷清单） |
-| 代码提交 | `agent/code_committer.md` | 测试验证通过后提交 autotests/ 到 git（只 commit，不 push） |
+| 代码提交 | `agent/code_committer.md` | 每批次 self_checker 通过后增量提交本批次完成类的测试代码到 git（只 commit，不 push）；防重提；提交信息含批次统计与基线 commit |
+| 自检（含提交规范） | `agent/self_checker.md` | 覆盖率/命名/SPDX/stub 正确性（单类模式）；提交规范自检（commit_check 模式）：已提交完整性 / 未误提交源码 / 未误提交构建产物 / 提交信息格式规范 |
 | 增量补全 | `agent/incremental_updater.md` | 图谱差集补缺失用例、CMake 智能合并 |
 | 失败修复 | `agent/failure_repairer.md` | 失败修复 + 根因分类 + 源码缺陷标红 |
 
@@ -209,7 +213,12 @@ subagent 间唯一的状态传递媒介。结构：
     }
   ],
   "last_phase": "report_generation",
-  "overall_status": "complete"
+  "overall_status": "complete",
+  "committed_classes": ["MyClass", "FooBar", "Baz"],
+  "last_batch_commit": "9f3a2c1",
+  "commit_history": [
+    {"batch": 1, "commit_sha": "9f3a2c1", "classes": ["MyClass", "FooBar"], "committed_at": "2026-08-04T10:30:00+08:00"}
+  ]
 }
 ```
 
@@ -223,6 +232,9 @@ subagent 间唯一的状态传递媒介。结构：
 - `overall_status`: `incomplete` / `partial` / `complete`
 - `coverage_threshold`: 函数覆盖率门禁阈值，默认 80，可由用户指定；低于此值触发 `incremental_updater` 补全
 - `function_coverage`: lcov 解析出的该类函数覆盖率百分比；低于 `coverage_threshold` 则触发补全
+- `committed_classes`: 已通过 `code_committer` 提交到 git 的类名列表；下次 `code_committer` 跳过这些类避免重复提交
+- `last_batch_commit`: 最近一次批次提交的 commit sha；`self_checker(commit_check=true)` 据此校验提交规范
+- `commit_history`: 各批次提交记录（batch 序号 / commit_sha / 本批次类列表 / 提交时间），用于审计与回溯
 
 ---
 
@@ -271,8 +283,11 @@ subagent 间唯一的状态传递媒介。结构：
 □ 逐类循环：每类走 class_analyzer → dependency_tracer → test_writer → build_verifier → self_checker
 □ 单类失败：已记录 failure_reason + 跳过 + 继续下一个类
 □ build_verifier 后读双信号：失败→failure_repairer；方法名差集→incremental_updater；函数覆盖率<阈值→incremental_updater
-□ 全类完成 + 覆盖达标：已派发 report_generator → code_committer
+□ 批次提交：本批次所有目标类 self_checker 处理完毕（done/failed/skipped）后，已派发 code_committer 增量提交本批次完成类（跳过 committed_classes 中已记录的类）
+□ 提交规范自检：code_committer 完成后已派发 self_checker(commit_check=true)，校验 4 项（已提交完整性 / 未误提交源码 / 未误提交构建产物 / 提交信息格式规范）
+□ 提交规范自检未过：已派发 code_committer 修正（仅 message 不规范时 amend 本批次未 push 的 commit；文件误提交时必须新 commit 撤销）后再 self_checker(commit_check=true)
+□ 全类完成 + 覆盖达标：已派发 report_generator 收尾（测试代码已在各批次提交中入库，不再 code_committer）
 □ 疑似源码缺陷：已标 failure_reason，报告里标红，未自行修源码
 □ 源码缺陷通知：report_generator 返回 source_defect_count > 0 时，已向用户输出醒目提示
-□ 测试代码已提交：code_committer 已 commit autotests/，未 push
+□ 提交边界：所有 code_committer 仅 commit 未 push；未提交源码修改、构建产物、session 文件、缓存
 ```
