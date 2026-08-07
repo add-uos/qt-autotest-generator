@@ -107,55 +107,60 @@ uncovered_functions = parse_uncovered_functions_from_lcov(
 
 ### 2. 命名规范自检
 
-检查每个 `TEST_F` 名是否符合 `{Feature}_{Scenario}_{ExpectedResult}`：
+检查每个 `TEST_F` / `TEST_P` 用例名是否符合 `{Feature}_{Scenario}_{ExpectedResult}`：
 - 必须有至少两个下划线分段
 - 不能是 `Test1`、`testMethod` 等无意义名
 - Feature 部分应与方法名或功能相关
+- `TEST_P` 参数化用例名同样适用（含 `INSTANTIATE_TEST_SUITE_P` 前缀生成的 `Prefix/CaseName/N` 形态，按 `/` 拆分后对最后一段 `CaseName` 检查）
 
 ### 2b. 断言强度自检
 
 检查每个用例的 Assert 段，避免"不崩溃就过"的虚假安全感：
 
-- **最低断言数**：每个 `TEST_F` 用例至少 2 个 `EXPECT_*` 断言（`EXPECT_NO_FATAL_FAILURE` / `EXPECT_NO_THROW` 不计入计数）；不满足标记违规
-- **唯一断言禁令**：扫描以 `EXPECT_NO_FATAL_FAILURE(...)` 为**唯一**断言的用例（用例体内无其他计数的 `EXPECT_*`）→ 违规，逻辑全错也通过，**最危险**
-- **空断言检测**：用例调用了待测方法但函数体内无任何计数的 `EXPECT_*`（只有 `stub.set_lamda` 或纯调用）→ 违规，等于没测
-- **布尔期望边**：单独 `EXPECT_TRUE(ret);` / `EXPECT_FALSE(ret);` 作唯一断言且无注释说明期望分支 → 标记可疑（不强判违规，但回交 test_writer 复核是否对应源码分支期望）
+- **最低断言数**：每个 `TEST_F` / `TEST_P` 用例至少 2 个有效 `EXPECT_*` 断言；`EXPECT_NO_FATAL_FAILURE` / `EXPECT_NO_THROW` / **`EXPECT_CALL`** 均不计入有效断言（`EXPECT_CALL` 是声明未来调用期望，非对当前状态的断言）；不满足标记违规
+- **唯一断言禁令**：扫描以 `EXPECT_NO_FATAL_FAILURE(...)` 为**唯一**断言的用例（用例体内无其他有效 `EXPECT_*`）→ 违规，逻辑全错也通过，**最危险**
+- **空断言检测**：用例调用了待测方法但函数体内无任何有效 `EXPECT_*`（只有 `stub.set_lamda`、`EXPECT_CALL` 或纯调用）→ 违规，等于没测
+- **纯 gMock 期望禁令**：用例只有 `EXPECT_CALL`/`ON_CALL` 而无任何传统 `EXPECT_EQ`/`EXPECT_TRUE`/`EXPECT_FALSE` 等断言验证返回值/对象状态 → 违规（gMock 验证了依赖被调用，但未验证 SUT 自身行为）
+- **布尔期望边**：单独 `EXPECT_TRUE(ret);` / `EXPECT_FALSE(ret);` 作唯一有效断言且无注释说明期望分支 → 标记可疑（不强判违规，但回交 test_writer 复核是否对应源码分支期望）
 - **副作用断言缺失**：方法有写状态/发信号/调下游的副作用（图谱 `trace_path` 出向调用或源码 `emit` 显示），但用例只断言返回值、无 `QSignalSpy.count()` / stub 调用计数 / 对象状态前后对比 → 违规
 - **返回值断言缺失**：方法有返回值（图谱 `get_code_snippet` 返回类型非 `void`）但用例未断言返回值的具体期望值（只断言不崩溃或无任何返回值检查）→ 违规
 
 **扫描方法**（两侧并行：测试文件用 awk/grep，源码侧用图谱——图谱查函数关系比 grep 源码快且准）：
 
-测试文件侧（断言计数、空断言、唯一 NO_FATAL、唯一布尔）—— awk/grep，图谱不索引测试文件内部：
+测试文件侧（断言计数、空断言、唯一 NO_FATAL、唯一布尔、纯 gMock 期望）—— awk/grep，图谱不索引测试文件内部：
 ```bash
 TEST_FILE="<test_file_path>"
 
-# 1-3. 用 awk 按 TEST_F(...) {...} 块切分，逐块统计 EXPECT_* 计数
-#    （EXPECT_NO_FATAL_FAILURE / EXPECT_NO_THROW 不计入有效断言）
+# 1-3. 用 awk 按 TEST_F/TEST_P(...) {...} 块切分，逐块统计有效 EXPECT_* 计数
+#    有效断言 = EXPECT_* 但排除 EXPECT_NO_FATAL_FAILURE / EXPECT_NO_THROW / EXPECT_CALL
+#    （EXPECT_CALL 是声明未来调用期望，非对当前状态的断言；纯 gMock 期望用例需另补传统断言）
 #    按大括号深度判定块边界；输出违规用例名
 awk '
-  /^TEST_F\(/ { in_block=1; name=$0; expect=0; nofatal=0; depth=0; opened=0 }
+  /^TEST_[FP]\(/ { in_block=1; name=$0; expect=0; nofatal=0; gmock=0; depth=0; opened=0 }
   in_block {
     n=gsub(/{/, "{"); d=gsub(/}/, "}"); depth += n - d
     if (n>0) opened=1
-    if (/EXPECT_/ && !/EXPECT_NO_FATAL_FAILURE/ && !/EXPECT_NO_THROW/) expect++
+    if (/EXPECT_CALL/) gmock++
+    if (/EXPECT_/ && !/EXPECT_NO_FATAL_FAILURE/ && !/EXPECT_NO_THROW/ && !/EXPECT_CALL/) expect++
     if (/EXPECT_NO_FATAL_FAILURE/) nofatal++
     if (opened && depth<=0) {
-      if (expect==0 && nofatal==0)      print "EMPTY_ASSERT: " name
-      else if (expect==0 && nofatal>0) print "SOLE_NO_FATAL: " name
-      else if (expect<2)               print "LOW_ASSERT(" expect "): " name
+      if (expect==0 && nofatal==0 && gmock==0)      print "EMPTY_ASSERT: " name
+      else if (expect==0 && nofatal>0)             print "SOLE_NO_FATAL: " name
+      else if (expect==0 && gmock>0)                print "SOLE_GMOCK_EXPECT: " name
+      else if (expect<2)                            print "LOW_ASSERT(" expect "): " name
       in_block=0
     }
   }
 ' "$TEST_FILE"
 
-# 4. 单独 EXPECT_TRUE/EXPECT_FALSE 作唯一断言（可疑，回交 test_writer 复核源码分支期望）
+# 4. 单独 EXPECT_TRUE/EXPECT_FALSE 作唯一有效断言（可疑，回交 test_writer 复核源码分支期望）
 awk '
-  /^TEST_F\(/ { in_block=1; name=$0; bool_only=0; other=0; depth=0; opened=0 }
+  /^TEST_[FP]\(/ { in_block=1; name=$0; bool_only=0; other=0; depth=0; opened=0 }
   in_block {
     n=gsub(/{/, "{"); d=gsub(/}/, "}"); depth += n - d
     if (n>0) opened=1
     if (/EXPECT_TRUE\(|EXPECT_FALSE\(/) bool_only++
-    if (/EXPECT_/ && !/EXPECT_TRUE\(/ && !/EXPECT_FALSE\(/ && !/EXPECT_NO_FATAL_FAILURE/ && !/EXPECT_NO_THROW/) other++
+    if (/EXPECT_/ && !/EXPECT_TRUE\(/ && !/EXPECT_FALSE\(/ && !/EXPECT_NO_FATAL_FAILURE/ && !/EXPECT_NO_THROW/ && !/EXPECT_CALL/) other++
     if (opened && depth<=0) {
       if (bool_only>0 && other==0) print "SOLE_BOOL_ASSERT: " name
       in_block=0
@@ -284,7 +289,7 @@ for method in all_methods:
 | 命名不规范 | 有违规 | 回交路由器 → `test_writer` 修正 |
 | SPDX 缺失 | 无头 | 回交路由器 → `test_writer` 补 |
 | stub 问题 | 有问题 | 回交路由器 → `test_writer` 修正 |
-| 断言强度违规 | NO_FATAL 唯一断言/空断言/副作用未断言/返回值未断言 | 回交路由器 → `test_writer` 重写对应用例 Assert 段 |
+| 断言强度违规 | NO_FATAL 唯一断言/空断言/纯 gMock 期望/副作用未断言/返回值未断言 | 回交路由器 → `test_writer` 重写对应用例 Assert 段 |
 | 环境隔离违规 | 硬编码路径/env 未还原/真实外部资源/stub 未清理 | 回交路由器 → `test_writer` 补 mock 或隔离 |
 | 全部通过 | - | 回交路由器 → 标记 `done`，下一类 |
 
@@ -545,7 +550,7 @@ rm -f "$MSG_FILE"
 - **不要自己拼 qualified_name**：从图谱返回值取
 - **不要忽略 lcov 函数覆盖率门禁**：方法名差集为空但 lcov 函数覆盖率 < 阈值时，仍必须回交 `incremental_updater`
 - **不要忽略覆盖率阈值**：从 `session.coverage_threshold`（默认 80）读取，不硬编码
-- **不要跳过断言强度自检**：每用例至少 2 个 `EXPECT_*`（NO_FATAL/NO_THROW 不计入）；`EXPECT_NO_FATAL_FAILURE` 作唯一断言、空断言、副作用未断言、返回值未断言必须检出并回交 `test_writer` 重写
+- **不要跳过断言强度自检**：每用例（`TEST_F` 与 `TEST_P` 均需扫描）至少 2 个有效 `EXPECT_*`（NO_FATAL/NO_THROW/EXPECT_CALL 均不计入）；`EXPECT_NO_FATAL_FAILURE` 作唯一断言、空断言、纯 gMock 期望（只有 `EXPECT_CALL` 无传统断言）、副作用未断言、返回值未断言必须检出并回交 `test_writer` 重写
 - **不要跳过环境隔离自检**：硬编码绝对路径、`qputenv` 无对应 `qunsetenv`、未 mock 的真实外部资源（QProcess/网络/socket/真实时间）、stub 未 `clear()` 必须检出并回交 `test_writer` 修正
 
 ### 提交规范自检模式

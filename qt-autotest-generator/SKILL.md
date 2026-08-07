@@ -254,6 +254,7 @@ subagent 间唯一的状态传递媒介。结构：
 | 函数覆盖率阈值 | 默认 80%，可由用户指定；低于阈值触发 `incremental_updater` 补全 |
 | MCP 提供方指南 | `resources/references/mcp-providers.md` |
 | MCP 使用指南 | `resources/references/codebase-memory-guide.md` |
+| 测试方法论 | `resources/references/test-types.md` |
 
 ---
 

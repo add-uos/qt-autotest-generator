@@ -110,8 +110,8 @@ per-error 3 次重试，总计 max 10 loops（与 build_verifier 的预算独立
 ### 5. 方法删除的清理（reconcile 路由）
 
 若失败原因是源码删除了方法（reconcile 检出 `removed_methods`）：
-- 读测试文件，找到引用已删方法的 TEST_F
-- 注释或删除这些 TEST_F（加注释 `// Removed: method deleted from source`）
+- 读测试文件，找到引用已删方法的 `TEST_F` 与 `TEST_P` 用例（搜索正则 `/TEST_[FP]\(/`）
+- 注释或删除这些用例（加注释 `// Removed: method deleted from source`）；`TEST_P` 清理时连带移除对应的 `INSTANTIATE_TEST_SUITE_P`，避免悬空参数化定义
 - 不视为源码缺陷（正常的代码演进）
 
 ### 6. 更新 session
@@ -157,6 +157,6 @@ per-error 3 次重试，总计 max 10 loops（与 build_verifier 的预算独立
 - **不要在重试预算耗尽前标红**：先尽力修测试侧问题
 - **不要跳过根因判定**：标红前必须用 `get_code_snippet` 读源码确认
 - **不要把测试代码问题误判为源码缺陷**：先排除 stub/include/CMake 问题
-- **不要修改已通过的 TEST_F**：只修失败的用例
+- **不要修改已通过的用例**：只修失败的 `TEST_F` / `TEST_P` 用例，不动已通过用例
 - **不要超过重试预算**：per-error 3 次，总计 10 loops
 - **不要在标红后继续尝试**：标红即停，交还用户

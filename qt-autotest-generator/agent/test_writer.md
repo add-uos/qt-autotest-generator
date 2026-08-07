@@ -35,6 +35,35 @@ permission:
 - `target_class`：当前要生成测试的类（session 中 `status=dependency_traced` 的类）
 - `autotests/.ut-session.json`
 
+## 测试方法论引用（必读）
+
+生成用例前必须先读 `${SKILL_DIR}/resources/references/test-types.md`，按其方法论建模输入空间与组织用例。本节列出 **test_writer 必须遵守的最小清单**，详细方法以 test-types.md 为准。
+
+### 最小清单（test_writer 在测试文件顶部注释中输出完成情况，未完成不得提交 build_verifier）
+
+| # | 检查项 | 出处 |
+|---|---|---|
+| 1 | 每个公开方法 ≥ 1 用例 | test_writer §4 |
+| 2 | 每个输入维度按等价类划分，每类 ≥ 1 用例 | §1 |
+| 3 | 每个等价类的边界值显式覆盖 | §2 |
+| 4 | 同质多组输入用 `TEST_P` 参数化（≥ 3 组同断言逻辑强制参数化） | §3.2 |
+| 5 | 分支清单已列出并映射到用例名（注释形式） | §4.1 |
+| 6 | 每条 `if/switch/throw/early-return` 分支有触发用例 | §4.2 |
+| 7 | 异常路径用 `EXPECT_THROW(stmt, ExcType)` 精确匹配类型 + message | §5 |
+| 8 | 负面场景（空/越界/类型不符/资源不足）有专门用例 | §6.2 |
+| 9 | 负面用例验证强异常安全（状态未损坏） | §6.3 |
+| 10 | 项目内接口类用 gMock，Qt 类/全局函数/无虚函数类用 stub_ext | §7.5 |
+
+**test_writer 必须读的关键章节**：
+- §1 等价类划分、§2 边界值分析 → 决定用例输入空间
+- §3.2 `TEST_P` 参数化 → 决定用例组织方式
+- §4.1 分支清单 + 用例映射 → 注释必须落到测试文件顶部
+- §5.2 异常精确匹配 → 决定异常路径断言形态
+- §6.3 强异常安全 → 负面用例必检
+- §7.2 / §7.3 / §7.5 stub_ext vs gMock 选择 → 决定 mock 工具
+
+**反模式速查**：见 test-types.md §9（A1-A12），出现即视为用例无效，需重写。
+
 ## 工作步骤
 
 ### 1. 读取函数源码（含签名）
@@ -67,6 +96,7 @@ read("${SKILL_DIR}/resources/templates/cmake-submodule.txt")
 文件路径：`autotests/<module>/test_<classname>.cpp`（模块名取自 source_dirs 的最后一段）
 
 替换模板占位符：
+- `{BranchList}` → 分支清单 + 用例映射注释块（test-types §4.1 要求，复杂方法必须落，简单方法可省）；插入位置：`{Namespace}` 之前、`#include` 之后
 - `{header_file}` → 目标类头文件路径（相对项目根）
 - `{ClassName}` → 类名
 - `{Namespace}` / `{NamespaceEnd}` → 命名空间开闭（若有）
@@ -129,6 +159,8 @@ read("${SKILL_DIR}/resources/templates/cmake-submodule.txt")
 - ✅ `EXPECT_EQ(ret, 42);  // 期望返回 42` + `EXPECT_EQ(obj->count(), 3);` + `EXPECT_EQ(spy.count(), 1);`——多维度交叉验证
 
 **用例自检**：生成每个用例后，回读 Assert 段，确认——(a) 至少 2 个 `EXPECT_*` 断言；(b) 至少 1 个是精确值/状态断言而非纯布尔；(c) 若方法有返回值，必须断言返回值的具体期望值；(d) 若方法有副作用（写状态/发信号/调下游），必须断言副作用发生。不满足则补全或重写。
+
+**类级自检**（test-types.md §8 最小清单，每个类生成完后在测试文件顶部 `{BranchList}` 注释段落落完成情况，与上方表格同义，此处不重复展开）。
 
 **命名规范**：
 - 测试用例名：`{Feature}_{Scenario}_{ExpectedResult}`
@@ -229,3 +261,6 @@ read("${SKILL_DIR}/resources/templates/cmake-submodule.txt")
 - **不要让测试依赖外部资源**：不读写真实文件系统、不连真实数据库、不发真实网络请求、不启动真实子进程、不依赖真实系统时间；一律 mock 或在 `SetUp()` 临时隔离并在 `TearDown()` 清理
 - **不要让用例间互相污染**：单例/静态成员/全局状态在 `TearDown()` 重置；`stub.clear()` 必须在 `TearDown()` 调用；临时目录/文件必须在 `TearDown()` 释放
 - **不要用"不崩溃"或单一布尔作为唯一断言**：每个用例至少 2 个 `EXPECT_*` 断言维度（返回值精确值 + 对象状态/副作用/信号/调用链 之一）；禁止 `EXPECT_NO_FATAL_FAILURE` 或单独 `EXPECT_TRUE(ret)` 作为唯一断言；调用方法后无任何 `EXPECT_*` 等于未测；布尔返回值必须断言具体期望边并写期望值注释；方法有副作用时必须断言副作用发生（详见 4.1）
+- **不要凭直觉生成用例**：必须先按等价类 + 边界值建模输入空间，再按分支覆盖补全；分支清单 + 用例映射写入测试文件顶部注释；`planned_cases` 是下限不是上限，未对账分支覆盖不得提交（详见 `resources/references/test-types.md` §1 §2 §4）
+- **不要用 `EXPECT_ANY_THROW` / `EXPECT_NO_FATAL_FAILURE` 充数异常断言**：异常路径必须 `EXPECT_THROW(stmt, ExcType)` 精确匹配异常类型，并验证 `e.what()` message 内容（test-types §5.2 §5.5 反模式 A1/A6）
+- **不要混用 stub_ext 与 gMock 同一方法**：项目内接口类（有虚函数 + 可注入）用 gMock；Qt 内置类、全局函数、无虚函数/不可注入类用 stub_ext；同一目标不得既 `stub.set_lamda` 又 `MOCK_METHOD`，会导致重复替换未定义行为（test-types §7.5 §7.6 §9 反模式 A8/A9）

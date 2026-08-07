@@ -293,3 +293,120 @@ EXPECT_EQ(obj->count(), 2);                       // 状态变更
 EXPECT_EQ(obj->itemAt(0), QString("item1"));      // 内容验证
 
 // ==================== Stub 模式结束 ====================
+
+// ==================== gMock 模式（用于项目内接口类，详见 test-types.md §7） ====================
+//
+// 何时用 gMock？依赖是【项目内定义的类】且【有虚函数/纯虚接口】且【可注入】（被测类
+// 通过指针/引用持有它，可在构造时传入 mock）。三者全满足才用 gMock；否则用 stub_ext
+// （上方第 1-16 节）。决策树见 test-types.md §7.6。
+//
+// 何时用 stub_ext？依赖是 Qt 内置类、全局函数、第三方类、或项目内类但无虚函数/不可
+// 注入。两者【禁止】对同一目标方法混用（test-types §7.5 反模式 A9）。
+//
+// 使用 gMock 的测试文件顶部必须 #include <gmock/gmock.h>（google-test-base.cpp 默认
+// 只 include gtest/gtest.h，gMock include 由 test_writer 按需追加）。
+
+// 17. Mock 类定义（gMock）
+//
+// 假设被测代码有接口：
+//   class IStorage {
+//   public:
+//       virtual ~IStorage() = default;
+//       virtual bool save(const QString &path, const QByteArray &data) = 0;
+//       virtual QByteArray load(const QString &path) = 0;
+//       virtual void clear() = 0;
+//   };
+//
+// 测试代码：定义 Mock 类（仅测试文件内可见，不动项目源码）
+// 注：实际工程中 #include <gmock/gmock.h> 应放测试文件顶部（与 #include <gtest/gtest.h> 同区），
+// 此处仅为展示 gMock 模式起始，不可照搬到文件中部
+#include <gmock/gmock.h>
+
+class MockStorage : public IStorage {
+public:
+    MOCK_METHOD(bool, save,
+                (const QString &path, const QByteArray &data), (override));
+    MOCK_METHOD(QByteArray, load,
+                (const QString &path), (override));
+    MOCK_METHOD(void, clear, (), (override));
+};
+
+// 18. EXPECT_CALL：验证"被调用了、调用了几次、传了什么参数"
+TEST_F(ManagerTest, Save_CallsStorageOnce_ReturnsTrue) {
+    MockStorage storage;
+    Manager mgr(&storage);  // 依赖注入：被测类通过指针持有 IStorage
+
+    // 期望：save 被调用恰好 1 次，参数必须等于 ("cfg.txt", "data")
+    EXPECT_CALL(storage, save("cfg.txt", QByteArray("data")))
+        .Times(1)
+        .WillOnce(::testing::Return(true));
+
+    // Act
+    bool ok = mgr.persist("cfg.txt", "data");
+
+    // Assert：行为已由 EXPECT_CALL 验证；这里只断言 SUT 返回
+    EXPECT_TRUE(ok);
+    // 析构时 gMock 自动校验所有 EXPECT_CALL 是否满足，未满足则用例失败
+}
+
+// 18a. 验证【未被调用】：Times(0)
+TEST_F(ManagerTest, Save_InvalidInput_SkipsStorageAndReturnsFalse) {
+    MockStorage storage;
+    Manager mgr(&storage);
+
+    EXPECT_CALL(storage, save(::testing::_, ::testing::_))
+        .Times(0);  // 任何形式的 save 都不应被触发
+
+    EXPECT_FALSE(mgr.persist("", ""));  // 空输入直接拒绝，不走 storage
+}
+
+// 18b. 验证【调用顺序】：InSequence
+TEST_F(ManagerTest, Save_ReloadAndSave_LoadsBeforeSaves) {
+    MockStorage storage;
+    Manager mgr(&storage);
+
+    ::testing::InSequence seq;
+    EXPECT_CALL(storage, load(::testing::_))
+        .WillOnce(::testing::Return(QByteArray("")));
+    EXPECT_CALL(storage, save(::testing::_, ::testing::_))
+        .WillOnce(::testing::Return(true));
+
+    mgr.reloadAndSave();
+}
+
+// 19. ON_CALL：配置默认返回值（stub 行为，不强制次数）
+//
+// 与 EXPECT_CALL 区别：
+// - EXPECT_CALL：默认会校验 Times(1)；验证"被调用情况"
+// - ON_CALL：仅配置默认返回，不校验次数；适合"喂输入"场景
+TEST_F(ManagerTest, Load_DefaultConfig_ReturnsCached) {
+    MockStorage storage;
+    Manager mgr(&storage);
+
+    ON_CALL(storage, load(::testing::_))
+        .WillByDefault(::testing::Return(QByteArray("cached")));
+
+    // 多次调用 load 都返回 "cached"，不会因次数校验失败
+    EXPECT_EQ(mgr.read("a"), QString("cached"));
+    EXPECT_EQ(mgr.read("b"), QString("cached"));
+}
+
+// 19a. Cardinality 速查（完整见 test-types.md §7.4.4）
+//   Times(0)        0 次（验证未调用）
+//   Times(1)        恰好 1 次（EXPECT_CALL 默认）
+//   Times(2)        恰好 2 次
+//   AtLeast(n)      ≥ n
+//   AtMost(n)       ≤ n
+//   Between(m, n)   [m, n]
+//   AnyNumber()     任意次（相当于 ON_CALL 的次数语义）
+
+// 19b. Matcher 速查（完整见 test-types.md §7.4.5）
+//   _                       任意
+//   Eq(v) / 直接写 v       等于
+//   StrEq(s)                字符串等于
+//   StartsWith(p)           前缀
+//   Contains(x)             包含
+//   IsNull() / NotNull()    指针 null/非 null
+//   Field(&T::m, m_)        结构体字段匹配
+
+// ==================== gMock 模式结束 ====================

@@ -172,6 +172,7 @@ subagent 间通过 `autotests/.ut-session.json` 传递状态，不靠内存。
 - [详细安装说明](INSTALL.md)
 - [MCP 提供方解析指南](resources/references/mcp-providers.md)
 - [codebase-memory-mcp 使用指南](resources/references/codebase-memory-guide.md)
+- [单元测试用例设计方法论](resources/references/test-types.md)
 - [环境搭建指南](docs/setup-guide.md)
 - [示例项目](examples/README.md)
 

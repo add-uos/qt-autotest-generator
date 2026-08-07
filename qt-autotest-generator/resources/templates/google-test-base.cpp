@@ -5,6 +5,8 @@
 #include "stubext.h"
 #include "{header_file}"
 
+{BranchList}
+
 {Namespace}
 
 class {ClassName}Test : public ::testing::Test {
