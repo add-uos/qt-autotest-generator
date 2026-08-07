@@ -112,6 +112,86 @@ uncovered_functions = parse_uncovered_functions_from_lcov(
 - 不能是 `Test1`、`testMethod` 等无意义名
 - Feature 部分应与方法名或功能相关
 
+### 2b. 断言强度自检
+
+检查每个用例的 Assert 段，避免"不崩溃就过"的虚假安全感：
+
+- **最低断言数**：每个 `TEST_F` 用例至少 2 个 `EXPECT_*` 断言（`EXPECT_NO_FATAL_FAILURE` / `EXPECT_NO_THROW` 不计入计数）；不满足标记违规
+- **唯一断言禁令**：扫描以 `EXPECT_NO_FATAL_FAILURE(...)` 为**唯一**断言的用例（用例体内无其他计数的 `EXPECT_*`）→ 违规，逻辑全错也通过，**最危险**
+- **空断言检测**：用例调用了待测方法但函数体内无任何计数的 `EXPECT_*`（只有 `stub.set_lamda` 或纯调用）→ 违规，等于没测
+- **布尔期望边**：单独 `EXPECT_TRUE(ret);` / `EXPECT_FALSE(ret);` 作唯一断言且无注释说明期望分支 → 标记可疑（不强判违规，但回交 test_writer 复核是否对应源码分支期望）
+- **副作用断言缺失**：方法有写状态/发信号/调下游的副作用（图谱 `trace_path` 出向调用或源码 `emit` 显示），但用例只断言返回值、无 `QSignalSpy.count()` / stub 调用计数 / 对象状态前后对比 → 违规
+- **返回值断言缺失**：方法有返回值（图谱 `get_code_snippet` 返回类型非 `void`）但用例未断言返回值的具体期望值（只断言不崩溃或无任何返回值检查）→ 违规
+
+**扫描方法**（两侧并行：测试文件用 awk/grep，源码侧用图谱——图谱查函数关系比 grep 源码快且准）：
+
+测试文件侧（断言计数、空断言、唯一 NO_FATAL、唯一布尔）—— awk/grep，图谱不索引测试文件内部：
+```bash
+TEST_FILE="<test_file_path>"
+
+# 1-3. 用 awk 按 TEST_F(...) {...} 块切分，逐块统计 EXPECT_* 计数
+#    （EXPECT_NO_FATAL_FAILURE / EXPECT_NO_THROW 不计入有效断言）
+#    按大括号深度判定块边界；输出违规用例名
+awk '
+  /^TEST_F\(/ { in_block=1; name=$0; expect=0; nofatal=0; depth=0; opened=0 }
+  in_block {
+    n=gsub(/{/, "{"); d=gsub(/}/, "}"); depth += n - d
+    if (n>0) opened=1
+    if (/EXPECT_/ && !/EXPECT_NO_FATAL_FAILURE/ && !/EXPECT_NO_THROW/) expect++
+    if (/EXPECT_NO_FATAL_FAILURE/) nofatal++
+    if (opened && depth<=0) {
+      if (expect==0 && nofatal==0)      print "EMPTY_ASSERT: " name
+      else if (expect==0 && nofatal>0) print "SOLE_NO_FATAL: " name
+      else if (expect<2)               print "LOW_ASSERT(" expect "): " name
+      in_block=0
+    }
+  }
+' "$TEST_FILE"
+
+# 4. 单独 EXPECT_TRUE/EXPECT_FALSE 作唯一断言（可疑，回交 test_writer 复核源码分支期望）
+awk '
+  /^TEST_F\(/ { in_block=1; name=$0; bool_only=0; other=0; depth=0; opened=0 }
+  in_block {
+    n=gsub(/{/, "{"); d=gsub(/}/, "}"); depth += n - d
+    if (n>0) opened=1
+    if (/EXPECT_TRUE\(|EXPECT_FALSE\(/) bool_only++
+    if (/EXPECT_/ && !/EXPECT_TRUE\(/ && !/EXPECT_FALSE\(/ && !/EXPECT_NO_FATAL_FAILURE/ && !/EXPECT_NO_THROW/) other++
+    if (opened && depth<=0) {
+      if (bool_only>0 && other==0) print "SOLE_BOOL_ASSERT: " name
+      in_block=0
+    }
+  }
+' "$TEST_FILE"
+```
+
+源码侧（返回值/副作用判断）——图谱查函数关系比 grep 源码更快更准，避免 grep 源码误报同名方法：
+```python
+# 待测方法列表（来自 1a 的 all_methods）
+for method in all_methods:
+    # 返回值类型：get_code_snippet 返回签名，判断返回类型是否非 void
+    snippet = codebase_memory_mcp.get_code_snippet(
+        qualified_name=method.qualified_name   # 必须来自图谱返回值
+    )
+    has_return_value = not snippet.signature.startswith("void")
+
+    # 副作用：trace_path 出向调用链，命中 emit/写状态/调下游
+    traces = codebase_memory_mcp.trace_path(
+        project=session.project_name_in_graph,
+        function_name=method.name,
+        direction="outbound",
+        mode="calls"
+    )
+    has_side_effect = any(
+        "emit" in t.callee_code or t.callee_is_signal or t.callee_writes_state
+        for t in traces
+    )
+
+    # 对每个用例比对：源码侧有返回值/副作用但测试文件侧未断言对应维度 → 违规
+    # （与 awk 输出交叉：用例名匹配源码方法名）
+```
+
+**判定**：任一违规 → 回交路由器 → `test_writer` 重写对应用例的 Assert 段（传入违规用例名 + 违规类型）
+
 ### 3. SPDX 头自检
 
 测试文件首行必须有：
@@ -134,6 +214,67 @@ uncovered_functions = parse_uncovered_functions_from_lcov(
 - 对象是否在 `SetUp()` 构造、`TearDown()` 释放
 - 是否有内存泄漏风险（`new` 无对应 `delete`）
 
+### 5b. 环境隔离自检
+
+检查测试是否硬耦合测试机环境（路径/环境变量/外部资源），避免在干净 CI 上崩溃或非确定性失败：
+
+- **硬编码绝对路径**：grep 测试文件，命中以下模式 → 违规
+  - `"/home/`、`"/tmp/`（非 `QTemporaryDir` 生成）、`"/usr/`、`"/var/`、`"/opt/`、`"/etc/` 硬编码字符串字面量
+  - `"/root/`、`C:\\`（Windows 绝对路径）
+  - 例外：`QTemporaryDir`/`QTemporaryFile` 的 `path()` 返回值、`QDir::tempPath()` 产生的临时路径不算违规
+- **用户目录访问**：直接使用 `QDir::homePath()`、`QStandardPaths::writableLocation(...)` 的返回值作为真实读写路径（未 mock、未重定向到临时目录）→ 违规
+- **环境变量未还原**：`qputenv(` 出现但全文件无对应 `qunsetenv(`（计数不平衡）→ 违规（用例间泄漏）。注：bash/grep 仅做文件级计数平衡，per-scope 精确配对交由 `test_writer` 复核时人工确认
+- **真实外部资源访问**：未 mock 的 `QProcess::start`、`::system`、`::popen`、`QNetworkAccessManager::get/post`、`QTcpSocket::connectToHost` → 违规
+- **真实时间依赖**：需要确定性结果但未 mock 的 `QDateTime::currentDateTime()`、`QTime::currentTime()`、`QRandomGenerator::system()` → 违规
+- **用例间污染**：单例 `Instance()` 调用但 `TearDown()` 无重置；`stub.set_lamda(` 出现但 `TearDown()` 无 `stub.clear()` → 违规
+
+**扫描方法**（两侧并行：测试文件用 grep 查硬编码/env/未清理；源码侧用图谱 trace_path 查待测方法是否调外部资源——图谱查调用链比 grep 源码快且准）：
+
+测试文件侧（硬编码路径、env 未还原、stub 未清理）—— grep：
+```bash
+# 硬编码绝对路径（排除临时目录相关）
+grep -nE '"/(home|tmp|usr|var|opt|etc|root)/' "$TEST_FILE" | grep -vE 'QTemporaryDir|QTemporaryFile|tempPath|QDir::temp'
+
+# 环境变量未还原
+qputenv_count=$(grep -c 'qputenv(' "$TEST_FILE")
+qunsetenv_count=$(grep -c 'qunsetenv(' "$TEST_FILE")
+[ "$qputenv_count" -ne "$qunsetenv_count" ] && echo "ENV_UNBALANCED: put=$qputenv_count unset=$qunsetenv_count"
+
+# 真实外部资源
+# 注：此 grep 主要命中静态引用形式（&Class::method）。实例调用形式
+#   proc.start() / nam.get() / nam.post() 受 grep 局限多数漏报，
+#   依赖 test_writer 4.0 手动复核识别；.connectToHost() 与 popen() 因
+#   方法名特异性高已纳入；system()/start() 因同名变量误报风险未纳入非限定形式
+grep -nE 'QProcess::start|::system\(|popen\(|QNetworkAccessManager::(get|post)|QTcpSocket::connectToHost|\.connectToHost\(' "$TEST_FILE" \
+    | grep -vE 'stub\.set_lamda|__DBG_STUB_INVOKE__' && echo "REAL_EXTERNAL_CALL"
+
+# stub 清理
+[ "$(grep -c 'stub\.set_lamda(' "$TEST_FILE")" -gt 0 ] && [ "$(grep -c 'stub\.clear()' "$TEST_FILE")" -eq 0 ] && echo "STUB_NOT_CLEARED"
+```
+
+源码侧（待测方法是否调外部资源、测试是否漏 mock）—— 图谱 trace_path，比 grep 源码更准（能跨文件、跨层级追到 QProcess::start 等终点）：
+```python
+EXTERNAL_ENDPOINTS = {
+    "QProcess::start", "system", "popen",
+    "QNetworkAccessManager::get", "QNetworkAccessManager::post",
+    "QTcpSocket::connectToHost", "QUdpSocket::writeDatagram",
+    "QDateTime::currentDateTime", "QTime::currentTime",
+    "QRandomGenerator::system", "srand", "qsrand",
+}
+for method in all_methods:
+    traces = codebase_memory_mcp.trace_path(
+        project=session.project_name_in_graph,
+        function_name=method.name,
+        direction="outbound",
+        mode="calls",
+        depth=5
+    )
+    external_called = {t.callee_qualified_name for t in traces} & EXTERNAL_ENDPOINTS
+    # 交叉比对测试文件：external_called 中是否有未出现在 stub.set_lamda(...) 的 → 漏 mock → 违规
+```
+
+**判定**：任一违规 → 回交路由器 → `test_writer` 修正（传入违规类型 + 行号），补 mock 或改用 `QTemporaryDir`/`qputenv`+`qunsetenv` 隔离
+
 ### 6. 自检结果处理
 
 | 自检项 | 结果 | 处理 |
@@ -143,6 +284,8 @@ uncovered_functions = parse_uncovered_functions_from_lcov(
 | 命名不规范 | 有违规 | 回交路由器 → `test_writer` 修正 |
 | SPDX 缺失 | 无头 | 回交路由器 → `test_writer` 补 |
 | stub 问题 | 有问题 | 回交路由器 → `test_writer` 修正 |
+| 断言强度违规 | NO_FATAL 唯一断言/空断言/副作用未断言/返回值未断言 | 回交路由器 → `test_writer` 重写对应用例 Assert 段 |
+| 环境隔离违规 | 硬编码路径/env 未还原/真实外部资源/stub 未清理 | 回交路由器 → `test_writer` 补 mock 或隔离 |
 | 全部通过 | - | 回交路由器 → 标记 `done`，下一类 |
 
 ### 7. 更新 session
@@ -157,7 +300,9 @@ uncovered_functions = parse_uncovered_functions_from_lcov(
     "coverage_threshold": 80,
     "naming": "pass",
     "spdx": "pass",
-    "stub": "pass"
+    "stub": "pass",
+    "assertion_strength": "pass",  // 2b 断言强度自检
+    "env_isolation": "pass"        // 5b 环境隔离自检
   }
 }
 ```
@@ -175,7 +320,9 @@ uncovered_functions = parse_uncovered_functions_from_lcov(
     "uncovered_functions": ["methodZ", "methodW"],   // lcov 未执行函数（若有）
     "naming": "pass",
     "spdx": "pass",
-    "stub": "pass"
+    "stub": "pass",
+    "assertion_strength": "pass",                    // 2b 断言强度自检
+    "env_isolation": "pass"                          // 5b 环境隔离自检
   }
 }
 ```
@@ -392,12 +539,14 @@ rm -f "$MSG_FILE"
 ### 单类自检模式
 
 - **不要产出交付文件**：自检是内部环节，不写报告不入正文
-- **不要修改测试代码**：只检查，修正由 `test_writer` / `incremental_updater` 负责
+- **不要修改测试代码**：自检只读扫描（测试文件侧 grep/awk + 源码侧图谱查询，不 AST 改写）报告违规，修正由 `test_writer` / `incremental_updater` 负责
 - **不要修改项目源码**
 - **不要跳过 GUI 类豁免**：GUI 类无可测方法时不强制覆盖率
 - **不要自己拼 qualified_name**：从图谱返回值取
 - **不要忽略 lcov 函数覆盖率门禁**：方法名差集为空但 lcov 函数覆盖率 < 阈值时，仍必须回交 `incremental_updater`
 - **不要忽略覆盖率阈值**：从 `session.coverage_threshold`（默认 80）读取，不硬编码
+- **不要跳过断言强度自检**：每用例至少 2 个 `EXPECT_*`（NO_FATAL/NO_THROW 不计入）；`EXPECT_NO_FATAL_FAILURE` 作唯一断言、空断言、副作用未断言、返回值未断言必须检出并回交 `test_writer` 重写
+- **不要跳过环境隔离自检**：硬编码绝对路径、`qputenv` 无对应 `qunsetenv`、未 mock 的真实外部资源（QProcess/网络/socket/真实时间）、stub 未 `clear()` 必须检出并回交 `test_writer` 修正
 
 ### 提交规范自检模式
 
