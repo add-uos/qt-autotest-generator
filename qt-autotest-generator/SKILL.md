@@ -244,8 +244,8 @@ subagent 间唯一的状态传递媒介。结构：
 |----|----|
 | 测试框架 | Google Test only |
 | 测试文件 | `test_myclass.cpp` |
-| 测试类名 | `MyClassTest` |
-| 用例命名 | `{Feature}_{Scenario}_{ExpectedResult}` |
+| 测试类名 | `MyClassTest`（禁止携带轮数/批次号如 `R18`） |
+| 用例命名 | `{Feature}_{Scenario}_{ExpectedResult}`（禁止携带轮数/批次号如 `R18`） |
 | MCP 工具（主） | 通过 `session.mcp_provider` 调用：`search_graph`, `get_code_snippet`, `trace_path`, `query_graph`, `index_status`；本地提供方额外支持 `index_repository` |
 | LSP 工具（补充） | `lsp_symbols`(scope=document), `lsp_goto_definition`（仅精确签名） |
 | Stub 模板 | `resources/templates/stub-patterns.cpp` |

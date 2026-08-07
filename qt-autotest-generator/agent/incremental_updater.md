@@ -114,7 +114,7 @@ callees = codebase_memory_mcp.trace_path(
 # 按 stub 决策矩阵决定 stub
 ```
 
-c. 生成测试用例（AAA 模式、命名规范同 test_writer）
+c. 生成测试用例（AAA 模式、命名规范同 test_writer；**Fixture 类名和用例名禁止携带轮数/批次号**）
 
 ### 4. 追加到现有测试文件
 

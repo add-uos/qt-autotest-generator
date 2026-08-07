@@ -150,7 +150,7 @@ INSTANTIATE_TEST_SUITE_P(
 
 #### 3.4.1 默认 fixture（test_writer 主路径）
 
-`{ClassName}Test : public ::testing::Test`，每用例独立实例，`SetUp()` 构造对象 + 设置 stub，`TearDown()` 析构 + `stub.clear()`。这是 `google-test-base.cpp` 模板的默认形态。
+`{ClassName}Test : public ::testing::Test`，每用例独立实例，`SetUp()` 构造对象 + 设置 stub，`TearDown()` 析构 + `stub.clear()`。这是 `google-test-base.cpp` 模板的默认形态。**Fixture 类名禁止携带轮数/批次号**（如 `R18`、`Round2`、`Batch3`），只允许 `{ClassName}Test` 或其派生（如 `{ClassName}Test_LoggedIn`）。
 
 #### 3.4.2 共享 SetUp（SetUpTestSuite）
 

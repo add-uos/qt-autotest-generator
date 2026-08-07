@@ -163,8 +163,10 @@ read("${SKILL_DIR}/resources/templates/cmake-submodule.txt")
 **类级自检**（test-types.md §8 最小清单，每个类生成完后在测试文件顶部 `{BranchList}` 注释段落落完成情况，与上方表格同义，此处不重复展开）。
 
 **命名规范**：
+- 测试 Fixture 类名：`{ClassName}Test`（如 `MyClassTest`）
 - 测试用例名：`{Feature}_{Scenario}_{ExpectedResult}`
 - 例：`ParseData_ValidInput_ReturnsTrue`、`ParseData_EmptyInput_ReturnsFalse`
+- **禁止在 Fixture 类名和用例名中携带轮数/批次号**（如 `R18`、`Round2`、`Batch3`），轮数是内部调度概念，不属于测试命名
 
 **GUI 类特殊处理**（`is_gui=true`）：
 - `SetUpTestSuite()` 用 `QCoreApplication`，**不用** `QApplication`（避免 X11/Wayland 崩溃）

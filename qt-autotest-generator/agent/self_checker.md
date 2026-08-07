@@ -112,6 +112,7 @@ uncovered_functions = parse_uncovered_functions_from_lcov(
 - 不能是 `Test1`、`testMethod` 等无意义名
 - Feature 部分应与方法名或功能相关
 - `TEST_P` 参数化用例名同样适用（含 `INSTANTIATE_TEST_SUITE_P` 前缀生成的 `Prefix/CaseName/N` 形态，按 `/` 拆分后对最后一段 `CaseName` 检查）
+- **禁止轮数/批次号**：Fixture 类名和用例名中不得出现 `R` + 数字（如 `R18`、`R2`）、`Round` + 数字、`Batch` + 数字等内部调度标识——这些是路由器批次管理概念，不属于测试命名。正则检测：`/(R\d+|Round\d+|Batch\d+)/i`，匹配即违规
 
 ### 2b. 断言强度自检
 
