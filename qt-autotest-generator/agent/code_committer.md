@@ -242,7 +242,6 @@ git commit -m "<提交信息>"
 
 ## 硬性限制
 
-- **不要 push**：只 commit，不 push
 - **不要重复提交**：以 `session.committed_classes` 为准，已提交过的类不再 commit
 - **不要提交源码修改**：只提交 autotests/ 目录的测试代码；staged 中发现 src/ 文件必须取消暂存
 - **不要提交构建产物**：build-autotests/、.results/、.reports/、.ut-session.json、缓存文件全部排除
