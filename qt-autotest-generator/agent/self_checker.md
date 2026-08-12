@@ -103,7 +103,6 @@ uncovered_functions = parse_uncovered_functions_from_lcov(
 - `pct < threshold` → 回交路由器 → `incremental_updater`（传入 `uncovered_functions`）
 - 两者都通过 → 覆盖率自检 pass
 
-**GUI 类豁免**：`is_gui=true` 且无可测方法（除构造函数）→ 跳过覆盖率自检（含 lcov 门禁）。
 
 ### 2. 命名规范自检
 
@@ -547,7 +546,7 @@ rm -f "$MSG_FILE"
 - **不要产出交付文件**：自检是内部环节，不写报告不入正文
 - **不要修改测试代码**：自检只读扫描（测试文件侧 grep/awk + 源码侧图谱查询，不 AST 改写）报告违规，修正由 `test_writer` / `incremental_updater` 负责
 - **不要修改项目源码**
-- **不要跳过 GUI 类豁免**：GUI 类无可测方法时不强制覆盖率
+- **不要跳过 GUI 类豁免**
 - **不要自己拼 qualified_name**：从图谱返回值取
 - **不要忽略 lcov 函数覆盖率门禁**：方法名差集为空但 lcov 函数覆盖率 < 阈值时，仍必须回交 `incremental_updater`
 - **不要忽略覆盖率阈值**：从 `session.coverage_threshold`（默认 80）读取，不硬编码

@@ -109,7 +109,6 @@ GUI 类标记 `is_gui=true`，后续 `test_writer` 会特殊处理（用 `QCoreA
 
 > 用例类型词汇与 `resources/references/test-types.md` 章节一一对应，`test_writer` 据此规划生成具体用例时按对应章节方法落地。
 
-**GUI 类豁免**：GUI 类若无可测 public/protected 方法（除构造函数外），标记为"仅生成占位测试"，不强制 100% 覆盖。
 
 ### 6. diff 模式（对账）
 

@@ -25,7 +25,7 @@ compatibility:
 1. **知识图谱 MCP 硬门禁** —— 无图谱索引不执行，不降级 LSP；LSP 仅在图谱 ready 后做精确签名补充。提供方在 `environment_check` 阶段一次性解析（**远端优先，本地兜底，互斥使用其一**），全流程通过 `session.mcp_provider` 调用，详见 `resources/references/mcp-providers.md`
 2. **`autotests/` 目录** —— 固定目录名，不用 `tests/`
 3. **Google Test only** —— 固定框架，不用 Qt Test / Catch2
-4. **函数覆盖率门禁** —— lcov 函数覆盖率不低于阈值（默认 80%，可由用户指定）；每个公开/受保护方法至少 1 个用例；低于阈值触发 `incremental_updater` 补全。GUI 类无可测方法时豁免
+4. **函数覆盖率门禁** —— lcov 函数覆盖率不低于阈值（默认 80%，可由用户指定）；每个公开/受保护方法至少 1 个用例；低于阈值触发 `incremental_updater` 补全。
 5. **强制编译+运行验证** —— 编译并跑通后才能报完成
 6. **内置 stub-ext** —— 从 `resources/stub/` 复制，不从网络下载
 7. **不问用户确认** —— 直接执行，不用 `ask` 工具
