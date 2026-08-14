@@ -41,103 +41,19 @@ fi
 
 ### 1. MCP 提供方解析（远端优先，本地兜底）
 
-本技能支持两种知识图谱 MCP 提供方。按优先级解析，**互斥使用其一**，详见
-`resources/references/mcp-providers.md`。
+**完整解析算法（候选优先级、`probe_available` 探测、远端项目已索引判定、4 种强制提醒规则）见 [`resources/references/mcp-providers.md`](../resources/references/mcp-providers.md)，该文档为单一权威来源。** 本步骤只列执行要点：
 
 候选提供方（优先级降序）：
 
 1. **`remote-codebase-memory-mcp`**（远端/外部）—— 优先。只读查询，**不可触发索引**。
 2. **`codebase-memory-mcp`**（本地）—— 兜底。可查询 + 可索引。
 
-#### 1a. 探测远端提供方
+**执行步骤**：
 
-```python
-# 探测远端 MCP 是否可用
-try:
-    remote_projects = remote_codebase_memory_mcp.list_projects()
-    remote_available = True
-except Exception:
-    remote_available = False
-```
-
-若远端可用，进一步判断目标项目是否已在远端索引：
-
-```python
-if remote_available:
-    matched = [p for p in remote_projects if p.root_path == project_path]
-    if matched:
-        project_name = matched[0].name
-        status = remote_codebase_memory_mcp.index_status(project=project_name)
-        if status.status == "ready":
-            # ✅ 远端已就绪，解析为远端提供方
-            resolved_provider = "remote-codebase-memory-mcp"
-            resolved_type = "remote"
-            # 跳过本地安装步骤
-        else:
-            # 远端正在索引或异常 → 跳过远端，走本地
-            pass
-    else:
-        # 远端未索引该项目，且远端无法 index_repository → 跳过远端，走本地
-        pass
-```
-
-#### 1b. 探测本地提供方（远端不可用或项目未索引时）
-
-```python
-if resolved_provider is None:
-    try:
-        local_projects = codebase_memory_mcp.list_projects()
-        local_available = True
-    except Exception:
-        local_available = False
-```
-
-- 若本地可用 → 解析为本地提供方：
-  ```python
-  resolved_provider = "codebase-memory-mcp"
-  resolved_type = "local"
-  ```
-  此时**仍需向用户提醒**未使用远端的原因（远端不可用 / 项目未在远端索引），提醒内容区分「使用已安装的本地」：
-  ```
-  ⚠️ [MCP 提供方解析] <远端不可用 / 远端未索引本项目>。
-  本次将使用本地知识图谱 MCP（codebase-memory-mcp）。
-  若需使用远端图谱，请在远端 codebase-memory-mcp 服务端先索引本项目，
-  并在 MCP 客户端配置中接入该远端实例。
-  ```
-- 若本地不可用 → **强制提醒用户**后将安装本地（见 1c）。
-
-#### 1c. 本地提供方不可用时的强制提醒
-
-当远端不可用（或目标项目未在远端索引）且本地 MCP 未安装时，必须向用户输出：
-
-```
-⚠️ [MCP 提供方解析] 未发现可用的远端知识图谱 MCP（未接入 / 项目未索引）。
-本次将安装本地 codebase-memory-mcp 用于本项目索引。
-若需使用远端图谱，请在远端 codebase-memory-mcp 服务端先索引本项目，
-并在 MCP 客户端配置中接入该远端实例。
-```
-
-然后运行安装脚本：
-
-```bash
-bash ${SKILL_DIR}/resources/scripts/setup-codebase-memory.sh
-```
-
-**退出码处理**：
-- `0` → 继续，设置本地提供方：
-  ```python
-  resolved_provider = "codebase-memory-mcp"
-  resolved_type = "local"
-  ```
-- `1`（安装失败）/ `2`（配置失败）/ `3`（验证失败）→ **硬终止**，向路由器报告退出码与错误摘要
-
-#### 1d. 全部不可用 → 硬终止
-
-若远端不可用、本地安装也失败：
-
-```
-硬终止：无任何可用的知识图谱 MCP 提供方。
-```
+1. **探测远端**：`remote_codebase_memory_mcp.list_projects()` 调通即远端可用；进一步用 `root_path` 匹配 `project_path`，命中且 `index_status(project=...) == "ready"` → 解析为远端提供方，写 `session.mcp_provider = "remote-codebase-memory-mcp"` / `mcp_provider_type = "remote"`，**跳过本地安装**。
+2. **回退本地**：远端不可用 / 项目未在远端索引 / 远端索引中三者任一成立 → 探测本地 `codebase_memory_mcp.list_projects()`：调通则解析为本地提供方，`session.mcp_provider = "codebase-memory-mcp"` / `mcp_provider_type = "local"`，按 `mcp-providers.md` §6 输出**使用本地**提醒。
+3. **本地不可用 → 安装**：本地亦不可用 → 按 `mcp-providers.md` §6 输出**安装本地**强制提醒 → 运行 `bash ${SKILL_DIR}/resources/scripts/setup-codebase-memory.sh`；退出码 `0` → 设本地提供方；`1`（安装失败）/ `2`（配置失败）/ `3`（验证失败）→ **硬终止**，向路由器报告退出码与错误摘要。
+4. **全不可用 → 硬终止**：远端不可用且本地安装失败 → `硬终止：无任何可用的知识图谱 MCP 提供方。`，**不降级 LSP**（`mcp-providers.md` §7）。
 
 ### 2. 确认项目已索引
 

@@ -110,3 +110,46 @@ qmake --version  # 或 qmake6 --version
 | lcov | `sudo apt install lcov` | 代码覆盖率 HTML 报告 |
 | ccache | `sudo apt install ccache` | 加速重复编译 |
 | AddressSanitizer | gcc 内置 | 编译时加 `-fsanitize=address` |
+
+## GitHub 网络受限时设置代理
+
+```bash
+export https_proxy=http://proxy02.uniontech.com:3128
+export http_proxy=http://proxy02.uniontech.com:3128
+```
+
+远端 codebase-memory-mcp 若走公网同样受此代理影响；本地 codebase-memory-mcp 不受影响。
+
+## 常见问题
+
+### GTest 找不到
+
+```
+CMake Error: Could not find GTest
+```
+
+解决：确认 `libgtest-dev` 已安装且编译了库文件（见上方「Google Test」节）。
+
+### codebase-memory-mcp 索引不 ready
+
+```
+index_status 返回 "indexing" 超过 60 秒
+```
+
+解决：手动推一下 `codebase-memory-mcp index_repository --repo-path <path> --mode fast`，等待 ready。
+
+### Qt 模块缺失
+
+```
+Could not find Qt6::Widgets
+```
+
+解决：`sudo apt install qt6-base-dev`（Qt5 用 `qtbase5-dev`）。
+
+### stub-shadow.cpp 链接错误
+
+```
+undefined reference to stub_ext::freeWrapper
+```
+
+解决：确认 `autotests/3rdparty/stub/stub-shadow.cpp` 已编入 test target（CMakeLists 检查）。

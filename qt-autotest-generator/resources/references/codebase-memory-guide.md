@@ -1,6 +1,6 @@
 # codebase-memory-mcp 使用指南
 
-> 本指南面向 `qt-unittest-make` 和 `generating-qt-unit-tests` 两个技能的子 Agent。
+> 本指南面向 `qt-autotest-generator` 技能的子 Agent。
 > 它假设 MCP 服务已经由 `setup-codebase-memory.sh` 安装并配置完成。
 
 > **提供方说明**：本技能支持两种知识图谱 MCP 提供方——远端（`remote-codebase-memory-mcp`）和本地（`codebase-memory-mcp`）。提供方在 `environment_check` 阶段一次性解析（远端优先，本地兜底），全流程互斥使用其一，记录在 `session.mcp_provider`。下文所有 `codebase_memory_mcp.*` 调用示例均为**概念性写法**，实际调用时替换为 `session.mcp_provider` 对应的工具前缀。完整解析算法见 `mcp-providers.md`。
@@ -224,7 +224,7 @@ callees = codebase_memory_mcp.trace_path(
 
 ### 4.5 分析依赖目录（#include 链）
 
-**场景**：`generating-qt-unit-tests` 子 Agent 需要为 CMakeLists.txt 收集所有依赖源码目录
+**场景**：`qt-autotest-generator` 子 Agent 需要为 CMakeLists.txt 收集所有依赖源码目录
 （原文档要求手动递归 `#include`）。
 
 ```python

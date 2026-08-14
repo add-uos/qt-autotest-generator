@@ -15,7 +15,7 @@ Qt 项目代码量大，**单测覆盖率上不去**？<br>
 手动写测试**又慢又容易漏方法**？<br>
 源码改了**不知道哪些测试要更新**？
 
-[愿景](#愿景) · [功能特性](#功能特性) · [安装](#安装) · [使用](#使用) · [架构](#架构) · [示例](#示例) · [参考文档](#参考文档) · [技能入口](SKILL.md)
+[愿景](#愿景) · [功能特性](#功能特性) · [安装](#安装) · [使用](#使用) · [示例](#示例) · [参考文档](#参考文档) · [技能入口](SKILL.md)
 
 </div>
 
@@ -96,16 +96,7 @@ Claude Code、Cursor、opencode 等兼容 AgentSkills 的客户端，具体落�
 
 ## 使用
 
-在 Agent 中用自然语言即可触发：
-
-| 说法 | 触发模式 |
-|------|---------|
-| 拉取 https://github.com/foo/bar 的 dev 分支生成单测、clone 项目建测试 | 拉取项目（用户提供 repo_url + branch） |
-| 建单测、生成测试框架、add tests | 首次搭建 |
-| 为 src/lib/ui 生成测试、批量生成单测 | 批量生成 |
-| 补全测试、补全 MyClass 的测试 | 增量补全 |
-| 测试编译失败、修测试、fix test failures | 修复失败 |
-| 代码改了重新检查、重新对账、sync tests | 源码变更对账 |
+在 Agent 中用自然语言即可触发：「建单测」「为 src/lib 生成测试」「补全测试」「修测试」「代码改了重新对账」等。完整触发表、subagent 流程图、状态传递机制与 Iron Laws 详见 [SKILL.md](SKILL.md)。
 
 建议说明 **项目路径** 或 **仓库地址 + 分支名**。例如：
 
@@ -123,43 +114,6 @@ Claude Code、Cursor、opencode 等兼容 AgentSkills 的客户端，具体落�
 
 ---
 
-## 架构
-
-### Subagent 流程
-
-```
-[project_preparer] → environment_check → framework_builder → [逐类循环] → [批次提交] → report_generator
-  (用户提供 repo_url 时)                                    ↓                ↓
-                                               class_analyzer → dependency_tracer → test_writer   code_committer
-                                               → build_verifier → self_checker                     → self_checker(commit_check)
-                                                               ↓                                                ↓
-                                                   失败 → failure_repairer → 重验              通过 → 下一批次或 report_generator
-                                                   缺口 → incremental_updater → 重验            未过 → code_committer 修正 → 重验
-```
-
-每批次所有目标类 self_checker 处理完毕后立即派发 `code_committer` 增量提交本批次完成类，并派发 `self_checker(commit_check=true)` 做提交规范自检（已提交完整性 / 未误提交源码 / 未误提交构建产物 / 提交信息格式规范）。`report_generator` 收尾时测试代码已全部入库，不再触发 `code_committer`。
-
-### 状态传递
-
-subagent 间通过 `autotests/.ut-session.json` 传递状态，不靠内存。
-
-### Iron Laws
-
-1. codebase-memory-mcp 硬门禁 —— 无图谱不执行（远端优先，本地兜底，互斥使用其一）
-2. `autotests/` 固定目录名
-3. Google Test only
-4. 函数覆盖率门禁（默认 80%，可由用户指定）
-5. 强制编译+运行验证
-6. 内置 stub-ext，不从网络下载
-7. 不问用户确认，直接执行
-8. 逐类闭环，单类失败不阻塞
-9. 不修源码，只标红
-10. 状态写 session 文件，不靠内存
-
-详见 [SKILL.md](SKILL.md)。
-
----
-
 ## 示例
 
 - **示例项目**：见 [examples/README.md](examples/README.md)（含示例 Qt 类、生成的测试文件、session 状态、报告样例）。
@@ -173,7 +127,7 @@ subagent 间通过 `autotests/.ut-session.json` 传递状态，不靠内存。
 - [MCP 提供方解析指南](resources/references/mcp-providers.md)
 - [codebase-memory-mcp 使用指南](resources/references/codebase-memory-guide.md)
 - [单元测试用例设计方法论](resources/references/test-types.md)
-- [环境搭建指南](docs/setup-guide.md)
+- [提交信息格式规范](resources/references/commit-msg-format.md)
 - [示例项目](examples/README.md)
 
 ---

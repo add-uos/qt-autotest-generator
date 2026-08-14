@@ -122,11 +122,9 @@ compatibility:
   self_check 不过（覆盖率缺口 / 函数覆盖率 < 阈值 / 命名 / SPDX / stub）→ incremental_updater 或 test_writer 修正
   failure_repairer 耗尽 → 标记 failed + failure_reason → 跳过 → 下一类
 
-本批次所有目标类 self_checker 处理完毕（含 done / failed / skipped）→ 派发 code_committer 增量提交本批次新完成的类 → 派发 self_checker(commit_check=true) 做提交规范自检
-  提交规范自检过 → 进入下一批次或检查覆盖率缺口
-  提交规范自检不过 → 派发 code_committer 修正（仅 message 不规范时 amend 本批次未 push 的 commit；文件误提交时必须新 commit 撤销）→ 再 self_checker(commit_check=true)
+本批次所有目标类 self_checker 处理完毕（含 done / failed / skipped）→ 按核心原则 11 执行批次提交闭环（`code_committer` → `self_checker(commit_check=true)`；自检不过则 `code_committer` 修正后重验，详见原则 11 与 `agent/code_committer.md` / `agent/self_checker.md`）
 
-全部类 done → 检查覆盖率缺口（方法名差集 + lcov 函数覆盖率是否达标）→ 有缺口则 incremental_updater → 无则 report_generator（测试代码已在各批次提交中入库，report_generator 之后不再 code_committer）
+全部类 done → 检查覆盖率缺口（方法名差集 + lcov 函数覆盖率是否达标）→ 有缺口则 incremental_updater → 无则 report_generator
 ```
 
 ### 并行处理策略
@@ -139,7 +137,7 @@ compatibility:
 - **CMake 合并**：test_writer 的 CMake 智能合并是 append-only，多类并行追加不冲突
 - **编译隔离**：build_verifier 按类编译 `--target test_<classname>`，互不影响
 - **失败不阻塞**：单类失败标记后继续，不影响并行中的其他类
-- **收尾同步**：所有并行类完成后，路由器统一合并分片、检查覆盖率缺口；本批次无覆盖率缺口或缺口已交由 incremental_updater 处理后，再统一派发 `code_committer` 增量提交本批次完成类，并派发 `self_checker(commit_check=true)` 做提交规范自检
+- **收尾同步**：所有并行类完成后，路由器统一合并分片、检查覆盖率缺口；本批次无覆盖率缺口或缺口已交由 incremental_updater 处理后，按核心原则 11 执行批次提交闭环
 
 ### 迭代双信号触发
 

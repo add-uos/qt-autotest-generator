@@ -432,39 +432,7 @@ git show --stat --name-only --pretty=format: "$SHA" \
 
 ### 4. 提交信息格式规范自检
 
-校验本批次 commit message 含 4 个必含字段（基线 commit / 本批次类列表 / 累计统计 / Log+Influence 行）：
-
-```bash
-cd "$PROJECT_PATH"
-MSG_FILE=$(mktemp)
-git log -1 --format=%B "$SHA" > "$MSG_FILE"
-
-# 4.1 标题行
-grep -E '^test: add autotests for .+ batch [0-9]+ \([0-9]+/[0-9]+ classes\)$' "$MSG_FILE" \
-    || echo "FAIL_TITLE"
-
-# 4.2 基线 commit 行
-grep -E '^Baseline: .+ @ .+ \".+\" \(.+\)$' "$MSG_FILE" \
-    || echo "FAIL_BASELINE"
-
-# 4.3 本批次类列表行
-grep -E '^Batch [0-9]+: .+$' "$MSG_FILE" \
-    || echo "FAIL_BATCH_LINE"
-
-# 4.4 累计统计行
-grep -E '^Cumulative: [0-9]+/[0-9]+ classes, [0-9]+/[0-9]+ methods tested$' "$MSG_FILE" \
-    || echo "FAIL_CUMULATIVE"
-
-# 4.5 Log 行
-grep -E '^Log: .+$' "$MSG_FILE" \
-    || echo "FAIL_LOG"
-
-# 4.6 Influence 行
-grep -E '^Influence: .+[0-9]+/[0-9]+.+$' "$MSG_FILE" \
-    || echo "FAIL_INFLUENCE"
-
-rm -f "$MSG_FILE"
-```
+校验本批次 commit message 含全部必含字段（标题 / 基线 commit / 本批次类列表 / 累计统计 / Log / Influence）。**正则与校验脚本以 [`resources/references/commit-msg-format.md`](../resources/references/commit-msg-format.md) §2 §3 为单一权威来源**，本步骤直接执行该文档 §3 的校验脚本（传入 `$SHA`），收集 6 个 `FAIL_*` 输出。
 
 **判定**：
 - 任何 `FAIL_*` 输出 → `fail`，列出缺失/不规范的字段
