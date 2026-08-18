@@ -120,7 +120,7 @@ if not matched:
 {
   "mcp_provider": "remote-codebase-memory-mcp",
   "mcp_provider_type": "remote",
-  "project_name_in_graph": "home-zhy-demo-utest-skills",
+  "project_name_in_graph": "home-demo-utest-skills",
   ...
 }
 ```

@@ -1,6 +1,6 @@
 ---
 name: qt-autotest-generator
-description: "用于为 Qt CMake 项目生成与维护 Google Test 单元测试：搭建 autotests/ 框架、逐类生成 GTest 用例、补全覆盖率缺口、修复失败用例、源码变更后重新对账。触发于「生成单测/建测试框架/批量生成测试/补全测试/修测试/重新对账/加测试」等表述，针对 Qt + CMake 的 C++ 项目；即使用户只说 add tests 或提高覆盖率也应触发。硬门禁依赖 codebase-memory-mcp 知识图谱（远端优先、本地兜底），强制编译+运行验证，函数覆盖率默认门禁 80%。不触发于：非 Qt 或非 CMake 项目、Qt Test/Catch2 框架、仅运行测试/CI 而不生成测试的任务。"
+description: "用于为 Qt CMake 项目生成与维护 Google Test 单元测试：搭建 autotests/ 框架、逐类生成 GTest 用例、补全覆盖率缺口、修复失败用例、源码变更后重新对账。触发于「生成单测/建测试框架/批量生成测试/补全测试/修测试/重新对账/加测试」等表述，针对 Qt + CMake 的 C++ 项目；即使用户只说 add tests 或提高覆盖率也应触发。硬门禁依赖 codebase-memory-mcp 知识图谱（远端优先、本地兜底），强制编译+运行验证，函数覆盖率默认门禁 90%。不触发于：非 Qt 或非 CMake 项目、Qt Test/Catch2 框架、仅运行测试/CI 而不生成测试的任务。"
 version: "2.0.0"
 user-invocable: true
 argument-hint: "[项目路径 / 模块路径 / 类名]"
@@ -25,7 +25,7 @@ compatibility:
 1. **知识图谱 MCP 硬门禁** —— 无图谱索引不执行，不降级 LSP；LSP 仅在图谱 ready 后做精确签名补充。提供方在环境检查阶段一次性解析（**远端优先，本地兜底，互斥使用其一**），全流程通过 `session.mcp_provider` 调用，详见 `resources/references/mcp-providers.md`
 2. **`autotests/` 目录** —— 固定目录名，不用 `tests/`
 3. **Google Test only** —— 固定框架，不用 Qt Test / Catch2
-4. **函数覆盖率门禁** —— lcov 函数覆盖率不低于阈值（默认 80%，可由用户指定）；每个公开/受保护方法至少 1 个用例；低于阈值触发增量补全。
+4. **函数覆盖率门禁** —— lcov 函数覆盖率不低于阈值（默认 90%，可由用户指定）；每个公开/受保护方法至少 1 个用例；低于阈值触发增量补全。
 5. **强制编译+运行验证** —— 编译并跑通后才能报完成
 6. **内置 stub-ext** —— 从 `resources/stub/` 复制，不从网络下载
 7. **不问用户确认** —— 直接执行
@@ -45,7 +45,7 @@ compatibility:
 - 增量补全缺失用例："补全测试"、"补全 MyClass 的测试"、"complete test coverage"
 - 修复失败用例："测试编译失败"、"修测试"、"fix test failures"
 - 源码变更后对账："代码改了重新检查"、"重新对账"、"sync tests"
-- **指定覆盖率阈值**："函数覆盖率 80%"、"覆盖率不低于 90%"、"coverage threshold 75%" → 写入 `session.coverage_threshold`，默认 80
+- **指定覆盖率阈值**："函数覆盖率 90%"、"覆盖率不低于 95%"、"coverage threshold 85%" → 写入 `session.coverage_threshold`，默认 90
 
 **不触发于**（交还给通用工具或其它技能）：
 - 非 Qt 或非 CMake 的项目（纯 C、Python、Go、前端等）
@@ -189,7 +189,7 @@ compatibility:
   "pull_method": "git_clone",
   "build_env": "verified",
   "qt_version": 5,
-  "coverage_threshold": 80,
+  "coverage_threshold": 90,
   "classes": [
     {
       "name": "MyClass",
@@ -225,7 +225,7 @@ compatibility:
 - `run_result`: `pass` / `fail` / `not_run`
 - `failure_reason`: `null` / `compile_error` / `runtime_crash` / `source_defect_compile` / `source_defect_runtime` / `source_defect_logic` / `needs_manual`
 - `overall_status`: `incomplete` / `partial` / `complete`
-- `coverage_threshold`: 函数覆盖率门禁阈值，默认 80，可由用户指定；低于此值触发增量补全
+- `coverage_threshold`: 函数覆盖率门禁阈值，默认 90，可由用户指定；低于此值触发增量补全
 - `function_coverage`: lcov 解析出的该类函数覆盖率百分比；低于 `coverage_threshold` 则触发补全
 - `committed_classes`: 已提交到 git 的类名列表；下次提交跳过这些类避免重复提交
 - `last_batch_commit`: 最近一次批次提交的 commit sha
@@ -246,7 +246,7 @@ compatibility:
 | Stub 模板 | `resources/templates/stub-patterns.cpp` |
 | CMake 模板 | `resources/templates/cmake-*.txt` |
 | 编译重试 | per-error 3 次，max 10 loops |
-| 函数覆盖率阈值 | 默认 80%，可由用户指定；低于阈值触发增量补全 |
+| 函数覆盖率阈值 | 默认 90%，可由用户指定；低于阈值触发增量补全 |
 | MCP 提供方指南 | `resources/references/mcp-providers.md` |
 | MCP 使用指南 | `resources/references/codebase-memory-guide.md` |
 | 测试方法论 | `resources/references/test-types.md` |

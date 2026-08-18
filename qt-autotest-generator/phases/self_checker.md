@@ -39,10 +39,10 @@ coverage_gap = all_method_names - tested_names
 
 ##### 1b. lcov 函数覆盖率门禁（百分比）
 
-读取 lcov 生成的 `build-autotests/coverage/filtered.info`，计算该类源文件对应的函数覆盖率百分比，与 `session.coverage_threshold`（默认 80）比对：
+读取 lcov 生成的 `build-autotests/coverage/filtered.info`，计算该类源文件对应的函数覆盖率百分比，与 `session.coverage_threshold`（默认 90）比对：
 
 ```python
-threshold = session.get("coverage_threshold", 80)
+threshold = session.get("coverage_threshold", 90)
 
 # 解析 lcov info 文件中目标类源文件的函数覆盖率
 func_coverage = parse_function_coverage_from_lcov(
@@ -265,7 +265,7 @@ for method in all_methods:
   "function_coverage": 86.7,
   "self_check": {
     "coverage": "pass",
-    "coverage_threshold": 80,
+    "coverage_threshold": 90,
     "naming": "pass",
     "spdx": "pass",
     "stub": "pass",
@@ -283,7 +283,7 @@ for method in all_methods:
   "function_coverage": 60.0,
   "self_check": {
     "coverage": "fail",
-    "coverage_threshold": 80,
+    "coverage_threshold": 90,
     "coverage_gap": ["methodX", "methodY"],
     "uncovered_functions": ["methodZ", "methodW"],
     "naming": "pass",
@@ -303,6 +303,6 @@ for method in all_methods:
 - 不跳过 GUI 类豁免
 - `qualified_name` 必须从图谱返回值取，不自己拼
 - 不忽略 lcov 函数覆盖率门禁：方法名差集为空但 lcov 函数覆盖率 < 阈值时，仍必须流转至 `incremental_updater`
-- 覆盖率阈值从 `session.coverage_threshold`（默认 80）读取，不硬编码
+- 覆盖率阈值从 `session.coverage_threshold`（默认 90）读取，不硬编码
 - 不跳过断言强度自检：每用例（`TEST_F` 与 `TEST_P` 均需扫描）至少 2 个有效 `EXPECT_*`（NO_FATAL/NO_THROW/EXPECT_CALL 均不计入）
 - 不跳过环境隔离自检：硬编码绝对路径、`qputenv` 无对应 `qunsetenv`、未 mock 的真实外部资源（QProcess/网络/socket/真实时间）、stub 未 `clear()` 必须检出
