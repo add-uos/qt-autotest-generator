@@ -1,45 +1,18 @@
----
-description: 读模板生成 Google Test 测试代码，AAA 模式，覆盖 public/protected 方法
-mode: subagent
-tools:
-  read: true
-  write: true
-  edit: true
-  codebase-memory-mcp: true
-  remote-codebase-memory-mcp: true
-permission:
-  read: allow
-  write: allow
-  edit: allow
----
+# 测试代码生成
 
-# Test Writer · 测试代码生成
+> 前置条件：`class_analyzer` 已完成目标类分析（session 中有 `test_plan`），`dependency_tracer` 已完成目标类追踪（session 中有 `stub_list` + `source_dirs`），图谱 ready。
 
-## MCP 提供方
+> 通过 session.mcp_provider 调用知识图谱工具（详见 resources/references/mcp-providers.md）
 
-本 subagent 通过 `session.mcp_provider` 记录的 MCP 提供方调用知识图谱工具（远端优先，本地兜底，互斥使用其一，详见 `resources/references/mcp-providers.md`）。下文示例中的 `codebase_memory_mcp.*` 调用均指当前解析到的提供方对应工具。
+## 概述
 
-## 角色作用
-
-根据 class_analyzer 的测试规划和 dependency_tracer 的 stub 清单，读模板生成单个类的 Google Test 测试代码。**只生成测试代码，不编译不运行**（编译验证由 `build_verifier` 负责）。
-
-## 前置门禁
-
-- `class_analyzer` 已完成目标类分析（session 中有 `test_plan`）
-- `dependency_tracer` 已完成目标类追踪（session 中有 `stub_list` + `source_dirs`）
-- 图谱 ready
-
-## 输入
-
-- `project_path`
-- `target_class`：当前要生成测试的类（session 中 `status=dependency_traced` 的类）
-- `autotests/.ut-session.json`
+根据类分析的测试规划和依赖追踪的 stub 清单，读模板生成单个类的 Google Test 测试代码。此阶段只生成测试代码，不编译不运行（编译验证由后续阶段负责）。
 
 ## 测试方法论引用（必读）
 
-生成用例前必须先读 `${SKILL_DIR}/resources/references/test-types.md`，按其方法论建模输入空间与组织用例。本节列出 **test_writer 必须遵守的最小清单**，详细方法以 test-types.md 为准。
+生成用例前必须先读 `${SKILL_DIR}/resources/references/test-types.md`，按其方法论建模输入空间与组织用例。本节列出**必须遵守的最小清单**，详细方法以 test-types.md 为准。
 
-### 最小清单（test_writer 在测试文件顶部注释中输出完成情况，未完成不得提交 build_verifier）
+### 最小清单（在测试文件顶部注释中输出完成情况，未完成不得提交编译验证）
 
 | # | 检查项 | 出处 |
 |---|---|---|
@@ -54,7 +27,7 @@ permission:
 | 9 | 负面用例验证强异常安全（状态未损坏） | §6.3 |
 | 10 | 项目内接口类用 gMock，Qt 类/全局函数/无虚函数类用 stub_ext | §7.5 |
 
-**test_writer 必须读的关键章节**：
+**必须读的关键章节**：
 - §1 等价类划分、§2 边界值分析 → 决定用例输入空间
 - §3.2 `TEST_P` 参数化 → 决定用例组织方式
 - §4.1 分支清单 + 用例映射 → 注释必须落到测试文件顶部
@@ -112,7 +85,7 @@ read("${SKILL_DIR}/resources/templates/cmake-submodule.txt")
 
 #### 4.0 前置：mock 深度分析（避免漏测与环境耦合）
 
-`stub_list` 是 `dependency_tracer` 给的起点，**不能盲信**。生成用例前必须对每个待测方法做以下分析，分析结论落入测试文件顶部注释或 `SetUp()` 实现：
+`stub_list` 是依赖追踪给的起点，**不能盲信**。生成用例前必须对每个待测方法做以下分析，分析结论落入测试文件顶部注释或 `SetUp()` 实现：
 
 1. **完整阅读待测方法源码**：不只看签名，要看实现。识别所有出向调用、分支、循环、异常路径。复杂方法先在测试文件顶部用注释列出"分支清单 → 用例映射"，确保每条分支至少一个用例。
 2. **识别隐式依赖**（`stub_list` 常漏的，必须逐一排查）：
@@ -160,7 +133,7 @@ read("${SKILL_DIR}/resources/templates/cmake-submodule.txt")
 
 **用例自检**：生成每个用例后，回读 Assert 段，确认——(a) 至少 2 个 `EXPECT_*` 断言；(b) 至少 1 个是精确值/状态断言而非纯布尔；(c) 若方法有返回值，必须断言返回值的具体期望值；(d) 若方法有副作用（写状态/发信号/调下游），必须断言副作用发生。不满足则补全或重写。
 
-**类级自检**（test-types.md §8 最小清单，每个类生成完后在测试文件顶部 `{BranchList}` 注释段落落完成情况，与上方表格同义，此处不重复展开）。
+**类级自检**（test-types.md §8 最小清单，每个类生成完后在测试文件顶部 `{BranchList}` 注释段落落完成情况）。
 
 **命名规范**：
 - 测试 Fixture 类名：`{ClassName}Test`（如 `MyClassTest`）
@@ -180,7 +153,7 @@ read("${SKILL_DIR}/resources/templates/cmake-submodule.txt")
 **单例/工厂模式处理**（`special_handling=private_ctor`）：
 - 单例：通过 `Instance()` 获取实例，不直接 `new`；测试后需重置单例状态
 - 工厂：通过工厂方法创建实例，不绕过工厂直接构造
-- 若构造函数是 private/protected 且无工厂方法 → 标记 `needs_manual`，回交路由器
+- 若构造函数是 private/protected 且无工厂方法 → 标记 `needs_manual`
 
 **PIMPL 模式处理**（`special_handling=pimpl`）：
 - 只测 public 接口，不直接访问 Private 类
@@ -190,7 +163,7 @@ read("${SKILL_DIR}/resources/templates/cmake-submodule.txt")
 - 为模板类指定具体类型参数（如 `MyTemplate<int>`、`MyTemplate<QString>`）
 - 优先用项目中已有的实例化类型
 
-**stub 选择**（以 `dependency_tracer` 的 `stub_list` 为起点，结合 4.0 的源码深度分析补齐）：
+**stub 选择**（以依赖追踪的 `stub_list` 为起点，结合 4.0 的源码深度分析补齐）：
 - 继承 QWidget → stub `show`、`hide`、`height`、`width`
 - 继承 QDialog → stub `exec`
 - 虚函数 → `VADDR(Class, method)`
@@ -214,7 +187,7 @@ read("${SKILL_DIR}/resources/templates/cmake-submodule.txt")
 - `{QT_VERSION}` → session 中的 qt_version
 - `{PROJECT_LIBRARIES}` → 从根 CMakeLists.txt 检测到的项目目标库（如 `dde-file-manager`）；无则留空
 - `{QT_EXTRA_LIBS}` → GUI 类填 `Qt${QT_VERSION}::Widgets`（及其他 GUI 模块）；纯 Core 模块填空字符串
-- `{source_module_path}` → dependency_tracer 的 source_dirs（glob `*.cpp`）
+- `{source_module_path}` → 依赖追踪的 source_dirs（glob `*.cpp`）
 
 ### 6. 智能合并 CMake
 
@@ -223,7 +196,7 @@ read("${SKILL_DIR}/resources/templates/cmake-submodule.txt")
 - 若已有该模块的 `add_subdirectory`，跳过
 - 若无，在 `{ADD_SUBDIRECTORIES}` 区域追加
 
-**绝不**修改已有 `add_subdirectory` 行的顺序或内容。
+> **注意**：绝不修改已有 `add_subdirectory` 行的顺序或内容。
 
 ### 7. 更新 session
 
@@ -235,34 +208,21 @@ read("${SKILL_DIR}/resources/templates/cmake-submodule.txt")
 }
 ```
 
-## 输出
+## 关键约束
 
-- `autotests/<module>/test_<classname>.cpp`：测试代码
-- `autotests/<module>/CMakeLists.txt`：模块 CMake
-- `autotests/CMakeLists.txt`：已追加 `add_subdirectory`
-- session 更新 `status=test_written` + `test_file`
-
-## 回交协议
-
-向路由器返回：
-- `pass`：测试代码已生成，可派发 `build_verifier`
-- `fail`：附错误摘要（如模板替换失败、源码获取失败）
-
-## 硬性限制
-
-- **不要编译或运行测试**：编译验证由 `build_verifier` 负责
-- **不要直接为 private 方法写 `TEST_F`**：private 方法通过调用它的 public/protected 方法**间接覆盖**，必须覆盖其内部分支与边界，不得因"private"跳过其逻辑（详见 4.0 第 5 条）
-- **不要自己拼 qualified_name**：必须从图谱返回值取
-- **不要跳过 GUI 特殊处理**：GUI 类用 `QCoreApplication`，不直接实例化
-- **不要修改已有 CMake 代码**：只 APPEND `add_subdirectory`
-- **不要修改项目源码**
-- **不要从网络下载模板**：只读 `resources/templates/`
-- **不要省略 SPDX 头**：测试文件必须有 `SPDX-FileCopyrightText` 和 `SPDX-License-Identifier`
-- **不要硬耦合测试机**：测试中所有路径、环境变量、文件系统、网络、子进程、时间、随机源访问必须 mock 或在 `SetUp()` 中隔离（`QTemporaryDir`/`QTemporaryFile`/临时 `qputenv`）；禁止硬编码测试机绝对路径（`/home/xxx`、`/tmp/xxx_by_user`、`/usr/...`）；禁止依赖测试机特定文件/用户/权限/时区/网络状态；用例必须可在任意干净 CI 环境复现
-- **不要盲信 `stub_list`**：`stub_list` 是 `dependency_tracer` 的起点，必须先读待测方法源码识别其**隐式依赖**（路径、env、文件系统、子进程、时间、随机、单例/全局状态），按 4.0 补齐 mock；漏掉隐式依赖会导致测试在测试机外崩溃或非确定性失败
-- **不要让测试依赖外部资源**：不读写真实文件系统、不连真实数据库、不发真实网络请求、不启动真实子进程、不依赖真实系统时间；一律 mock 或在 `SetUp()` 临时隔离并在 `TearDown()` 清理
-- **不要让用例间互相污染**：单例/静态成员/全局状态在 `TearDown()` 重置；`stub.clear()` 必须在 `TearDown()` 调用；临时目录/文件必须在 `TearDown()` 释放
-- **不要用"不崩溃"或单一布尔作为唯一断言**：每个用例至少 2 个 `EXPECT_*` 断言维度（返回值精确值 + 对象状态/副作用/信号/调用链 之一）；禁止 `EXPECT_NO_FATAL_FAILURE` 或单独 `EXPECT_TRUE(ret)` 作为唯一断言；调用方法后无任何 `EXPECT_*` 等于未测；布尔返回值必须断言具体期望边并写期望值注释；方法有副作用时必须断言副作用发生（详见 4.1）
-- **不要凭直觉生成用例**：必须先按等价类 + 边界值建模输入空间，再按分支覆盖补全；分支清单 + 用例映射写入测试文件顶部注释；`planned_cases` 是下限不是上限，未对账分支覆盖不得提交（详见 `resources/references/test-types.md` §1 §2 §4）
-- **不要用 `EXPECT_ANY_THROW` / `EXPECT_NO_FATAL_FAILURE` 充数异常断言**：异常路径必须 `EXPECT_THROW(stmt, ExcType)` 精确匹配异常类型，并验证 `e.what()` message 内容（test-types §5.2 §5.5 反模式 A1/A6）
-- **不要混用 stub_ext 与 gMock 同一方法**：项目内接口类（有虚函数 + 可注入）用 gMock；Qt 内置类、全局函数、无虚函数/不可注入类用 stub_ext；同一目标不得既 `stub.set_lamda` 又 `MOCK_METHOD`，会导致重复替换未定义行为（test-types §7.5 §7.6 §9 反模式 A8/A9）
+- 不编译或运行测试（编译验证由后续阶段负责）
+- 不直接为 private 方法写 `TEST_F`：private 方法通过调用它的 public/protected 方法**间接覆盖**，必须覆盖其内部分支与边界
+- `qualified_name` 必须从图谱返回值取，不自己拼
+- 不跳过 GUI 特殊处理（GUI 类用 `QCoreApplication`，不直接实例化）
+- 不修改已有 CMake 代码，只 APPEND `add_subdirectory`
+- 不修改项目源码
+- 不从网络下载模板，只读 `resources/templates/`
+- 测试文件必须有 `SPDX-FileCopyrightText` 和 `SPDX-License-Identifier` 头
+- 不硬耦合测试机：所有路径、环境变量、文件系统、网络、子进程、时间、随机源访问必须 mock 或在 `SetUp()` 中隔离；禁止硬编码测试机绝对路径；禁止依赖测试机特定文件/用户/权限/时区/网络状态；用例必须可在任意干净 CI 环境复现
+- 不盲信 `stub_list`：必须先读待测方法源码识别其**隐式依赖**（路径、env、文件系统、子进程、时间、随机、单例/全局状态），按 4.0 补齐 mock
+- 不让测试依赖外部资源：不读写真实文件系统、不连真实数据库、不发真实网络请求、不启动真实子进程、不依赖真实系统时间；一律 mock 或在 `SetUp()` 临时隔离并在 `TearDown()` 清理
+- 不让用例间互相污染：单例/静态成员/全局状态在 `TearDown()` 重置；`stub.clear()` 必须在 `TearDown()` 调用；临时目录/文件必须在 `TearDown()` 释放
+- 不用"不崩溃"或单一布尔作为唯一断言：每个用例至少 2 个 `EXPECT_*` 断言维度；禁止 `EXPECT_NO_FATAL_FAILURE` 或单独 `EXPECT_TRUE(ret)` 作为唯一断言
+- 不凭直觉生成用例：必须先按等价类 + 边界值建模输入空间，再按分支覆盖补全；分支清单 + 用例映射写入测试文件顶部注释；`planned_cases` 是下限不是上限
+- 不用 `EXPECT_ANY_THROW` / `EXPECT_NO_FATAL_FAILURE` 充数异常断言：异常路径必须 `EXPECT_THROW(stmt, ExcType)` 精确匹配异常类型
+- 不混用 stub_ext 与 gMock 同一方法：项目内接口类用 gMock；Qt 内置类、全局函数、无虚函数/不可注入类用 stub_ext；同一目标不得既 `stub.set_lamda` 又 `MOCK_METHOD`

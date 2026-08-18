@@ -1,33 +1,10 @@
----
-description: 搭建 autotests/ 脚手架：CMake、stub-ext、runner、report_generator
-mode: subagent
-tools:
-  read: true
-  write: true
-  edit: true
-  bash: true
-permission:
-  read: allow
-  write: allow
-  edit: allow
-  bash: allow
----
+# 框架搭建
 
-# Framework Builder · 框架搭建
+> 前置条件：`environment_check` 已通过（session 中 `project_name_in_graph` 已记录），且 `autotests/` 目录不存在。
 
-## 角色作用
+## 概述
 
-在目标项目根目录下创建 `autotests/` 测试框架骨架：目录结构、stub-ext、CMake 工具、测试运行脚本、报告生成器。**只搭建框架，不生成具体测试用例**。
-
-## 前置门禁
-
-- `environment_check` 已通过（session 中 `project_name_in_graph` 已记录）
-- `autotests/` 目录不存在（若已存在，回交路由器跳过本 phase）
-
-## 输入
-
-- `project_path`：目标项目绝对路径
-- `autotests/.ut-session.json`（已含 project_name_in_graph、baseline_commit）
+在目标项目根目录下创建 `autotests/` 测试框架骨架：目录结构、stub-ext、CMake 工具、测试运行脚本、报告生成器。此阶段只搭建框架，不生成具体测试用例。
 
 ## 工作步骤
 
@@ -59,7 +36,7 @@ autotests/
 cp -r ${SKILL_DIR}/resources/stub/* ${PROJECT_PATH}/autotests/3rdparty/stub/
 ```
 
-**禁止**从网络下载 stub-ext，只从 `resources/stub/` 复制。
+> **注意**：禁止从网络下载 stub-ext，只从 `resources/stub/` 复制。
 
 ### 4. 生成 CMake 工具脚本
 
@@ -84,7 +61,7 @@ bash ${SKILL_DIR}/resources/scripts/generate-runner.sh
 替换占位符：
 - `{QT_VERSION}` → 5 或 6
 - `{THIRD_PARTY_PACKAGES}` → 检测到的依赖的 `find_package` 命令
-- `{ADD_SUBDIRECTORIES}` → `add_subdirectory()` 调用（初始为空，后续 class_analyzer/test_writer 会补充）
+- `{ADD_SUBDIRECTORIES}` → `add_subdirectory()` 调用（初始为空，后续阶段会补充）
 
 **覆盖率编译标志**：模板已内置 `-fprofile-arcs -ftest-coverage`（Debug 模式下启用）。
 不要删除此标志——`run-ut.sh` 的 step_5 (lcov --capture) 和 `report_generator` 的覆盖率解析都依赖它。
@@ -92,7 +69,7 @@ bash ${SKILL_DIR}/resources/scripts/generate-runner.sh
 
 ### 7. 修改根 CMakeLists.txt
 
-**DANGER ZONE**：只 APPEND 新行，**绝不**修改或注释已有代码。
+> **注意**：只 APPEND 新行，**绝不**修改或注释已有代码。
 
 用 `edit` 工具精确匹配插入。找到 `add_subdirectory(src)` 行，在其后插入：
 
@@ -151,23 +128,10 @@ cmake --build . -j$(nproc)
 }
 ```
 
-## 输出
+## 关键约束
 
-- `autotests/` 完整骨架（CMakeLists、stub、runner、report_generator、README）
-- 根 CMakeLists.txt 已 APPEND 测试开关
-- 框架可空编译通过
-- session 更新 `qt_version` + `last_phase`
-
-## 回交协议
-
-向路由器返回：
-- `pass`：框架就绪，可派发 `class_analyzer` 开始逐类生成
-- `fail`：附编译错误摘要，路由器决定是否重试或终止
-
-## 硬性限制
-
-- **不要生成具体测试用例**：只搭框架，测试代码由 `test_writer` 负责
-- **不要修改已有 CMake 代码**：只 APPEND，不改不删不注释已有块
-- **不要从网络下载 stub-ext**
-- **不要跳过框架编译验证**：空框架必须能编译通过
-- **不要在 `autotests/` 已存在时重复搭建**：回交路由器跳过
+- 不生成具体测试用例（测试代码由后续阶段负责）
+- 不修改已有 CMake 代码，只 APPEND，不改不删不注释已有块
+- 不从网络下载 stub-ext
+- 空框架必须能编译通过，不跳过框架编译验证
+- `autotests/` 已存在时跳过本阶段

@@ -1,30 +1,12 @@
----
-description: codebase-memory-mcp 环境门禁：提供方解析（远端优先，本地兜底）、索引、验证；失败硬终止
-mode: subagent
-tools:
-  read: true
-  bash: true
-  codebase-memory-mcp: true
-  remote-codebase-memory-mcp: true
-permission:
-  read: allow
-  bash: allow
----
+# 环境门禁
 
-# Environment Check · 环境门禁
+> 前置条件：目标项目绝对路径（`project_path`）已就绪。
 
-## 角色作用
+> 通过 session.mcp_provider 调用知识图谱工具（详见 resources/references/mcp-providers.md）
 
-确认知识图谱 MCP 已就绪、目标项目已索引、索引处于 ready 状态。**失败即硬终止**，不降级 LSP，不继续后续 phase。
+## 概述
 
-## 前置门禁
-
-- 收到路由器派发，携带 `project_path`（目标项目绝对路径）
-- 无需其他前置条件
-
-## 输入
-
-- `project_path`：目标项目绝对路径
+确认知识图谱 MCP 已就绪、目标项目已索引、索引处于 ready 状态。**失败即硬终止**，不降级 LSP，不继续后续阶段。
 
 ## 工作步骤
 
@@ -52,7 +34,7 @@ fi
 
 1. **探测远端**：`remote_codebase_memory_mcp.list_projects()` 调通即远端可用；进一步用 `root_path` 匹配 `project_path`，命中且 `index_status(project=...) == "ready"` → 解析为远端提供方，写 `session.mcp_provider = "remote-codebase-memory-mcp"` / `mcp_provider_type = "remote"`，**跳过本地安装**。
 2. **回退本地**：远端不可用 / 项目未在远端索引 / 远端索引中三者任一成立 → 探测本地 `codebase_memory_mcp.list_projects()`：调通则解析为本地提供方，`session.mcp_provider = "codebase-memory-mcp"` / `mcp_provider_type = "local"`，按 `mcp-providers.md` §6 输出**使用本地**提醒。
-3. **本地不可用 → 安装**：本地亦不可用 → 按 `mcp-providers.md` §6 输出**安装本地**强制提醒 → 运行 `bash ${SKILL_DIR}/resources/scripts/setup-codebase-memory.sh`；退出码 `0` → 设本地提供方；`1`（安装失败）/ `2`（配置失败）/ `3`（验证失败）→ **硬终止**，向路由器报告退出码与错误摘要。
+3. **本地不可用 → 安装**：本地亦不可用 → 按 `mcp-providers.md` §6 输出**安装本地**强制提醒 → 运行 `bash ${SKILL_DIR}/resources/scripts/setup-codebase-memory.sh`；退出码 `0` → 设本地提供方；`1`（安装失败）/ `2`（配置失败）/ `3`（验证失败）→ **硬终止**，报告退出码与错误摘要。
 4. **全不可用 → 硬终止**：远端不可用且本地安装失败 → `硬终止：无任何可用的知识图谱 MCP 提供方。`，**不降级 LSP**（`mcp-providers.md` §7）。
 
 ### 2. 确认项目已索引
@@ -145,23 +127,11 @@ if result.total == 0:
 git -C <project_path> rev-parse HEAD
 ```
 
-## 输出
+## 关键约束
 
-- `autotests/.ut-session.json` 已初始化（含 `mcp_provider` / `mcp_provider_type` / `project_name_in_graph` / `baseline_commit`）
-- 回交路由器 status：`pass` / `hard_terminate`
-
-## 回交协议
-
-向路由器返回：
-- `pass`：提供方已解析、session 已就绪、图谱 ready，可派发 `framework_builder`
-- `hard_terminate`：附退出码/错误摘要；路由器终止流程并向用户报告
-
-## 硬性限制
-
-- **不要混用提供方**：全流程只用 `session.mcp_provider` 记录的那一个
-- **不要对远端 MCP 调用 index_repository**：远端不可索引，只能查询
-- **不要降级到 LSP**：图谱不可用即硬终止
-- **不要跳过验证**：必须确认 `index_status == "ready"` 且图谱非空
-- **不要修改项目源码**
-- **不要生成测试代码**：你只负责环境门禁
-- **不要假设项目名**：必须从 `list_projects` 的 `root_path` 匹配取 `name`
+- 全流程只用 `session.mcp_provider` 记录的那一个提供方，不混用
+- 不对远端 MCP 调用 `index_repository`（远端不可索引，只能查询）
+- 图谱不可用即硬终止，不降级到 LSP
+- 必须确认 `index_status == "ready"` 且图谱非空
+- 不修改项目源码
+- 项目名必须从 `list_projects` 的 `root_path` 匹配取 `name`，不假设

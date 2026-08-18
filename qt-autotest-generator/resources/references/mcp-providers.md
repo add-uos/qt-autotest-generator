@@ -1,7 +1,7 @@
 # MCP 提供方解析（Provider Resolution）
 
 > 本技能支持两种知识图谱 MCP 提供方：**远端优先**，**本地兜底**。全流程互斥使用其一，绝不混用。
-> 单一权威文档：所有 subagent 与路由器均以本文档为提供方解析的唯一依据。
+> 单一权威文档：所有 phase 均以本文档为提供方解析的唯一依据。
 
 ## 1. 背景
 
@@ -23,7 +23,7 @@
 
 ## 3. 解析算法
 
-`environment_check` subagent 在 Step 1 执行提供方解析。算法如下：
+`environment_check` 阶段在 Step 1 执行提供方解析。算法如下：
 
 ```
 输入: project_path（目标项目绝对路径）
@@ -103,14 +103,14 @@ if not matched:
 
 ## 4. 提供方与工具前缀映射
 
-解析到的提供方决定 subagent 实际调用的工具前缀：
+解析到的提供方决定实际调用的工具前缀：
 
 | resolved_provider | 工具前缀 | 示例 |
 |-------------------|---------|------|
 | `remote-codebase-memory-mcp` | `remote_codebase_memory_mcp_*` | `remote_codebase_memory_mcp_search_graph` |
 | `codebase-memory-mcp` | `codebase_memory_mcp_*` | `codebase_memory_mcp_search_graph` |
 
-> ⚠️ 各 subagent 文档中的 `codebase_memory_mcp.*` 调用示例均为**概念性写法**，实际调用时替换为 `session.mcp_provider` 对应的前缀。
+> ⚠️ 各 phase 文档中的 `codebase_memory_mcp.*` 调用示例均为**概念性写法**，实际调用时替换为 `session.mcp_provider` 对应的前缀。
 
 ## 5. 会话记录
 
@@ -127,7 +127,7 @@ if not matched:
 
 - `mcp_provider`：解析到的 MCP 名称（如 `remote-codebase-memory-mcp` 或 `codebase-memory-mcp`）
 - `mcp_provider_type`：`remote` 或 `local`
-- 后续所有 subagent 从 session 读取 `mcp_provider`，用对应前缀调用工具
+- 后续所有 phase 从 session 读取 `mcp_provider`，用对应前缀调用工具
 
 ## 6. 强制提醒规则
 

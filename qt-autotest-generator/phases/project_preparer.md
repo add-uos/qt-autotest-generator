@@ -1,32 +1,10 @@
----
-description: 拉取项目代码、校验基线、安装依赖、验证构建环境；流水线第一道前置门禁
-mode: subagent
-tools:
-  read: true
-  write: true
-  bash: true
-permission:
-  read: allow
-  write: allow
-  bash: allow
----
+# 项目准备
 
-# Project Preparer · 项目准备
+> 前置条件：收到仓库地址（`repo_url`）和分支名（`branch`）。
 
-## 角色作用
+## 概述
 
-从用户提供的仓库地址和分支名拉取代码到独立 worktree，校验基线，安装构建依赖，验证项目可编译。**只做项目准备，不生成测试、不修改源码、不跑测试**。你是整条流水线的第零阶段——在 `environment_check` 之前执行。
-
-## 前置门禁
-
-- 收到路由器派发，携带 `repo_url`（仓库地址）和 `branch`（分支名）
-- 无需其他前置条件
-
-## 输入
-
-- `repo_url`：仓库地址（HTTPS 或 SSH）
-- `branch`：分支名（如 `main`、`dev`、`uos-ai-assistant`）
-- `project_name`（可选）：项目英文短名，未提供时从 repo_url 推断
+从用户提供的仓库地址和分支名拉取代码到独立 worktree，校验基线，安装构建依赖，验证项目可编译。此阶段只做项目准备，不生成测试、不修改源码、不跑测试。
 
 ## 工作步骤
 
@@ -40,9 +18,9 @@ permission:
 project_name=$(basename "$repo_url" .git)
 ```
 
-### 2. 拉取代码（硬门禁：产出独立 WT，禁复用旧目录）
+### 2. 拉取代码
 
-**禁止旁路**：禁 `/tmp/<pkg>` 当 WT、禁复用已存在目录、禁浅克隆。
+> **注意**：必须新建独立 worktree，禁止复用旧目录、禁止浅克隆。
 
 **主路径**：
 
@@ -143,8 +121,10 @@ cmake --build . -j$(nproc) 2>&1
 
 **构建失败处理**：
 - 分析错误：缺依赖 → 回 §5 补装；CMake 语法错 → 记录不修；缺 Qt 模块 → 记录
-- 重试 3 次仍失败 → 标记 `build_env=failed`，记录错误摘要，回交路由器
+- 重试 3 次仍失败 → 标记 `build_env=failed`，记录错误摘要，停止流程
 - **不修改源码**，疑似源码缺陷只记录
+
+> **注意**：构建验证失败时必须停止，不得继续后续阶段。
 
 构建成功 → 删除 `build-verify/` 目录（不污染项目）：
 
@@ -174,26 +154,11 @@ cd "$WT" && rm -rf build-verify
 }
 ```
 
-## 输出
+## 关键约束
 
-- 独立 worktree（WT）路径
-- `autotests/.ut-session.json` 已初始化（含 project_path、baseline、repo_url、branch）
-- 构建环境已验证（项目可编译）
-- 回交路由器 status + WT 路径
-
-## 回交协议
-
-向路由器返回：
-- `pass` + WT 路径：项目已就绪，可派发 `environment_check`（用 WT 路径作为 project_path）
-- `fail` + 原因：拉取失败 / 鉴权失败 / 非 CMake 项目 / 构建环境验证失败
-
-## 硬性限制
-
-- **不要生成测试代码**：只做项目准备，测试由后续 subagent 负责
-- **不要修改源码**：构建失败只记录原因，不修
-- **不要复用旧目录**：每次拉取必须新建独立 WT
-- **不要浅克隆**：`--depth` 禁用，需要完整 git 历史做基线校验
-- **不要跳过构建验证**：必须确认项目可编译才交还
-- **不要在构建验证失败时旁路继续**：失败即停，回交路由器
-- **不要跑测试**：构建验证只做 cmake + build，不 ctest
-- **不要假设项目名**：从 repo_url 推断或从 CMakeLists.txt 读取
+- 不修改源码：构建失败只记录原因，不修
+- 每次拉取必须新建独立 worktree，禁止复用旧目录
+- 禁止浅克隆（`--depth` 禁用），需要完整 git 历史做基线校验
+- 必须确认项目可编译才进入后续阶段
+- 构建验证只做 cmake + build，不跑 ctest
+- 项目名从 repo_url 推断或从 CMakeLists.txt 读取，不假设

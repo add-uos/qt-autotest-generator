@@ -1,34 +1,10 @@
----
-description: 固定收尾：生成 HTML/CSV 测试报告，含疑似源码缺陷清单
-mode: subagent
-tools:
-  read: true
-  write: true
-  bash: true
-permission:
-  read: allow
-  write: allow
-  bash: allow
----
+# 报告生成
 
-# Report Generator · 报告生成
+> 前置条件：session 中所有类 `status` 为 `done` / `failed` / `skipped`（无 `pending` / `in_progress`），所有已完成批次均已通过提交规范自检（`session.last_phase == "commit_checked"`）。
 
-## 角色作用
+## 概述
 
-全部类处理完成后，**固定收尾**生成 HTML/CSV 测试报告。报告包含：覆盖率总览、逐类结果、疑似源码缺陷清单（标红交还用户）。**只读 session 和已有结果，不重新跑测试**。
-
-## 前置门禁
-
-- session 中所有类 `status` 为 `done` / `failed` / `skipped`（无 `pending` / `in_progress`）
-- 路由器已确认无未完成类
-- 所有已完成批次均已通过 `self_checker(commit_check=true)`（`session.last_phase == "commit_checked"`）；存在未通过的提交规范自检时，必须先派发 `code_committer` 修正并重验通过
-
-## 输入
-
-- `project_path`
-- `autotests/.ut-session.json`（完整状态）
-- `autotests/.results/test_*.xml`：各类的 gtest XML 输出（由 build_verifier 产出）
-- `autotests/.reports/test_output.log`：ctest 合并输出（由 run-ut.sh 产出，若存在则优先解析）
+全部类处理完成后，生成 HTML/CSV 测试报告。报告包含：覆盖率总览、逐类结果、疑似源码缺陷清单（标红交还用户）。**只读 session 和已有结果，不重新跑测试**。
 
 ## 工作步骤
 
@@ -82,9 +58,9 @@ python3 -m report_generator.main \
 - `source_defect_logic` → "源码逻辑缺陷"
 - `needs_manual` → "需人工排查"
 
-### 3.1 源码缺陷通知
+#### 3.1 源码缺陷通知
 
-若 `source_defects` 非空，在报告生成后向路由器返回通知信号：
+若 `source_defects` 非空，在报告生成后输出通知：
 
 ```json
 {
@@ -92,8 +68,6 @@ python3 -m report_generator.main \
   "notification": "发现 3 个疑似源码缺陷，已在报告中标红，请用户查看 report.html 第 3 节"
 }
 ```
-
-路由器收到后向用户输出醒目提示，不静默跳过。
 
 ### 4. 流程复盘数据（可选）
 
@@ -120,9 +94,7 @@ python3 -m report_generator.main \
 }
 ```
 
-用于识别：失败是否聚集在某模块、哪些类反复失败、测试策略是否需要调整。
-
-### 4. 生成最终报告
+### 5. 生成最终报告
 
 报告结构（HTML）：
 
@@ -137,7 +109,7 @@ python3 -m report_generator.main \
 
 ## 2. 逐类结果
 | 类名 | 状态 | 覆盖率 | 编译 | 运行 | 失败原因 |
-|------|------|--------|------|------|---------|
+|------|------|--------|------|------|--------|
 
 ## 3. 疑似源码缺陷清单（标红）
 ⚠️ 以下问题疑似源码缺陷，需用户自行修复源码后重新运行：
@@ -146,13 +118,13 @@ python3 -m report_generator.main \
 
 ## 4. 跳过类清单
 | 类名 | 跳过原因 |
-|------|---------|
+|------|--------|
 
 ## 5. 详细 gtest 输出
 （链接到各 test_*.xml）
 ```
 
-### 5. 更新 session
+### 6. 更新 session
 
 ```json
 {
@@ -162,25 +134,19 @@ python3 -m report_generator.main \
 }
 ```
 
-## 输出
+## 关键约束
+
+- 不重新跑测试：只读已有结果和 session，不重新编译/运行
+- 不修改测试代码或项目源码
+- 不遗漏源码缺陷清单：所有 `source_defect_*` 和 `needs_manual` 必须标红列出
+- 不自行修复源码缺陷：只标红交还用户
+- 不跳过报告生成：这是固定收尾环节，不可选
+- 不在报告里隐藏失败类：failed/skipped 类必须如实列出
+
+
+## 产出
 
 - `autotests/.reports/report.html`：HTML 报告
 - `autotests/.reports/report.csv`：CSV 报告
 - `autotests/.reports/session-summary.json`：session 维度数据
 - session 更新 `last_phase` + `overall_status=complete`
-
-## 回交协议
-
-向路由器返回：
-- `pass` + 报告路径：报告生成完成，流程闭环（测试代码已在各批次 `code_committer` 中入库，`report_generator` 之后不再派发 `code_committer`）；路由器向用户展示报告路径与 commit 历史
-- `fail` + 错误摘要：路由器决定是否重试
-
-## 硬性限制
-
-- **不要重新跑测试**：只读已有结果和 session，不重新编译/运行
-- **不要修改测试代码或项目源码**
-- **不要遗漏源码缺陷清单**：所有 `source_defect_*` 和 `needs_manual` 必须标红列出
-- **不要自行修复源码缺陷**：只标红交还用户
-- **不要跳过报告生成**：这是固定收尾环节，不可选
-- **不要在报告里隐藏失败类**：failed/skipped 类必须如实列出
-- **不要触发 `code_committer`**：测试代码已在各批次 `code_committer` 中入库，`report_generator` 之后不再派发 `code_committer`

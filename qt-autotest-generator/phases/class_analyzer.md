@@ -1,38 +1,16 @@
----
-description: MCP 拉取类与方法、GUI 继承识别、按复杂度规划用例数
-mode: subagent
-tools:
-  read: true
-  write: true
-  codebase-memory-mcp: true
-  remote-codebase-memory-mcp: true
-permission:
-  read: allow
-  write: allow
----
+# 类分析
 
-# Class Analyzer · 类分析
+> 前置条件：`environment_check` 已通过（图谱 ready），`framework_builder` 已通过（`autotests/` 存在），session 中 `project_name_in_graph` 已记录。
 
-## MCP 提供方
+> 通过 session.mcp_provider 调用知识图谱工具（详见 resources/references/mcp-providers.md）
 
-本 subagent 通过 `session.mcp_provider` 记录的 MCP 提供方调用知识图谱工具（远端优先，本地兜底，互斥使用其一，详见 `resources/references/mcp-providers.md`）。下文示例中的 `codebase_memory_mcp.*` 调用均指当前解析到的提供方对应工具。
+## 概述
 
-## 角色作用
+用知识图谱批量拉取目标范围内的类与方法，识别 GUI 类，按复杂度规划每个方法的测试用例数量。此阶段只分析和规划，不生成测试代码。
 
-用 codebase-memory-mcp 知识图谱批量拉取目标范围内的类与方法，识别 GUI 类，按复杂度规划每个方法的测试用例数量。**只分析和规划，不生成测试代码**。
-
-## 前置门禁
-
-- `environment_check` 已通过（图谱 ready）
-- `framework_builder` 已通过（`autotests/` 存在）
-- session 中 `project_name_in_graph` 已记录
-
-## 输入
-
-- `project_path`
-- `target_scope`：用户指定的范围（模块路径如 `src/lib/ui/*`，或类名如 `MyClass`）
-- `mode`：`full`（全量分析）或 `diff`（对账模式，与 session 记录做 diff）
-- `autotests/.ut-session.json`
+支持两种模式：
+- `full`（全量分析）：分析目标范围内所有类
+- `diff`（对账模式）：与 session 记录做差集，找出新增/删除/签名变更的方法
 
 ## 工作步骤
 
@@ -40,7 +18,7 @@ permission:
 
 ```python
 status = codebase_memory_mcp.index_status(project=session.project_name_in_graph)
-# 必须 status == "ready"，否则回交路由器（不应发生，environment_check 已保证）
+# 必须 status == "ready"，否则停止（environment_check 已保证）
 ```
 
 ### 2. 批量拉取目标类
@@ -92,7 +70,7 @@ gui_classes = codebase_memory_mcp.query_graph(
 )
 ```
 
-GUI 类标记 `is_gui=true`，后续 `test_writer` 会特殊处理（用 `QCoreApplication` 而非 `QApplication`，避免 X11/Wayland 崩溃）。
+GUI 类标记 `is_gui=true`，后续测试代码生成阶段会特殊处理（用 `QCoreApplication` 而非 `QApplication`，避免 X11/Wayland 崩溃）。
 
 ### 5. 按复杂度规划用例数
 
@@ -107,8 +85,7 @@ GUI 类标记 `is_gui=true`，后续 `test_writer` 会特殊处理（用 `QCoreA
 | `param_count >= 4` | +1 | 参数组合 | §1.2 多维等价类组合 |
 | 普通方法 | 1 | 正常路径 | §1 有效等价类 |
 
-> 用例类型词汇与 `resources/references/test-types.md` 章节一一对应，`test_writer` 据此规划生成具体用例时按对应章节方法落地。
-
+> 用例类型词汇与 `resources/references/test-types.md` 章节一一对应，测试代码生成阶段据此规划生成具体用例时按对应章节方法落地。
 
 ### 6. diff 模式（对账）
 
@@ -125,7 +102,7 @@ removed_methods = recorded_methods - current_methods       # 删除
 # 签名变更：对比 get_code_snippet 的签名部分
 ```
 
-产出差异清单，回交路由器按差异路由：
+产出差异清单，按差异类型路由：
 - 新增方法 → `incremental_updater`
 - 签名变更 → `test_writer`（重新生成该类）
 - 方法删除 → `failure_repairer`（清理引用）
@@ -152,35 +129,22 @@ removed_methods = recorded_methods - current_methods       # 删除
 
 ### 8. 边界类处理
 
-以下特殊类需标记 `special_handling` 字段，供后续 subagent 参考：
+以下特殊类需标记 `special_handling` 字段，供后续阶段参考：
 
 | 类特征 | 标记值 | 处理建议 |
-|--------|--------|---------|
-| 模板类（`template<typename T> class`） | `template` | test_writer 需指定具体类型实例化 |
-| Q_OBJECT 宏类 | `q_object` | dependency_tracer 需确认 MOC 处理 |
+|--------|--------|--------|
+| 模板类（`template<typename T> class`） | `template` | 测试代码生成需指定具体类型实例化 |
+| Q_OBJECT 宏类 | `q_object` | 依赖追踪需确认 MOC 处理 |
 | 匿名命名空间类 | `anonymous_ns` | 内部类，按需测试 |
-| 私有构造函数（单例/工厂） | `private_ctor` | test_writer 用 friend 或工厂创建实例 |
-| 纯虚抽象类 | `abstract` | test_writer 创建最小具体子类 |
-| PIMPL 模式 | `pimpl` | dependency_tracer 需追踪 Private 类 |
+| 私有构造函数（单例/工厂） | `private_ctor` | 测试代码生成用 friend 或工厂创建实例 |
+| 纯虚抽象类 | `abstract` | 测试代码生成创建最小具体子类 |
+| PIMPL 模式 | `pimpl` | 依赖追踪需追踪 Private 类 |
 
-## 输出
+## 关键约束
 
-- session 中 `classes` 数组已填充（含 test_plan）
-- 若 diff 模式：产出差异清单
-- 回交路由器 status + 下一个待处理类
-
-## 回交协议
-
-向路由器返回：
-- `pass` + 待处理类清单：路由器逐类派发 `dependency_tracer`
-- `pass` + diff 结果：路由器按差异类型路由
-- `empty`：目标范围内无可测类，路由器终止
-
-## 硬性限制
-
-- **不要生成测试代码**：只分析和规划，测试代码由 `test_writer` 负责
-- **不要为 private 方法规划测试**
-- **不要自己拼 qualified_name**：必须从 `search_graph` 返回值取，命名空间/嵌套类规则复杂
-- **不要忽略 `has_more`**：截断时必须提高 limit 或缩小范围
-- **不要跳过 GUI 识别**：GUI 类不特殊处理会导致 segfault
-- **不要修改项目源码**
+- 不生成测试代码（只分析和规划）
+- 不为 private 方法规划测试
+- `qualified_name` 必须从 `search_graph` 返回值取，不自己拼（命名空间/嵌套类规则复杂）
+- 截断时必须提高 limit 或缩小范围，不忽略 `has_more`
+- 不跳过 GUI 识别（GUI 类不特殊处理会导致 segfault）
+- 不修改项目源码

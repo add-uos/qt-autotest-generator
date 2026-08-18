@@ -1,40 +1,12 @@
----
-description: 强制编译+运行测试，错误分类与重试，产出双信号
-mode: subagent
-tools:
-  read: true
-  write: true
-  edit: true
-  bash: true
-  codebase-memory-mcp: true
-  remote-codebase-memory-mcp: true
-permission:
-  read: allow
-  write: allow
-  edit: allow
-  bash: allow
----
+# 编译验证
 
-# Build Verifier · 编译验证
+> 前置条件：`test_writer` 已完成目标类（session 中 `status=test_written`），`autotests/<module>/test_<classname>.cpp` 存在。
 
-## MCP 提供方
+> 通过 session.mcp_provider 调用知识图谱工具（详见 resources/references/mcp-providers.md）
 
-本 subagent 通过 `session.mcp_provider` 记录的 MCP 提供方调用知识图谱工具（远端优先，本地兜底，互斥使用其一，详见 `resources/references/mcp-providers.md`）。下文示例中的 `codebase_memory_mcp.*` 调用均指当前解析到的提供方对应工具。
+## 概述
 
-## 角色作用
-
-强制编译并运行目标类的测试，按错误分类表修复，在重试预算内达成编译+运行通过。产出**双信号**（编译/运行结果 + 覆盖率信号）回交路由器。**不修源码**，疑似源码缺陷标红交还。
-
-## 前置门禁
-
-- `test_writer` 已完成目标类（session 中 `status=test_written`）
-- `autotests/<module>/test_<classname>.cpp` 存在
-
-## 输入
-
-- `project_path`
-- `target_class`：当前要验证的类
-- `autotests/.ut-session.json`
+强制编译并运行目标类的测试，按错误分类表修复，在重试预算内达成编译+运行通过。产出**双信号**（编译/运行结果 + 覆盖率信号）。**不修源码**，疑似源码缺陷标红交还用户。
 
 ## 工作步骤
 
@@ -53,7 +25,7 @@ cmake --build . -j$(nproc) --target test_<classname> 2>&1
 按错误模式分类，逐个修复（per-error 3 次重试，总计 max 10 loops）：
 
 | 错误模式 | 修复策略 |
-|---------|---------|
+|---------|--------|
 | `undefined reference to` | 在 CMakeLists `target_link_libraries` 补依赖；用 MCP `trace_path` 重新追踪遗漏的传递依赖 |
 | `No such file or directory`（头文件） | 在 CMakeLists `target_include_directories` 补路径 |
 | `stub.set_lamda` 签名不匹配 | 用 MCP `get_code_snippet` 重新读方法签名，修正 stub |
@@ -62,10 +34,7 @@ cmake --build . -j$(nproc) --target test_<classname> 2>&1
 | `undefined reference to stub_ext::freeWrapper` | 确认 `resources/stub/stub-shadow.cpp` 已编入 test target |
 | `vtable for XXX` / `undefined type` | 检查 Q_OBJECT 宏、MOC 处理 |
 
-**修复原则**：
-- 只修测试代码和测试 CMakeLists，**不修项目源码**
-- 每次修复后重新编译，确认该错误消除
-- 同一错误 3 次修不好 → 标记为疑似源码缺陷，停止该错误
+> **注意**：只修测试代码和测试 CMakeLists，不修项目源码。每次修复后重新编译，确认该错误消除。同一错误 3 次修不好 → 标记为疑似源码缺陷，停止该错误。
 
 ### 3. 编译通过 → 运行测试
 
@@ -74,7 +43,7 @@ cd ${PROJECT_PATH}/build-autotests
 timeout 120 ./autotests/<module>/test_<classname> --gtest_output=xml:${PROJECT_PATH}/autotests/.results/test_<classname>.xml 2>&1
 ```
 
-**超时保护**：用 `timeout 120` 限制单类测试执行不超过 2 分钟。超时 → 判定为 `runtime_crash`（可能死循环或 stub 缺失导致真实 IO），记录 `timeout` 标记。
+> **注意**：用 `timeout 120` 限制单类测试执行不超过 2 分钟。超时 → 判定为 `runtime_crash`（可能死循环或 stub 缺失导致真实 IO），记录 `timeout` 标记。
 
 捕获运行输出和退出码。
 
@@ -102,10 +71,7 @@ timeout 120 ./autotests/<module>/test_<classname> --gtest_output=xml:${PROJECT_P
         → failure_reason = "needs_manual"
 ```
 
-**关键判定依据**：
-- 用 MCP `get_code_snippet` 读源码，确认是否源码本身有问题
-- 尝试最小化复现：只构造对象、不调方法，看是否崩溃
-- 若源码缺 `#include`、缺 `Q_OBJECT`、有空实现导致链接失败 → 源码缺陷
+> **注意**：判定前必须用 `get_code_snippet` 读源码确认。尝试最小化复现：只构造对象、不调方法，看是否崩溃。若源码缺 `#include`、缺 `Q_OBJECT`、有空实现导致链接失败 → 源码缺陷。
 
 ### 6. 产出双信号
 
@@ -133,32 +99,24 @@ coverage_gap = planned - tested
 
 若 `coverage_gap` 非空 → 信号 B 触发 `incremental_updater`。
 
-**注意**：此处只做方法名差集（结构性检查）。lcov 函数覆盖率百分比的完整门禁（与 `session.coverage_threshold` 比对）在 `self_checker` 中执行——build_verifier 不解析 lcov 数据，避免与 self_checker 重复。
+> **注意**：此处只做方法名差集（结构性检查）。lcov 函数覆盖率百分比的完整门禁（与 `session.coverage_threshold` 比对）在 `self_checker` 中执行——此处不解析 lcov 数据，避免与 self_checker 重复。
 
-## 输出
+## 后续流程
 
-- session 更新 `build_result` + `run_result` + `failure_reason` + `status`
-- `autotests/.results/test_<classname>.xml`：gtest XML 输出
-- 双信号回交路由器
-
-## 回交协议
-
-向路由器返回双信号：
-
-| build_result | run_result | coverage_gap | 回交 |
-|-------------|-----------|-------------|------|
+| build_result | run_result | coverage_gap | 下一阶段 |
+|-------------|-----------|-------------|--------|
 | pass | pass | 空 | `self_checker` |
 | pass | pass | 非空 | `self_checker`（自检后若通过 → `incremental_updater`） |
 | fail | - | - | `failure_repairer` |
 | pass | fail | - | `failure_repairer` |
 
-若 `failure_reason` 含 `source_defect` → 路由器标记该类 `status=failed`，跳过，继续下一类。
+若 `failure_reason` 含 `source_defect` → 标记该类 `status=failed`，跳过，继续下一类。
 
-## 硬性限制
+## 关键约束
 
-- **不要修改项目源码**：只修测试代码和测试 CMakeLists；疑似源码缺陷只标红
-- **不要在编译失败时报完成**
-- **不要跳过运行验证**：编译通过必须接着运行
-- **不要超过重试预算**：per-error 3 次，总计 10 loops
-- **不要忽略 gtest XML 输出**：覆盖率信号从 XML 提取
-- **不要自行宣布"源码缺陷"而不读源码**：必须用 `get_code_snippet` 读源码确认
+- 不修改项目源码：只修测试代码和测试 CMakeLists；疑似源码缺陷只标红
+- 编译失败时不报完成
+- 编译通过必须接着运行，不跳过运行验证
+- 不超过重试预算：per-error 3 次，总计 10 loops
+- 不忽略 gtest XML 输出：覆盖率信号从 XML 提取
+- 不自行宣布"源码缺陷"而不读源码：必须用 `get_code_snippet` 读源码确认

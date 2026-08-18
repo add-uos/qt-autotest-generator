@@ -51,7 +51,7 @@ Qt 项目代码量大，**单测覆盖率上不去**？<br>
 <tr><td nowrap width="1%"><strong>增量对账</strong></td><td>源码变更后自动 diff，只补新增方法、只修签名变更、只清理已删方法引用</td></tr>
 <tr><td nowrap width="1%"><strong>源码缺陷标红</strong></td><td>疑似源码缺陷（编译不过/运行崩溃/逻辑矛盾）标红交还用户，不自行修源码</td></tr>
 <tr><td nowrap width="1%"><strong>HTML/CSV 报告</strong></td><td>固定收尾生成覆盖率总览、逐类结果、源码缺陷清单、跳过类清单</td></tr>
-<tr><td nowrap width="1%"><strong>并行处理</strong></td><td>类数 >= 5 时可并行派发多个类的处理链，加速大规模项目</td></tr>
+<tr><td nowrap width="1%"><strong>并行处理</strong></td><td>类数 >= 5 时可并行处理多个类的闭环链，加速大规模项目</td></tr>
 </tbody>
 </table>
 
@@ -96,7 +96,7 @@ Claude Code、Cursor、opencode 等兼容 AgentSkills 的客户端，具体落�
 
 ## 使用
 
-在 Agent 中用自然语言即可触发：「建单测」「为 src/lib 生成测试」「补全测试」「修测试」「代码改了重新对账」等。完整触发表、subagent 流程图、状态传递机制与 Iron Laws 详见 [SKILL.md](SKILL.md)。
+在 Agent 中用自然语言即可触发：「建单测」「为 src/lib 生成测试」「补全测试」「修测试」「代码改了重新对账」等。完整触发表、工作流流程图、状态传递机制与 Iron Laws 详见 [SKILL.md](SKILL.md)。
 
 建议说明 **项目路径** 或 **仓库地址 + 分支名**。例如：
 
@@ -122,7 +122,7 @@ Claude Code、Cursor、opencode 等兼容 AgentSkills 的客户端，具体落�
 
 ## 参考文档
 
-- [技能入口与路由流程](SKILL.md)
+- [技能入口与工作流](SKILL.md)
 - [详细安装说明](INSTALL.md)
 - [MCP 提供方解析指南](resources/references/mcp-providers.md)
 - [codebase-memory-mcp 使用指南](resources/references/codebase-memory-guide.md)

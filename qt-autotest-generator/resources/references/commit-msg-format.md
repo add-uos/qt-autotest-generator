@@ -44,7 +44,7 @@ Influence: 新增 <batch_done_count> 个类的单元测试，本批次覆盖率 
 | Log 行 | `^Log: .+$` | `FAIL_LOG` |
 | Influence 行 | `^Influence: .+[0-9]+/[0-9]+.+$` | `FAIL_INFLUENCE` |
 
-任一 `FAIL_*` → 提交规范自检不通过 → 路由器派发 `code_committer` amend 本批次**未 push** commit 仅修正 message（已 push 的 commit 禁止 amend；文件层面误提交必须新 commit 撤销，不 amend）。
+任一 `FAIL_*` → 提交规范自检不通过 → 回到代码提交阶段 amend 本批次**未 push** commit 仅修正 message（已 push 的 commit 禁止 amend；文件层面误提交必须新 commit 撤销，不 amend）。
 
 ## 3. 校验脚本
 
