@@ -127,7 +127,6 @@ Claude Code、Cursor、opencode 等兼容 AgentSkills 的客户端，具体落�
 - [MCP 提供方解析指南](resources/references/mcp-providers.md)
 - [codebase-memory-mcp 使用指南](resources/references/codebase-memory-guide.md)
 - [单元测试用例设计方法论](resources/references/test-types.md)
-- [提交信息格式规范](resources/references/commit-msg-format.md)
 - [示例项目](examples/README.md)
 
 ---

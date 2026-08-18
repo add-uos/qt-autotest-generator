@@ -32,7 +32,7 @@ compatibility:
 8. **逐类闭环** —— 每个类独立走完 分析→追踪→生成→验证→自检；单类失败记录跳过，不阻塞其他类
 9. **不修源码** —— 疑似源码缺陷只标红交还用户，技能只负责测试
 10. **只 APPEND 不改已有** —— 修改根 CMakeLists.txt 和测试 CMake 时只追加新行，不注释/删除/修改已有代码
-11. **批次提交 + 提交规范自检** —— 每批次（一轮批量生成/增量补全/失败修复）所有类自检通过后即提交本批次完成类的测试代码，并做提交规范自检；**只 commit，不 push**。最终报告收尾时测试代码已全部入库，不再触发提交
+11. **批次提交** —— 每批次（一轮批量生成/增量补全/失败修复）所有类自检通过后即提交本批次完成类的测试代码（提交信息复用 `git-commit-workflow` 技能格式，自动化提交跳过人工确认）；**只 commit，不 push**。最终报告收尾时测试代码已全部入库，不再触发提交
 12. **状态持久化** —— 一切状态写 `autotests/.ut-session.json`，跨 phase 传递
 
 ---
@@ -98,10 +98,10 @@ compatibility:
 | 用户提供 repo_url + branch 拉取项目 | 无 session | 项目准备 → 环境检查 → 框架搭建 |
 | 用户提供本地 project_path | 无 session | 环境检查 → 框架搭建 |
 | 首次搭建 | 无 session | 环境检查 → 框架搭建 |
-| 批量生成 | 框架就绪 + 有未完成类 | 类分析 → 依赖追踪 → 测试生成 → 编译验证 → 自检（逐类循环）→ **批次内全类自检通过** → 代码提交 → 提交规范自检 |
-| 增量补全 | 全类完成 + 覆盖有缺口 | 增量补全 → 编译验证 → 自检 → **本批次自检通过** → 代码提交 → 提交规范自检 |
-| 修复失败 | 有 failed 类 | 失败修复 → 编译验证 → 自检 → **本批次自检通过** → 代码提交 → 提交规范自检 |
-| 源码变更对账 | baseline 漂移 | reconcile → 按差异路由 → **本批次自检通过** → 代码提交 → 提交规范自检 |
+| 批量生成 | 框架就绪 + 有未完成类 | 类分析 → 依赖追踪 → 测试生成 → 编译验证 → 自检（逐类循环）→ **批次内全类自检通过** → 代码提交 |
+| 增量补全 | 全类完成 + 覆盖有缺口 | 增量补全 → 编译验证 → 自检 → **本批次自检通过** → 代码提交 |
+| 修复失败 | 有 failed 类 | 失败修复 → 编译验证 → 自检 → **本批次自检通过** → 代码提交 |
+| 源码变更对账 | baseline 漂移 | reconcile → 按差异路由 → **本批次自检通过** → 代码提交 |
 | 全部完成 | 全类完成 + 覆盖达标 | 报告生成（固定收尾；测试代码已在各批次提交中入库，不再提交） |
 
 ### 逐类闭环流程
@@ -119,7 +119,7 @@ compatibility:
 自检不过（覆盖率缺口 / 函数覆盖率 < 阈值 / 命名 / SPDX / stub）→ 增量补全或测试生成修正
 失败修复耗尽 → 标记 failed + failure_reason → 跳过 → 下一类
 
-本批次所有目标类自检处理完毕（含 done / failed / skipped）→ 按核心原则 11 执行批次提交闭环（代码提交 → 提交规范自检；自检不过则修正后重验，详见原则 11 与 phases/code_committer.md / phases/self_checker.md）
+本批次所有目标类自检处理完毕（含 done / failed / skipped）→ 按核心原则 11 执行批次提交（代码提交；详见原则 11 与 phases/code_committer.md）
 
 全部类 done → 检查覆盖率缺口（方法名差集 + lcov 函数覆盖率是否达标）→ 有缺口则增量补全 → 无则报告生成
 ```
@@ -164,8 +164,8 @@ compatibility:
 | 测试生成 | `phases/test_writer.md` | 读模板生成测试代码、AAA、命名、protected 暴露 |
 | 编译验证 | `phases/build_verifier.md` | 强制编译+运行、错误分类→修复表、重试预算 |
 | 报告生成 | `phases/report_generator.md` | 固定收尾出 HTML/CSV 报告（含源码缺陷清单） |
-| 代码提交 | `phases/code_committer.md` | 每批次自检通过后增量提交本批次完成类的测试代码到 git（只 commit，不 push）；防重提；提交信息含批次统计与基线 commit |
-| 自检（含提交规范） | `phases/self_checker.md` | 覆盖率/命名/SPDX/stub 正确性（单类模式）；提交规范自检（commit_check 模式）：已提交完整性 / 未误提交源码 / 未误提交构建产物 / 提交信息格式规范 |
+| 代码提交 | `phases/code_committer.md` | 每批次自检通过后增量提交本批次完成类的测试代码到 git（只 commit，不 push）；防重提；提交信息复用 `git-commit-workflow` 技能格式（自动化提交跳过人工确认） |
+| 自检 | `phases/self_checker.md` | 覆盖率完整性/命名规范/SPDX 头/stub 正确性/结构（单类自检，内部执行不产出交付文件） |
 | 增量补全 | `phases/incremental_updater.md` | 图谱差集补缺失用例、CMake 智能合并 |
 | 失败修复 | `phases/failure_repairer.md` | 失败修复 + 根因分类 + 源码缺陷标红 |
 
@@ -228,7 +228,7 @@ compatibility:
 - `coverage_threshold`: 函数覆盖率门禁阈值，默认 80，可由用户指定；低于此值触发增量补全
 - `function_coverage`: lcov 解析出的该类函数覆盖率百分比；低于 `coverage_threshold` 则触发补全
 - `committed_classes`: 已提交到 git 的类名列表；下次提交跳过这些类避免重复提交
-- `last_batch_commit`: 最近一次批次提交的 commit sha；提交规范自检据此校验
+- `last_batch_commit`: 最近一次批次提交的 commit sha
 - `commit_history`: 各批次提交记录（batch 序号 / commit_sha / 本批次类列表 / 提交时间），用于审计与回溯
 
 ---
@@ -278,8 +278,6 @@ compatibility:
 □ 单类失败：已记录 failure_reason + 跳过 + 继续下一个类
 □ 编译验证后读双信号：失败→失败修复；方法名差集→增量补全；函数覆盖率<阈值→增量补全
 □ 批次提交：本批次所有目标类自检处理完毕（done/failed/skipped）后，已执行代码提交本批次完成类（跳过 committed_classes 中已记录的类）
-□ 提交规范自检：代码提交完成后已做自检（commit_check），校验 4 项（已提交完整性 / 未误提交源码 / 未误提交构建产物 / 提交信息格式规范）
-□ 提交规范自检未过：已修正（仅 message 不规范时 amend 本批次未 push 的 commit；文件误提交时必须新 commit 撤销）后重新自检
 □ 全类完成 + 覆盖达标：已执行报告生成收尾（测试代码已在各批次提交中入库，不再提交）
 □ 疑似源码缺陷：已标 failure_reason，报告里标红，未自行修源码
 □ 源码缺陷通知：报告生成返回 source_defect_count > 0 时，已向用户输出醒目提示

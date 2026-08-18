@@ -1,10 +1,12 @@
 # 批次测试代码提交
 
-> 前置条件：本批次所有目标类自检已处理完毕（`status` 为 `done` / `failed` / `skipped`，无 `pending` / `in_progress`）；session 中存在 `committed_classes` 字段（首次为 `[]`）；本批次存在至少 1 个 `done` 且不在 `committed_classes` 中的类；上一批次（若有）的提交规范自检已通过（`session.last_phase == "commit_checked"`）。
+> 前置条件：本批次所有目标类自检已处理完毕（`status` 为 `done` / `failed` / `skipped`，无 `pending` / `in_progress`）；session 中存在 `committed_classes` 字段（首次为 `[]`）；本批次存在至少 1 个 `done` 且不在 `committed_classes` 中的类；上一批次（若有）已提交完成（`session.last_phase == "code_committed"`）。
 
 ## 概述
 
 每批次（一轮批量生成/增量补全/失败修复/源码变更对账）的所有目标类自检处理完毕后，将本批次新完成类的测试代码**增量提交**到 git。**只 commit，不 push**。提交信息包含基线 commit、本批次类列表、覆盖率摘要、累计统计。
+
+提交信息格式**复用公共 `git-commit-workflow` 技能规范**（`test` 类型 + `Log`/`Influence` 行）；本技能为自动化批次提交，**跳过 `git-commit-workflow` 的人工确认环节**，生成信息后直接提交，不再单独维护提交信息正则与校验脚本。
 
 ## 工作步骤
 
@@ -26,7 +28,7 @@ to_commit = [c['name'] for c in s['classes']
              and c.get('status') == 'done']
 ```
 
-**空集处理**：若 `to_commit` 为空（本批次无新完成类或全部已提交），跳过提交，把 session `last_phase` 标记为 `commit_checked`（等价于已通过提交规范自检，因为无变更可校验），继续进入下一批次或报告生成阶段。
+**空集处理**：若 `to_commit` 为空（本批次无新完成类或全部已提交），跳过提交，把 session `last_phase` 标记为 `code_committed`，继续进入下一批次或报告生成阶段。
 
 ### 2. 确认提交范围
 
@@ -133,7 +135,7 @@ print(f'{batch_done_count}\n{batch_total}\n{batch_methods}\n{batch_tested}\n{bat
 PYEOF
 ```
 
-**提交信息格式**（强制模板与正则以 [`resources/references/commit-msg-format.md`](../resources/references/commit-msg-format.md) §1 为单一权威来源）：
+按 **`git-commit-workflow` 技能的提交信息格式**生成（`test` 类型，含 `Log` / `Influence` 行）：
 
 ```
 test: add autotests for <project> batch <N> (<cumulative_classes>/<cumulative_total> classes)
@@ -147,22 +149,14 @@ Log: 新增 <project> 单元测试
 Influence: 新增 <batch_done_count> 个类的单元测试，本批次覆盖率 <batch_tested>/<batch_methods>，累计覆盖率 <cumulative_tested>/<cumulative_methods>
 ```
 
-### 6. 提交信息格式自校验
+**格式要求**（沿用 `git-commit-workflow` 技能规范，不再单独维护正则）：
+- 标题行 `<type>[scope]: <desc>`，类型固定为 `test`，≤ 80 字符
+- body 行 ≤ 80 字符
+- 必含 `Log:`（中文简述）与 `Influence:`（中文影响）行
+- 若 session 记录了 `pms_no` / `issue_no`，追加 `PMS:` / `Issue:` 行；否则省略
+- 本批次为自动化提交：**跳过 `git-commit-workflow` 的 Step 4 人工确认**，生成信息后直接提交
 
-提交前对生成的提交信息做格式自校验。**正则以 [`resources/references/commit-msg-format.md`](../resources/references/commit-msg-format.md) §2 为单一权威来源**，直接套用该文档 §3 校验脚本。
-
-| 必含字段 | 校验规则（详见 `commit-msg-format.md` §2） |
-|---------|---------|
-| 标题行 | `^test: add autotests for .+ batch [0-9]+ \([0-9]+/[0-9]+ classes\)$` |
-| 基线 commit | `^Baseline: .+ @ .+ \".+\" \(.+\)$` |
-| 本批次类列表 | `^Batch [0-9]+: .+$` |
-| 累计统计 | `^Cumulative: [0-9]+/[0-9]+ classes, [0-9]+/[0-9]+ methods tested$` |
-| Log 行 | `^Log: .+$` |
-| Influence 行 | `^Influence: .+[0-9]+/[0-9]+.+$` |
-
-任一字段缺失或格式不符 → **不提交**，报告缺失字段清单。
-
-### 7. 提交前 staged diff 二次复核
+### 6. 提交前 staged diff 二次复核
 
 ```bash
 git diff --staged --name-only
@@ -175,7 +169,9 @@ git diff --staged --name-only
 
 复核通过后执行提交。
 
-### 8. 执行提交
+### 7. 执行提交
+
+直接执行 `git commit`（**复用 `git-commit-workflow` 技能的提交信息格式，但跳过其人工确认环节**）：
 
 ```bash
 git commit -m "<提交信息>"
@@ -183,7 +179,7 @@ git commit -m "<提交信息>"
 
 记录返回的 commit sha。
 
-### 9. 更新 session
+### 8. 更新 session
 
 ```json
 {
@@ -200,23 +196,23 @@ git commit -m "<提交信息>"
 
 **字段说明**：
 - `committed_classes`：累计已提交类列表（追加本批次新提交类）
-- `last_batch_commit`：本批次提交 sha；提交规范自检据此校验
+- `last_batch_commit`：本批次提交 sha
 - `commit_history`：追加本批次记录（batch 序号自增 / sha / 本批次类列表 / ISO8601 时间）
 - `overall_status`：批次提交后保持 `partial`；仅报告生成阶段完成后置 `complete`
 
-### 10. 后续流程
+### 9. 后续流程
 
-- **提交成功**（有新提交类）：进入提交规范自检（`self_checker(commit_check=true)`）校验本次提交
-- **无变更**（`no_changes`）：`last_phase` 已标记为 `commit_checked`，直接进入下一批次或报告生成阶段
-- **提交失败**：根据原因决定重试或转人工（如 git 冲突、无 git 仓库、提交信息格式校验未过、staged 误含源码且无法自动取消）
+- **提交成功**（有新提交类）：直接进入下一批次或报告生成阶段
+- **无变更**（`no_changes`）：`last_phase` 已标记为 `code_committed`，直接进入下一批次或报告生成阶段
+- **提交失败**：根据原因决定重试或转人工（如 git 冲突、无 git 仓库、staged 误含源码且无法自动取消）
 
 ## 关键约束
 
 - 不重复提交：以 `session.committed_classes` 为准，已提交过的类不再 commit
 - 不提交源码修改：只提交 autotests/ 目录的测试代码；staged 中发现 src/ 文件必须取消暂存
 - 不提交构建产物：build-autotests/、.results/、.reports/、.ut-session.json、缓存文件全部排除
-- 不修改已 push 的提交：已 push 的 commit 禁止 amend/rebase/force；未 push 的本批次 commit，在提交规范自检反馈 message 不规范时可 amend 仅修正 commit message；文件层面误提交（源码/构建产物）必须新 commit 撤销，不 amend
+- 不修改项目源码
 - 不提交根 CMakeLists.txt 中的已有代码：只提交框架搭建阶段 APPEND 的 `BUILD_TESTS` 开关行
-- 提交信息必须含基线 commit、类列表、覆盖率摘要、累计统计：缺一不可
-- 提交信息格式自校验未过时不提交：先修正信息再 commit
+- 提交信息含基线 commit、类列表、覆盖率摘要、累计统计
+- 提交信息格式沿用 `git-commit-workflow` 技能规范，不再单独维护正则校验
 - 报告生成阶段之后不再触发：测试代码已在各批次提交中入库

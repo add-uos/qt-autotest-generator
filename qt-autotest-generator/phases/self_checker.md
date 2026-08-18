@@ -1,25 +1,16 @@
 # 自检
 
-> 前置条件（单类模式）：`build_verifier` 已通过目标类（session 中 `status=verified`，`build_result=pass`，`run_result=pass`）。
-
-> 前置条件（提交规范模式）：`code_committer` 已完成本批次提交（session 中 `last_phase == "code_committed"`），session 中存在 `last_batch_commit` 和 `commit_history`。若本批次无新完成类则直接标记 `commit_checked` 跳过。
+> 前置条件：`build_verifier` 已通过目标类（session 中 `status=verified`，`build_result=pass`，`run_result=pass`）。
 
 > 通过 session.mcp_provider 调用知识图谱工具（详见 resources/references/mcp-providers.md）
 
 ## 概述
 
-两种工作模式：
-
-- **单类自检**（默认）：对单个类的测试做内部自检——覆盖率完整性、命名规范、SPDX 头、stub 正确性、结构。**内部执行，不产出交付文件**，发现问题流转到修正阶段。
-- **提交规范自检**（`commit_check=true`）：校验上次批次提交是否规范——已提交完整性 / 未误提交源码 / 未误提交构建产物 / 提交信息格式规范。
-
-**模式判定**：`commit_check=false`（默认）→ 单类自检流程；`commit_check=true` → 提交规范自检流程。
+对单个类的测试做内部自检——覆盖率完整性、命名规范、SPDX 头、stub 正确性、结构。**内部执行，不产出交付文件**，发现问题流转到修正阶段。
 
 ---
 
-## 单类自检模式（commit_check=false）
-
-### 工作步骤
+## 工作步骤
 
 #### 1. 覆盖率自检（方法名差集 + lcov 函数覆盖率门禁）
 
@@ -304,143 +295,7 @@ for method in all_methods:
 }
 ```
 
----
-
-## 提交规范自检模式（commit_check=true）
-
-### 工作步骤
-
-#### 1. 已提交完整性自检
-
-校验本批次新完成类的测试文件均已入库，无漏提交：
-
-```bash
-cd "$PROJECT_PATH"
-
-# 本批次新提交的类清单（从 session.commit_history 最后一条取）
-BATCH_CLASSES=$(python3 -c "
-import json
-with open('autotests/.ut-session.json') as f:
-    s = json.load(f)
-hist = s.get('commit_history', [])
-if hist:
-    print(' '.join(hist[-1].get('classes', [])))
-")
-
-# 对每个类，检查其测试文件已在 git 跟踪
-for cls in $BATCH_CLASSES; do
-    test_file=$(find autotests -name "test_${cls,,}.cpp" 2>/dev/null | head -1)
-    if [ -n "$test_file" ]; then
-        git ls-files --error-unmatch "$test_file" 2>/dev/null \
-            || echo "MISSING_TRACKED: $test_file"
-    fi
-done
-
-# 检查工作区中 autotests/ 下是否有未提交的测试代码文件（本批次应全部入库）
-LC_ALL=C git status --porcelain -- autotests/ \
-    | grep -E '^\?\?|^.[MD]' \
-    | grep -E '\.(cpp|h|txt|sh|cmake|md)$' \
-    | grep -vE '\.(results|reports|pytest_cache|ut-session)' \
-    || echo "WORKDIR_CLEAN"
-```
-
-**判定**：
-- 出现 `MISSING_TRACKED` → 该类测试文件未入库 → `fail`
-- 出现非 `WORKDIR_CLEAN` 的输出 → autotests/ 下有未提交的测试代码文件 → `fail`，列出文件清单
-
-#### 2. 未误提交源码自检
-
-校验本批次 commit 中**没有 src/ 下源码文件**：
-
-```bash
-cd "$PROJECT_PATH"
-SHA=$(python3 -c "
-import json
-with open('autotests/.ut-session.json') as f:
-    s = json.load(f)
-print(s.get('last_batch_commit', ''))
-")
-
-if [ -n "$SHA" ]; then
-    git show --stat --name-only --pretty=format: "$SHA" \
-        | grep -E '^src/.*\.(cpp|h|hpp|cc|cxx)$' \
-        || echo "NO_SOURCE_LEAK"
-fi
-```
-
-**判定**：
-- 输出 `NO_SOURCE_LEAK` → 通过
-- 输出任何 `src/...` 文件 → `fail`，列出泄漏的源码文件清单
-
-#### 3. 未误提交构建产物自检
-
-校验本批次 commit 中**没有** `build-autotests/` / `.results/` / `.reports/` / `.ut-session.json` / 缓存文件：
-
-```bash
-cd "$PROJECT_PATH"
-git show --stat --name-only --pretty=format: "$SHA" \
-    | grep -E '^(build-autotests/|autotests/\.results/|autotests/\.reports/|autotests/\.ut-session\.json|autotests/\.pytest_cache/|.*__pycache__/)' \
-    || echo "NO_ARTIFACT_LEAK"
-```
-
-**判定**：
-- 输出 `NO_ARTIFACT_LEAK` → 通过
-- 输出任何产物路径 → `fail`，列出泄漏的产物清单
-
-#### 4. 提交信息格式规范自检
-
-校验本批次 commit message 含全部必含字段（标题 / 基线 commit / 本批次类列表 / 累计统计 / Log / Influence）。**正则与校验脚本以 [`resources/references/commit-msg-format.md`](../resources/references/commit-msg-format.md) §2 §3 为单一权威来源**，本步骤直接执行该文档 §3 的校验脚本（传入 `$SHA`），收集 6 个 `FAIL_*` 输出。
-
-**判定**：
-- 任何 `FAIL_*` 输出 → `fail`，列出缺失/不规范的字段
-
-#### 5. 自检结果汇总与处理
-
-| 自检项 | 通过条件 | 不通过处理 |
-|-------|---------|----------|
-| 已提交完整性 | 本批次类测试文件均已入库且 autotests/ 无未提交测试代码 | `fail` → 回到代码提交阶段补提交漏掉的文件 |
-| 未误提交源码 | commit 中无 `src/**` 源码 | `fail` → 回到代码提交阶段创建新 commit 撤销（`git rm --cached <file>` + 新 commit；**不 amend**，保持历史可追溯） |
-| 未误提交构建产物 | commit 中无 `build-autotests/`、`.results/`、`.reports/`、`.ut-session.json`、缓存 | `fail` → 同上，创建新 commit 撤销产物 |
-| 提交信息格式规范 | 标题/基线/批次列表/累计统计/Log/Influence 全部符合正则 | `fail` → 回到代码提交阶段 amend 未 push 的 commit 仅修正 message |
-
-#### 6. 更新 session
-
-通过时：
-```json
-{
-  "last_phase": "commit_checked",
-  "commit_check": {
-    "last_batch_commit": "<sha>",
-    "completeness": "pass",
-    "no_source_leak": "pass",
-    "no_artifact_leak": "pass",
-    "commit_message_format": "pass",
-    "checked_at": "<ISO8601>"
-  }
-}
-```
-
-未通过时：
-```json
-{
-  "last_phase": "commit_check_failed",
-  "commit_check": {
-    "last_batch_commit": "<sha>",
-    "completeness": "pass",
-    "no_source_leak": "fail",
-    "no_artifact_leak": "pass",
-    "commit_message_format": "pass",
-    "failures": {
-      "no_source_leak": ["src/lib/ui/leaked.cpp"]
-    },
-    "checked_at": "<ISO8601>"
-  }
-}
-```
-
 ## 关键约束
-
-### 单类自检模式
 
 - 不产出交付文件：自检是内部环节，不写报告不入正文
 - 不修改测试代码：自检只读扫描（测试文件侧 grep/awk + 源码侧图谱查询，不 AST 改写），修正由 `test_writer` / `incremental_updater` 负责
@@ -451,13 +306,3 @@ git show --stat --name-only --pretty=format: "$SHA" \
 - 覆盖率阈值从 `session.coverage_threshold`（默认 80）读取，不硬编码
 - 不跳过断言强度自检：每用例（`TEST_F` 与 `TEST_P` 均需扫描）至少 2 个有效 `EXPECT_*`（NO_FATAL/NO_THROW/EXPECT_CALL 均不计入）
 - 不跳过环境隔离自检：硬编码绝对路径、`qputenv` 无对应 `qunsetenv`、未 mock 的真实外部资源（QProcess/网络/socket/真实时间）、stub 未 `clear()` 必须检出
-
-### 提交规范自检模式
-
-- 不 amend 已 push 的 commit：未 push 的本批次 commit，message 不规范时 amend 仅修正 message（安全）；已 push 的 commit 不允许 amend
-- 文件层面误提交不允许 amend：必须创建新 commit 撤销（`git rm --cached` + 新 commit），保持历史可追溯
-- 不 push：自检不触发 push，仅校验本地 commit
-- 不在自检中执行 commit：自检只读 git 状态与提交信息，修正由 `code_committer` 负责
-- 不跳过任一项：4 项（已提交完整性 / 未误提交源码 / 未误提交构建产物 / 提交信息格式规范）必须全跑
-- 不凭印象判定：以 `git show --stat` / `git log -1 --format=%B` / `git status --porcelain` 实际输出为准
-- 不遗漏 failures 清单：未通过时必须列出具体文件/字段，供 `code_committer` 精准修正

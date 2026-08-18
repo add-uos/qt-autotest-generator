@@ -1,6 +1,6 @@
 # 报告生成
 
-> 前置条件：session 中所有类 `status` 为 `done` / `failed` / `skipped`（无 `pending` / `in_progress`），所有已完成批次均已通过提交规范自检（`session.last_phase == "commit_checked"`）。
+> 前置条件：session 中所有类 `status` 为 `done` / `failed` / `skipped`（无 `pending` / `in_progress`），所有已完成批次均已提交完成（`session.last_phase == "code_committed"`）。
 
 ## 概述
 
