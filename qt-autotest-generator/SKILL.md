@@ -1,7 +1,7 @@
 ---
 name: qt-autotest-generator
-description: "Qt CMake 项目单元测试自动生成：基于 codebase-memory-mcp 知识图谱，搭建 autotests/ 框架、逐类生成 Google Test 用例、强制编译验证、覆盖率自检与报告。支持首次搭建、批量生成、增量补全、失败修复与源码变更对账。"
-version: "1.0.0"
+description: "用于为 Qt CMake 项目生成与维护 Google Test 单元测试：搭建 autotests/ 框架、逐类生成 GTest 用例、补全覆盖率缺口、修复失败用例、源码变更后重新对账。触发于「生成单测/建测试框架/批量生成测试/补全测试/修测试/重新对账/加测试」等表述，针对 Qt + CMake 的 C++ 项目；即使用户只说 add tests 或提高覆盖率也应触发。硬门禁依赖 codebase-memory-mcp 知识图谱（远端优先、本地兜底），强制编译+运行验证，函数覆盖率默认门禁 80%。不触发于：非 Qt 或非 CMake 项目、Qt Test/Catch2 框架、仅运行测试/CI 而不生成测试的任务。"
+version: "1.1.0"
 user-invocable: true
 argument-hint: "[项目路径 / 模块路径 / 类名]"
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash
@@ -46,6 +46,12 @@ compatibility:
 - 修复失败用例："测试编译失败"、"修测试"、"fix test failures"
 - 源码变更后对账："代码改了重新检查"、"重新对账"、"sync tests"
 - **指定覆盖率阈值**："函数覆盖率 80%"、"覆盖率不低于 90%"、"coverage threshold 75%" → 写入 `session.coverage_threshold`，默认 80
+
+**不触发于**（交还给通用工具或其它技能）：
+- 非 Qt 或非 CMake 的项目（纯 C、Python、Go、前端等）
+- 明确要求用 Qt Test / Catch2 / doctest 等其它测试框架
+- 仅运行已有测试 / 配 CI / 看测试日志，不涉及「生成 / 补全 / 修复测试代码」
+- 单测之外的测试类型：集成测试、性能基准、UI 自动化、契约测试
 
 ---
 
