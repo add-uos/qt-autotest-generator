@@ -9,6 +9,8 @@
 .qoder/
 .serena/
 .omo/
+.pi/
+.agents/
 
 # Python cache
 __pycache__/
