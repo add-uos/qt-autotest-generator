@@ -25,10 +25,10 @@
 │          │                                  │   + level 编辑器      │
 │  ─────── │  ──────────────────────────────  │  ─────────────────── │
 │  Level    │  ☐ | name | class | file |      │  qn (全限定名)        │
-│  🌟 high  │      level | factors | source   │  signature            │
-│  ⚖ mid    │      review | usecase           │  file path            │
-│  💤 low   │                                  │  factors (带得分)     │
-│  🚫 exempt│                                  │  gate_thresholds      │
+│  high  │      level | factors | source   │  signature            │
+│  mid    │      review | usecase           │  file path            │
+│  low   │                                  │  factors (带得分)     │
+│  exempt│                                  │  gate_thresholds      │
 │          │                                  │  review 操作          │
 │  ─────── │                                  │                       │
 │  Class树  │                                  │  ─────────────────── │
@@ -47,10 +47,10 @@
 
 **Level 筛选器**（复选框组，类似 IDS Viewer 的 tab 逻辑）：
 ```
-☑ 🌟 high   (58)    ← 点击只显示 high
-☑ ⚖ mid    (240)   ← 可多选
-☑ 💤 low    (309)
-☐ 🚫 exempt (484)   ← 默认不勾选（噪音大）
+☑ high   (58)    ← 点击只显示 high
+☑ mid    (240)   ← 可多选
+☑ low    (309)
+☐ exempt (484)   ← 默认不勾选（噪音大）
 
 ── 节点类型 ──
 ☑ Method  (1091)
@@ -60,12 +60,12 @@
 **Class 树**（可折叠，按 class_qn 分组）：
 ```
 ▼ CalculatorInterface  (9)
-  ▶ showWindow          🌟
-  ▶ hideWindow          🌟
+  ▶ showWindow          
+  ▶ hideWindow          
   ▶ CalculatorInterface 💤
 ▼ InputEdit            (23)
-  ▶ CurrentCursor...   🌟
-  ▶ SetAttrRecur       🌟
+  ▶ CurrentCursor...   
+  ▶ SetAttrRecur       
   ▶ InputEdit          💤
 ▼ MainWindow           (15)
   ...
@@ -90,7 +90,7 @@
 | 列 | 宽度 | 说明 |
 |----|------|------|
 | ☐ | 32px | 复选框（批量选择） |
-| Level | 64px | 🌟/⚖/💤/🚫 色标 + 文字，**可点击切换** |
+| Level | 64px | /⚖/💤/ 色标 + 文字，**可点击切换** |
 | Name | 180px | 方法名（monospace） |
 | Type | 48px | M/F 标签（Method/Function） |
 | Class | 120px | class_qn 短名 |
@@ -109,10 +109,10 @@
 
 **Level 色标设计**：
 ```
-🌟 high   → bg-emerald-500/20 text-emerald-400 border-emerald-500/30
-⚖ mid    → bg-amber-500/20 text-amber-400 border-amber-500/30
-💤 low    → bg-slate-500/20 text-slate-400 border-slate-500/30
-🚫 exempt → bg-red-500/20 text-red-400 border-red-500/30
+high   → bg-emerald-500/20 text-emerald-400 border-emerald-500/30
+mid    → bg-amber-500/20 text-amber-400 border-amber-500/30
+low    → bg-slate-500/20 text-slate-400 border-slate-500/30
+exempt → bg-red-500/20 text-red-400 border-red-500/30
 ```
 
 **Factor 标签设计**（小 pill）：
@@ -135,7 +135,7 @@ destructor    → 红色 pill  (-1)
 │  showWindow                         │
 │  CalculatorInterface                │
 │                                     │
-│  Level:  [🌟 high ▾]   ← 下拉编辑  │
+│  Level:  [ high ▾]   ← 下拉编辑  │
 │  Source: auto                       │
 │  Review: auto                       │
 │                                     │
@@ -170,12 +170,12 @@ destructor    → 红色 pill  (-1)
 │  [1/21] clearItems                  │
 │  SimpleListModel                    │
 │                                     │
-│  自动建议: 🌟 high                  │
+│  自动建议:  high                  │
 │  原因: 方法名含 clearItems          │
 │  默认: ⚖ mid                        │
 │                                     │
 │  你的决定:                          │
-│  [🌟 high] [⚖ mid] [💤 low]       │
+│  [ high] [⚖ mid] [💤 low]       │
 │  [跳过]              [← 上一条]    │
 │                                     │
 │  ── 进度 ──                         │
@@ -192,7 +192,7 @@ destructor    → 红色 pill  (-1)
 │                                                                     │
 │  [🔍 搜索方法名/类名/文件...]                                       │
 │                                                                     │
-│  🌟58  ⚖240  💤309  🚫484  |  待复核: 21  |  已修改: 3            │
+│  58  240  309  484  |  待复核: 21  |  已修改: 3            │
 │                                                                     │
 │  [🌙 主题] [📥 导入] [💾 保存] [📤 导出] [⚙ 设置]                  │
 └─────────────────────────────────────────────────────────────────────┘
@@ -208,7 +208,7 @@ destructor    → 红色 pill  (-1)
 
 ```
 ┌─ 已选 12 条 ──────────────────────────────────────────────┐
-│  [🌟 设为 high]  [⚖ 设为 mid]  [💤 设为 low]  [🚫 豁免]  │
+│  [设为 high]  [设为 mid]  [设为 low]  [豁免]  │
 │  [✅ 取消豁免]  [取消选择]                                │
 └────────────────────────────────────────────────────────────┘
 ```
@@ -232,11 +232,11 @@ destructor    → 红色 pill  (-1)
 
 ### UI 交互
 
-1. **Level 列点击**：4 选项浮层增加「🚫 豁免」选项
+1. **Level 列点击**：4 选项浮层增加「豁免」选项
 2. **右侧详情面板**：testable 开关（toggle switch）
    - 关闭 → 弹出确认「标记为不可测试？原因：」
    - 开启 → 自动重新评分
-3. **批量操作栏**：增加「🚫 豁免」和「✅ 取消豁免」按钮
+3. **批量操作栏**：增加「豁免」和「✅ 取消豁免」按钮
 4. **右键菜单**：豁免/取消豁免
 
 ### 豁免原因编辑
