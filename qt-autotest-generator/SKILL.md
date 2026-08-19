@@ -47,8 +47,9 @@ Mode 2 启动时若 `.ut-inventory.json` 不存在 → **自动触发 Mode 1**�
 
 ## Mode 1 · 函数重要性探测
 
-1. **`Read`** `prompts/environment_check.md` → MCP 门禁
-2. **`Read`** `prompts/inventory.md` → 全量扫描 → 评分 → 产出 `.ut-inventory.json` + `inventory-summary.md`
+1. **对账（reconcile）**：`Read` `resources/references/reconcile-logic.md` → 首次运行（无 inventory）直接进入步骤 2；inventory 已存在且 `base_sha` 漂移时按差异路由后再决定是否全量重扫
+2. **`Read`** `prompts/environment_check.md` → MCP 门禁
+3. **`Read`** `prompts/inventory.md` → 全量扫描 → 评分 → 产出 `.ut-inventory.json` + `inventory-summary.md`
 
 Mode 1 **不生成测试代码、不编译、不运行**，只建表。
 
@@ -56,9 +57,10 @@ Mode 1 **不生成测试代码、不编译、不运行**，只建表。
 
 ## Mode 2 · 单元测试编写
 
-1. **`Read`** `prompts/environment_check.md` → MCP 门禁
-2. 检查 `{test_dir}/.ut-inventory.json` → 不存在则先执行 Mode 1
-3. **`Read`** `prompts/test_writer.md` → 逐类闭环 → 编译验证 → 更新 `usecase_count`
+1. **对账（reconcile）**：`Read` `resources/references/reconcile-logic.md` → 若 inventory 不存在走首次运行（步骤 3 会触发 Mode 1）；若 `base_sha` 已漂移按差异路由（新增/签名变更/删除/分支切换）后再进入下方主流程
+2. **`Read`** `prompts/environment_check.md` → MCP 门禁
+3. 检查 `{test_dir}/.ut-inventory.json` → 不存在则先执行 Mode 1
+4. **`Read`** `prompts/test_writer.md` → 逐类闭环 → 编译验证 → 更新 `usecase_count`
 
 Mode 2 的子步骤按需读取：
 
@@ -158,6 +160,7 @@ Mode 2 的子步骤按需读取：
 
 ```
 □ 已区分 Mode 1（分析）/ Mode 2（编写），未混跑
+□ 已执行 reconcile（比对 git HEAD 与 inventory.base_sha，按差异路由；首次运行无 inventory 直接进入环境检查）
 □ Mode 1：已 Read prompts/environment_check.md + prompts/inventory.md；产出 .ut-inventory.json
 □ Mode 2：已 Read prompts/environment_check.md；.ut-inventory.json 存在（不存在则先执行 Mode 1）
 □ Mode 2：已按步骤 Read 对应 prompts 子步骤文件

@@ -182,12 +182,6 @@ Mode 2 的 MCP 查询集中在依赖追踪和测试代码生成阶段：
 | 关键（search_graph/trace_path/get_code_snippet） | 硬终止 + 明确错误 |
 | 非关键（query_graph 辅助查询） | 降级 + 警告，用文件读取兜底 |
 
-## 并行策略
-
-> TODO: 并行策略待重新设计。原 session 分片机制已废弃，需基于 `.ut-inventory.json` 重新设计并行方案。
-
-当前版本：串行逐类处理。
-
 ## 关键约束
 
 - 不修改项目源码

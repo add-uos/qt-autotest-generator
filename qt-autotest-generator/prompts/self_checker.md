@@ -8,7 +8,7 @@
 
 对单个类的测试做内部自检——覆盖率完整性、命名规范、SPDX 头、stub 正确性、结构。**内部执行，不产出交付文件**，发现问题流转到修正阶段。
 
-### 0. 迭代次数检查（Iron Law #13）
+### 0. 迭代次数检查（Iron Law #10）
 
 在执行任何自检之前，先检查 `iteration_count[classname]`：
 
@@ -334,5 +334,3 @@ for method in all_methods:
 - 覆盖率门禁规则：必须有 `.ut-inventory.json`，按方法分级（详见 `resources/references/coverage-tiers.md`）；无 inventory 时技能不可运行
 - 不跳过断言强度自检：每用例（`TEST_F` 与 `TEST_P` 均需扫描）至少 2 个有效 `EXPECT_*`（NO_FATAL/NO_THROW/EXPECT_CALL 均不计入）
 - 不跳过环境隔离自检：硬编码绝对路径、`qputenv` 无对应 `qunsetenv`、未 mock 的真实外部资源（QProcess/网络/socket/真实时间）、stub 未 `clear()` 必须检出
-
-> **并行分片**：当目标类 >= 5 个时，并行处理使用分片 session 机制，详见 `resources/references/parallel-strategy.md`

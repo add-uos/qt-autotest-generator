@@ -12,7 +12,7 @@
   "gate_thresholds": {
     "high": { "line": 90, "branch": 80, "function": 100 },
     "mid": { "line": 60, "branch": 0, "function": 100 },
-    "low": { "line": 0, "branch": 0, "function": 0 }
+    "low": { "line": 60, "branch": 0, "function": 100 }
   },
   "scope_rules": [
     { "pattern": "3rdparty/**", "scope": "exempt" },

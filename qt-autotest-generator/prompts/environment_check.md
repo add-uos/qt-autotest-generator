@@ -54,7 +54,7 @@ fi
 
 1. **探测远端**：`remote_codebase_memory_mcp.list_projects()` 调通即远端可用；进一步用 `root_path` 匹配 `project_path`，命中且 `index_status(project=...) == "ready"` → 解析为远端提供方，写 `mcp_provider = "remote-codebase-memory-mcp"` / `mcp_provider_type = "remote"`，**跳过本地安装**。
 2. **回退本地**：远端不可用 / 项目未在远端索引 / 远端索引中三者任一成立 → 探测本地 `codebase_memory_mcp.list_projects()`：调通则解析为本地提供方，`mcp_provider = "codebase-memory-mcp"` / `mcp_provider_type = "local"`，按 `mcp-providers.md` §6 输出**使用本地**提醒。
-3. **本地不可用 → 安装**：本地亦不可用 → 按 `mcp-providers.md` §6 输出**安装本地**强制提醒 → 运行 `bash ${SKILL_DIR}/tools/setup-codebase-memory.sh`；退出码 `0` → 设本地提供方；`1`（安装失败）/ `2`（配置失败）/ `3`（验证失败）→ **硬终止**，报告退出码与错误摘要。
+3. **本地不可用 → 安装**：本地亦不可用 → 按 `mcp-providers.md` §6 输出**安装本地**强制提醒 → 运行 `bash ${SKILL_DIR}/scripts/setup-codebase-memory.sh`；退出码 `0` → 设本地提供方；`1`（安装失败）/ `2`（配置失败）/ `3`（验证失败）→ **硬终止**，报告退出码与错误摘要。
 4. **全不可用 → 硬终止**：远端不可用且本地安装失败 → `硬终止：无任何可用的知识图谱 MCP 提供方。`，**不降级 LSP**（`mcp-providers.md` §7）。
 
 ### 2. 确认项目已索引
@@ -142,7 +142,7 @@ if result.total == 0:
   "gate_thresholds": {
     "high": { "line": 90, "branch": 80, "function": 100 },
     "mid": { "line": 60, "branch": 0, "function": 100 },
-    "low": { "line": 0, "branch": 0, "function": 0 }
+    "low": { "line": 60, "branch": 0, "function": 100 }
   },
   "scope_rules": [],
   "methods": [],

@@ -87,7 +87,7 @@ sudo apt install lcov
 否则 `environment_check` 会强制提醒用户并安装本地 `codebase-memory-mcp`：
 
 ```bash
-bash tools/setup-codebase-memory.sh
+bash scripts/setup-codebase-memory.sh
 ```
 
 ### 验证安装

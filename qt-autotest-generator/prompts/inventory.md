@@ -250,7 +250,7 @@ for qn in candidates:
 
 **scope_rules 应用**：scope=exempt → `testable=false`，不论因子评分多高。
 
-完整评分逻辑详见 `tools/scan_inventory.py` 的 `score_method()` 函数。
+完整评分逻辑详见 `scripts/scan_inventory.py` 的 `score_method()` 函数。
 
 ### 4. 已有用例数统计
 
@@ -294,7 +294,7 @@ Agent 输出 Markdown 摘要 + review_queue，与用户交互：
 2. Agent 问: "逐条确认还是全部用默认值？"
    - "全部跳过" → review_queue 所有 pending → confirmed, level=mid
    - "看看" → 逐条展示，用户回复 high/mid/low
-   - 用户也可直接编辑 JSON 文件，或用可视化编辑器 `tools/ut-inventory-editor/index.html`
+   - 用户也可直接编辑 JSON 文件，或用可视化编辑器 `scripts/ut-inventory-editor/index.html`
 
 3. 回写 review_status
 ```
@@ -325,11 +325,11 @@ Agent 输出 Markdown 摘要 + review_queue，与用户交互：
 
 ## 端到端脚本
 
-**`tools/fetch_mcp_data.py`** 一条命令完成全流程：
+**`scripts/fetch_mcp_data.py`** 一条命令完成全流程：
 MCP 收集 → 继承检测 → DBus 槽 → Q_INVOKABLE/Q_PLUGIN → P75 → 生成 `.ut-inventory.json`。
 
 ```bash
-python3 tools/fetch_mcp_data.py \
+python3 scripts/fetch_mcp_data.py \
   --project home-uos-service-codebase-repos-dde-file-manager \
   --file-pattern "src/**" \
   --output ${test_dir}/.ut-inventory.json \

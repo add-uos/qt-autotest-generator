@@ -52,7 +52,6 @@ Qt 项目代码量大，**单测覆盖率上不去**？<br>
 <tr><td nowrap width="1%"><strong>增量对账</strong></td><td>源码变更后自动 diff，只补新增方法、只修签名变更、只清理已删方法引用</td></tr>
 <tr><td nowrap width="1%"><strong>源码缺陷标红</strong></td><td>疑似源码缺陷（编译不过/运行崩溃/逻辑矛盾）标红交还用户，不自行修源码</td></tr>
 <tr><td nowrap width="1%"><strong>HTML/CSV 报告</strong></td><td>固定收尾生成覆盖率总览、逐类结果、源码缺陷清单、跳过类清单</td></tr>
-<tr><td nowrap width="1%"><strong>并行处理</strong></td><td>类数 >= 5 时可并行处理多个类的闭环链，加速大规模项目</td></tr>
 </tbody>
 </table>
 

@@ -40,24 +40,24 @@ cp -r ${SKILL_DIR}/resources/stub/* ${PROJECT_PATH}/{test_dir}/3rdparty/stub/
 
 ### 4. 生成 CMake 工具脚本
 
-bash ${SKILL_DIR}/tools/generate-cmake-utils.sh
+bash ${SKILL_DIR}/scripts/generate-cmake-utils.sh
 ```
 
 生成 `{test_dir}/cmake/UnitTestUtils.cmake`。脚本通过环境变量 `TEST_DIR` 接收目录名（默认 `autotests`）：
 
 ```bash
-TEST_DIR=tests bash ${SKILL_DIR}/tools/generate-cmake-utils.sh
+TEST_DIR=tests bash ${SKILL_DIR}/scripts/generate-cmake-utils.sh
 ```
 
 ### 5. 生成测试运行脚本 + 报告生成器
 
-bash ${SKILL_DIR}/tools/generate-runner.sh
+bash ${SKILL_DIR}/scripts/generate-runner.sh
 ```
 
 生成 `{test_dir}/run-ut.sh` 并复制 `report_generator/`。脚本通过环境变量 `TEST_DIR` 接收目录名（默认 `autotests`）：
 
 ```bash
-TEST_DIR=tests bash ${SKILL_DIR}/tools/generate-runner.sh
+TEST_DIR=tests bash ${SKILL_DIR}/scripts/generate-runner.sh
 ```
 
 ### 6. 生成 {test_dir}/CMakeLists.txt
@@ -164,5 +164,3 @@ cmake --build . -j$(nproc)
 - 空框架必须能编译通过，不跳过框架编译验证
 - `{test_dir}/` 已存在时跳过本阶段
 - 必须生成 `{test_dir}/.gitignore`（排除构建产物、缓存、覆盖率数据）
-
-> **并行分片**：当目标类 >= 5 个时，并行处理使用分片 session 机制，详见 `resources/references/parallel-strategy.md`

@@ -8,7 +8,7 @@
 
 强制编译并运行目标类的测试，按错误分类表修复，在重试预算内达成编译+运行通过。产出**双信号**（编译/运行结果 + 覆盖率信号）。**不修源码**，疑似源码缺陷标红交还用户。
 
-若 `iteration_count[classname]` >= 3（Iron Law #13），跳过验证，直接标记 `failed` + `max_iterations_exceeded`。
+若 `iteration_count[classname]` >= 3（Iron Law #10），跳过验证，直接标记 `failed` + `max_iterations_exceeded`。
 
 ## 工作步骤
 
