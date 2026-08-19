@@ -712,20 +712,21 @@ Agent 输出 Markdown 摘要 + review_queue，与用户交互：
 
 **解决方案**：`in_degree` 因子仅贡献 +1 分（mid-booster），需叠加 `complexity ≥ 10` (+2)
 或 `linear_scan_in_loop` (+1) + `complexity ≥ 5` (+1) 才能达到 high。
-跨项目全量验证（6 个项目，18340 方法）：`in_degree=+2` 导致 calculator 14.2% high（大量 cx_lo+in_deg 假阳性），
-`in_degree=+1` 降至 8.1%，全部项目 high 比例保持在 1.2%–8.1% 的合理分布。
+跨项目全量验证（6 个项目，18340 方法，fetch_mcp_data.py 端到端）：`in_degree=+2` 导致 calculator 14.2% high（大量 cx_lo+in_deg 假阳性），
+`in_degree=+1` 降至 9.6%，全部项目 high 比例保持在 1.2%–9.6% 的合理分布。
+端到端脚本比手动流程多检出 26 个 high（DBus Adaptor 槽 + Q_INVOKABLE 正确检测）。
 
 | 项目 | 方法总数 | 可测试 | high | mid | low | high% | high 主因 |
 |------|---------|--------|------|-----|-----|-------|----------|
-| deepin-calculator | 1091 | 607 | 49 | 240 | 318 | 8.1% | dbus, cx_mid+in_deg, cx_hi |
-| deepin-ocr | 261 | 101 | 3 | 56 | 42 | 3.0% | cx_hi |
-| deepin-camera | 1632 | 472 | 27 | 250 | 195 | 5.7% | dbus, cx_mid+lsl, cx_hi |
+| deepin-calculator | 1091 | 607 | 58 | 240 | 309 | 9.6% | dbus_slot(9), cx_mid+in_deg, cx_hi |
+| deepin-ocr | 261 | 101 | 3 | 56 | 42 | 3.0% | cx_hi, q_invokable(3) |
+| deepin-camera | 1632 | 472 | 35 | 250 | 187 | 7.4% | dbus_slot(8), cx_mid+lsl, cx_hi |
 | deepin-terminal | 2245 | 1112 | 17 | 360 | 735 | 1.5% | cx_mid+lsl, cx_hi |
 | deepin-reader | 1098 | 1098 | 23 | 306 | 769 | 2.1% | cx_hi, cx_mid+lsl |
-| dde-file-manager | 12013 | 12013 | 141 | 3494 | 8378 | 1.2% | cx_mid+in_deg, cx_hi |
-| **合计** | **18340** | **15403** | **260** | **4706** | **10437** | **1.7%** | |
+| dde-file-manager | 12013 | 12013 | 150 | 3493 | 8370 | 1.2% | q_invokable(9), cx_mid+in_deg, cx_hi |
+| **合计** | **18340** | **15403** | **286** | **4705** | **10412** | **1.9%** | |
 
-> 全量收集（collect_all_methods.py，HTTP MCP 直连，limit=2000/页）。
+> 端到端收集（fetch_mcp_data.py，HTTP MCP 直连，query_graph + search_code 自动检测）。
 
 ### MCP 不支持 Cypher 查询
 
@@ -734,29 +735,37 @@ Agent 输出 Markdown 摘要 + review_queue，与用户交互：
 - `search_graph(label="Class")` 不返回 `base_classes` 字段，需用 `query_graph` 替代
 - 继承检测必须通过 `get_code_snippet()` 读源码确认
 
-### 全量收集脚本（HTTP MCP 直连）
+### 端到端脚本（fetch_mcp_data.py）
 
-**`resources/scripts/collect_all_methods.py`** 直接通过 HTTP 调用远程 MCP 服务器，
-绕过 pi 网关，全自动分页收集所有 Method 节点。
+**`resources/scripts/fetch_mcp_data.py`** 一条命令完成全流程：
+MCP 收集 → 继承检测 → DBus 槽 → Q_INVOKABLE/Q_PLUGIN → P75 → 生成 `.ut-inventory.json`。
 
 ```bash
-# 收集项目全部方法（自动分页，limit=2000/页）
-python3 resources/scripts/collect_all_methods.py \
+# 端到端：一条命令生成 .ut-inventory.json
+python3 resources/scripts/fetch_mcp_data.py \
   --project home-uos-service-codebase-repos-dde-file-manager \
   --file-pattern "src/**" \
-  --output ${test_dir}/all_methods.json
+  --output ${test_dir}/.ut-inventory.json \
+  --summary
 ```
 
-- **HTTP 直连**：MCP 服务器 `http://10.8.12.80:13626/mcp`，JSON-RPC 协议
-- **limit=2000**：每次返回 2000 条（默认 limit=200 需 61 页，limit=2000 仅需 7 页）
-- **file_pattern 过滤**：收集时排除 3rdparty，避免无用数据
+脚本自动完成 5 个步骤：
+1. **search_graph 分页**收集所有 Method（limit=2000/页，file_pattern 过滤 3rdparty）
+2. **query_graph CONTAINS** 检测继承链（QDBusAbstractAdaptor 服务端 / QThread 并发）
+3. **query_graph** 获取 DBus Adaptor 类方法 → dbus_slots（过滤构造/析构/emit*）
+4. **search_code** 检测 Q_INVOKABLE / Q_PLUGIN_METADATA（best-effort）
+5. **客户端计算 P75** 非零 in_degree → 调用 `scan_inventory.build_inventory()` 评分
+
+- **HTTP 直连**：MCP 服务器 `http://10.8.12.80:13626/mcp`，JSON-RPC 2.0 协议
+- **file_pattern 过滤**：收集时排除 3rdparty
   - deepin-reader: `reader/**` → 7780 降至 1098 方法
   - dde-file-manager: `src/**` → 14877 降至 12013 方法
-- **性能**：12013 方法全量收集仅需 ~1.3 秒
-- **输出**：JSON 数组，每元素为一个 Method 节点的完整属性
+- **性能**：12013 方法端到端仅需 ~2 秒
+- **依赖**：同目录的 `scan_inventory.py`（提供 `build_inventory()` 评分逻辑）
+- **可选**：`--keep-dump` 保留中间 `mcp_dump.json`，`--summary` 输出 Markdown 摘要
 
-> 若 `collect_all_methods.py` 不可用（如 MCP URL 变更），
-> Agent 可退回手动调用 `search_graph` 分页（limit=2000, offset 递增）。
+> 若 `fetch_mcp_data.py` 不可用（如 MCP URL 变更），
+> Agent 可退回手动调用 `search_graph` 分页 + `query_graph` + `scan_inventory.py`。
 
 ### search_graph 分页参数（手动回退）
 
@@ -772,6 +781,7 @@ python3 resources/scripts/collect_all_methods.py \
 
 ### get_code_snippet 限制
 
-- 只能按 `qualified_name` 查询，不能按文件路径
-- 返回的是类级源码，不是单个方法
-- 大类源码可能被截断，Q_SLOTS 解析应只取类声明部分
+- 按 `qualified_name` 查询时返回**方法级**源码（.cpp 实现），非类声明
+- Q_SLOTS/Q_INVOKABLE 声明在头文件中，get_code_snippet 无法直接获取
+- **替代方案**：用 `query_graph(parent_class CONTAINS '<类名>')` 获取类方法列表，
+  或用 `search_code(pattern='Q_INVOKABLE')` 搜索源码文本
