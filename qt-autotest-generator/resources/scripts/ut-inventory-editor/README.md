@@ -22,7 +22,7 @@ python3 fetch_mcp_data.py --project <id> --output .ut-inventory.json
 | Level 筛选 | 🌟 high / ⚖ mid / 💤 low / 🚫 exempt 复选框 |
 | Level 编辑 | 点击 Level 色标 → 弹出选择器，或键盘 1-4 |
 | 豁免切换 | testable 开关 → 豁免/取消豁免，双向切换 |
-| Review Queue | 逐条复核待审条目，确认 high/mid/low |
+| Review Queue | 逐条复核待审条目，确认 high/mid/low；**✅ 完成复核** 按钮可批量将剩余条目按 ⚖ mid 确认 |
 | 批量操作 | 多选 → 批量设 Level / 豁免 / 取消豁免 |
 | 因子筛选 | 点击 Factor pill → 筛选含该因子的所有方法 |
 | Class 树 | 按类分组，点击类名过滤 |
@@ -33,6 +33,7 @@ python3 fetch_mcp_data.py --project <id> --output .ut-inventory.json
 | CSV 导出 | 导出当前筛选结果 |
 | 拖放导入 | 拖放 JSON 文件到页面 |
 | 暗色/亮色主题 | 自动检测系统偏好，手动切换 |
+| 字体大小 | S/M/L 三档（12/15/17px），默认 M，持久化到 localStorage |
 
 ## 快捷键
 
