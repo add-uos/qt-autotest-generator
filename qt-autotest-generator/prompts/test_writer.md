@@ -43,6 +43,7 @@ if not file_exists(inventory_path):
     # Mode 1 完成后 inventory_path 应存在
 
 inventory = read_json(inventory_path)
+gui_names = {c["name"] for c in inventory.get("classes", []) if c.get("is_gui")}
 ```
 
 ### 1. 项目准备（按需）
@@ -75,6 +76,7 @@ for method in inventory["methods"]:
             "name": class_qn.split(".")[-1],
             "qualified_name": class_qn,
             "level": method["level"],  # 取该类最高 level
+            "is_gui": class_qn in gui_names,  # methods[].class_qn 是短名，用 classes[].name 匹配
             "methods": []
         }
     testable_classes[class_qn]["methods"].append(method)
@@ -84,6 +86,10 @@ for method in inventory["methods"]:
 
 # 排序：high → mid → low
 sorted_classes = sorted(testable_classes.values(), key=lambda c: -level_rank(c["level"]))
+
+# 初始化类处理状态（内存变量）
+for c in sorted_classes:
+    class_status[c["name"]] = {"status": "pending"}
 ```
 
 ### 5. 逐类闭环
@@ -91,20 +97,19 @@ sorted_classes = sorted(testable_classes.values(), key=lambda c: -level_rank(c["
 对 `sorted_classes` 中每个类，执行闭环链：
 
 ```
-类分析 → 依赖追踪 → 测试代码生成 → 编译验证 → 自检
-   ↑                                    |
-   └────── 失败修复 ←───────────────────┘
-   ↑                                    |
-   └────── 增量补全 ←── 覆盖率缺口 ─────┘
+依赖追踪 → 测试代码生成 → 编译验证 → 自检
+   ↑                          |
+   └──── 失败修复 ←───────────┘
+   ↑                          |
+   └──── 增量补全 ←── 覆盖率缺口 ┘
 ```
 
 每步读取对应 prompt 文件：
 
 | 步骤 | 文件 | 说明 |
 |------|------|------|
-| 类分析 | `prompts/class_analyzer.md` | MCP 拉类+方法、GUI 识别、用例规划 |
-| 依赖追踪 | `prompts/dependency_tracer.md` | MCP trace_path 出向、stub 决策、CMake 目录 |
-| 测试代码生成 | `prompts/test_code_gen.md` | 读模板生成测试代码、AAA、命名 |
+| 依赖追踪 | `prompts/dependency_tracer.md` | 读 inventory 的 is_gui、MCP trace_path 出向、stub 决策、CMake 目录 |
+| 测试代码生成 | `prompts/test_code_gen.md` | 读模板生成测试代码、用例数下限从 level/factors 推导、AAA、命名 |
 | 编译验证 | `prompts/build_verifier.md` | 强制编译+运行、错误分类→修复表 |
 | 自检 | `prompts/self_checker.md` | 覆盖率/命名/SPDX/stub/断言强度/环境隔离 |
 | 失败修复 | `prompts/failure_repairer.md` | 编译/运行失败时 |
@@ -128,8 +133,8 @@ case_count = len(re.findall(r'TEST_F\s*\(\s*\w+Test\s*,', content))
 inventory = read_json(inventory_path)
 for method in inventory["methods"]:
     if method.get("class_qn") == class_qn and method["testable"]:
-        # 按方法名匹配测试用例
-        method_cases = count_cases_for_method(content, method["name"])
+        # 按方法名匹配测试用例（用例名首段 PascalCase，方法名 camelCase → 小写归一化后比对）
+        method_cases = count_cases_for_method(content, method["name"].lower())
         method["usecase_count"] = method_cases
 
 # 3. 写回
@@ -165,16 +170,14 @@ gate = inventory["gate_thresholds"]
 
 ## MCP 查询策略
 
-Mode 2 的 MCP 查询集中在类分析和依赖追踪阶段：
+Mode 2 的 MCP 查询集中在依赖追踪和测试代码生成阶段：
 
 | 查询 | 用途 | 阶段 |
 |------|------|------|
-| `search_graph(label="Class")` | 拉取目标类 | 类分析 |
-| `search_graph(label="Method")` | 拉取方法列表 | 类分析 |
-| `query_graph(Cypher)` | GUI 继承识别 | 类分析 |
-| `get_code_snippet(qn)` | 读取方法源码/签名 | 依赖追踪、测试代码生成 |
 | `trace_path(direction="outbound")` | 出向调用链 | 依赖追踪 |
 | `query_graph(IMPORTS)` | 补充传递依赖 | 依赖追踪 |
+| `search_graph` | 头文件/符号查找 | 依赖追踪 |
+| `get_code_snippet(qn)` | 读取方法源码/签名 | 测试代码生成 |
 
 **查询失败处理**：
 

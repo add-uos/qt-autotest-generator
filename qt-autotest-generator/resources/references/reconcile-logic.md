@@ -24,7 +24,7 @@
       - 索引 ready 后验证新鲜度：query_graph 查一个已知类，
         若返回的 file_path 对应的 git log 与当前 HEAD 一致则索引已同步；
         若不一致 → 同上按提供方类型处理（本地可 index_repository 刷新，远端只能等待/提醒）
-      - 执行类分析（mode="diff"）→ 与 inventory 记录做方法级 diff
+      - 执行 inventory 对账（方法级 diff：图谱当前方法集 vs `methods[]`）
       - 新增方法 → 增量补全
       - 签名/体变更 → 测试生成（重新生成该类）→ 编译验证 → 自检
       - 方法删除 → 失败修复（清理引用已删方法的测试）
@@ -37,7 +37,7 @@
         · 重新对账前，检查每个类的 file_path 是否在当前分支仍存在
         · 不存在 → 标记该类 status="stale"，从 CMakeLists 移除对应 add_subdirectory（避免编译失败）
         · 保留 stale 类的测试文件（不删除，供切换回原分支后恢复），记录 stale_classes 列表
-        · 新分支重新走类分析 → 新增/变更的类正常闭环
+        · 新分支重新对账 → 新增/变更的类正常闭环
         · 更新内存变量 branch + inventory.base_sha + stale_classes
 ```
 
@@ -54,5 +54,5 @@
 2. 不存在 → 标记 `status="stale"`，从 CMakeLists 移除对应 `add_subdirectory`
 3. 保留 stale 类的测试文件（不删除，供切回原分支后恢复）
 4. 记录 `stale_classes` 列表（内存变量）
-5. 新分支重新走类分析 → 新增/变更的类正常闭环
+5. 新分支重新对账 → 新增/变更的类正常闭环
 6. 更新内存变量 `branch` + `inventory.base_sha` + `stale_classes`

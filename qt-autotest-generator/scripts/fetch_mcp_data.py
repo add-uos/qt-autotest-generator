@@ -5,7 +5,7 @@ fetch_mcp_data.py — 端到端：MCP 知识图谱 → .ut-inventory.json
 一条命令完成函数重要性探测的全流程数据采集与评分：
 
   1. HTTP MCP 收集所有 Method 节点（search_graph 分页，file_pattern 过滤 3rdparty）
-  2. query_graph 检测继承链（QDBusAbstractAdaptor 服务端 / QThread 并发基类）
+  2. query_graph 检测继承链（QDBusAbstractAdaptor 服务端 / QThread 并发基类 / GUI 基类）
   3. query_graph 获取 DBus Adaptor 类方法 → dbus_slots
   4. search_code 检测 Q_INVOKABLE / Q_PLUGIN_METADATA（best-effort）
   5. 客户端计算 P75 非零 in_degree
@@ -60,6 +60,12 @@ DBUS_INTERFACE_BASES = ["QDBusAbstractInterface"]
 CONCURRENT_BASES = [
     "QThread", "QThreadPool", "QMutex", "QReadWriteLock",
     "QSemaphore", "QAtomicInt", "QAtomicInteger", "QWaitCondition",
+]
+
+# GUI 基类 — 继承自这些基类的类在测试中需特殊处理（QCoreApplication / 不直接实例化 / 链 Widgets）
+GUI_BASES = [
+    "QWidget", "QDialog", "QMainWindow",
+    "DMainWindow", "DFrame", "DWidget", "DAbstractDialog",
 ]
 
 
@@ -215,9 +221,9 @@ def collect_methods(client, project, file_pattern=None, limit=2000):
 
 
 def collect_inheritance(client, project):
-    """Step 2: query_graph to detect DBus Adaptor and concurrent base classes.
+    """Step 2: query_graph to detect DBus / concurrent / GUI base classes.
 
-    Returns (dbus_adaptor_classes, dbus_interface_classes, concurrent_classes).
+    Returns (dbus_adaptor_classes, dbus_interface_classes, concurrent_classes, gui_classes).
     Each is a list of dicts: {name, qualified_name, file_path, base_classes}.
     """
     print(f"\n📊 [2/5] Detecting inheritance chains...")
@@ -225,6 +231,7 @@ def collect_inheritance(client, project):
     dbus_adaptor = []
     dbus_interface = []
     concurrent = []
+    gui = []
 
     # DBus Adaptor (server-side, contract-level)
     for base in DBUS_ADAPTOR_BASES:
@@ -265,15 +272,30 @@ def collect_inheritance(client, project):
                 "file_path": row[2], "base_classes": _parse_bases(row[3]),
             })
 
+    # GUI base classes → is_gui（Mode 2 测试生成的环境约束依据）
+    for base in GUI_BASES:
+        query = (
+            f"MATCH (c:Class) WHERE c.base_classes CONTAINS '{base}' "
+            f"RETURN c.name, c.qualified_name, c.file_path, c.base_classes"
+        )
+        data = client.call_tool("query_graph", {"project": project, "query": query})
+        for row in data.get("rows", []):
+            gui.append({
+                "name": row[0], "qualified_name": row[1],
+                "file_path": row[2], "base_classes": _parse_bases(row[3]),
+            })
+
     # Deduplicate
     dbus_adaptor = _dedup_classes(dbus_adaptor)
     dbus_interface = _dedup_classes(dbus_interface)
     concurrent = _dedup_classes(concurrent)
+    gui = _dedup_classes(gui)
 
     print(f"   DBus Adaptor (server): {len(dbus_adaptor)}")
     print(f"   DBus Interface (client): {len(dbus_interface)}")
     print(f"   Concurrent: {len(concurrent)}")
-    return dbus_adaptor, dbus_interface, concurrent
+    print(f"   GUI: {len(gui)}")
+    return dbus_adaptor, dbus_interface, concurrent, gui
 
 
 def collect_dbus_slots(client, project, dbus_adaptor_classes):
@@ -437,7 +459,7 @@ def _extract_class_from_qn(qn):
 # ── 主流程 ──
 
 def build_mcp_dump(project, methods, functions, dbus_adaptor, dbus_interface,
-                   concurrent, dbus_slots, q_invokables, q_plugins, p75):
+                   concurrent, gui, dbus_slots, q_invokables, q_plugins, p75):
     """Assemble mcp_dump dict for scan_inventory.build_inventory()."""
     return {
         "project": project,
@@ -447,6 +469,7 @@ def build_mcp_dump(project, methods, functions, dbus_adaptor, dbus_interface,
         "dbus_classes": dbus_adaptor,       # server-side Adaptor (contract-level)
         "dbus_interface_classes": dbus_interface,  # client-side (not contract-level)
         "concurrent_classes": concurrent,
+        "gui_classes": gui,                 # → inventory.classes[].is_gui
         "dbus_slots": dbus_slots,
         "dbus_signals": {},
         "q_invokables": q_invokables,
@@ -493,7 +516,7 @@ def main():
 
     # Step 1-5: 采集数据
     methods, functions = collect_methods(client, args.project, args.file_pattern, args.limit)
-    dbus_adaptor, dbus_interface, concurrent = collect_inheritance(client, args.project)
+    dbus_adaptor, dbus_interface, concurrent, gui = collect_inheritance(client, args.project)
     dbus_slots = collect_dbus_slots(client, args.project, dbus_adaptor)
     q_invokables, q_plugins = collect_qt_macros(client, args.project)
     p75 = compute_p75_nonzero(methods + functions)
@@ -501,7 +524,7 @@ def main():
     # 构建 mcp_dump
     mcp_dump = build_mcp_dump(
         args.project, methods, functions, dbus_adaptor, dbus_interface,
-        concurrent, dbus_slots, q_invokables, q_plugins, p75)
+        concurrent, gui, dbus_slots, q_invokables, q_plugins, p75)
 
     if args.keep_dump:
         dump_path = os.path.join(

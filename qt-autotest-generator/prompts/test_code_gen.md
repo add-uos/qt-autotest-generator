@@ -1,12 +1,12 @@
 # 测试代码生成
 
-> 前置条件：`class_analyzer` 已完成目标类分析（有 `test_plan`（内存变量）），`dependency_tracer` 已完成目标类追踪（有 `stub_list` + `source_dirs`（内存变量）），图谱 ready。
+> 前置条件：`.ut-inventory.json` 存在（方法分级 + `factors`），`dependency_tracer` 已完成目标类追踪（有 `is_gui` + `stub_list` + `source_dirs`（内存变量）），图谱 ready。
 
 > 通过 mcp_provider 调用知识图谱工具（详见 resources/references/mcp-providers.md）
 
 ## 概述
 
-根据类分析的测试规划和依赖追踪的 stub 清单，读模板生成单个类的 Google Test 测试代码。此阶段只生成测试代码，不编译不运行（编译验证由后续阶段负责）。
+根据 inventory 的方法分级（level/factors）和依赖追踪的 stub 清单，读模板生成单个类的 Google Test 测试代码。此阶段只生成测试代码，不编译不运行（编译验证由后续阶段负责）。
 
 ## 测试方法论引用（必读）
 
@@ -88,7 +88,17 @@ read("${SKILL_DIR}/resources/templates/cmake-submodule.txt")
 
 ### 4. 生成测试用例
 
-每个待测方法按 test_plan 的 planned_cases 数量生成用例。
+每个待测方法按其 inventory `level`/`factors` 推导用例数下限：
+
+| factors / level 特征 | 最少用例数 | 用例类型 | 对应 test-types.md 章节 |
+|---------------------|-----------|---------|------------------------|
+| high 或 `complexity_ge_20` | 3 | 正常 + 边界 + 异常 | §1 有效等价类 + §2 边界值 + §5 异常路径 + §6 负面测试 |
+| `complexity_ge_10`（mid 档） | 2 | 正常 + 边界或异常 | §2 边界值 + §5 异常路径 |
+| `loop_ge_1` / 循环类因子 | +1 | 循环边界（空集合、单元素、超大集合） | §2.1 循环计数 + §4.2 for 循环分支 |
+| mid | 1–2 | 正常路径 + 主要分支 | §1 有效等价类 |
+| low | 1 | 正常路径 | §1 有效等价类 |
+
+> 分支覆盖优先于用例数量（见 4.0 第 4 条），上表是下限不是上限。
 
 #### 4.0 前置：mock 深度分析（避免漏测与环境耦合）
 
@@ -104,7 +114,7 @@ read("${SKILL_DIR}/resources/templates/cmake-submodule.txt")
    - **时间/随机**：`QDateTime::currentDateTime`、`QTime::currentTime`、`QElapsedTimer`、`srand`/`qsrand`、`QRandomGenerator::system` —— 需要确定性结果时必须 mock
    - **单例/全局状态**：进程内单例、静态成员、`qApp` 全局状态（多用例之间会污染，`TearDown` 必须重置）
 3. **对每个识别出的依赖决定 mock 策略**：能 mock 的走 `stub.set_lamda`；不能直接 mock 的（如硬编码路径字符串）在 `SetUp()` 用 `QTemporaryDir`/`QTemporaryFile` 构造临时环境并把路径注入被测对象；环境变量在 `SetUp()` 用 `qputenv` 设置、`TearDown()` 用 `qunsetenv` 还原。
-4. **分支覆盖优先于用例数量**：基于源码分支生成用例，`planned_cases` 是下限不是上限。嵌套 `if`/`switch`/循环边界/异常路径要单独生成用例，**哪怕超出 `planned_cases` 也必须补**，避免漏测。
+4. **分支覆盖优先于用例数量**：基于源码分支生成用例，按 level/factors 推导的用例数下限不是上限。嵌套 `if`/`switch`/循环边界/异常路径要单独生成用例，**哪怕超出下限也必须补**，避免漏测。
 5. **private 方法的间接覆盖**：private 方法不直接 `TEST_F`，但**必须通过调用它的 public/protected 方法覆盖其分支和边界条件**，不得因"private 不可直接测"就跳过其内部逻辑分支。若某 public 方法全部逻辑就是调一个 private，则该 public 的用例必须覆盖 private 的所有分支。
 
 #### 4.1 用例结构
@@ -232,6 +242,6 @@ read("${SKILL_DIR}/resources/templates/cmake-submodule.txt")
 - 不让测试依赖外部资源：不读写真实文件系统、不连真实数据库、不发真实网络请求、不启动真实子进程、不依赖真实系统时间；一律 mock 或在 `SetUp()` 临时隔离并在 `TearDown()` 清理
 - 不让用例间互相污染：单例/静态成员/全局状态在 `TearDown()` 重置；`stub.clear()` 必须在 `TearDown()` 调用；临时目录/文件必须在 `TearDown()` 释放
 - 不用"不崩溃"或单一布尔作为唯一断言：每个用例至少 2 个 `EXPECT_*` 断言维度；禁止 `EXPECT_NO_FATAL_FAILURE` 或单独 `EXPECT_TRUE(ret)` 作为唯一断言
-- 不凭直觉生成用例：必须先按等价类 + 边界值建模输入空间，再按分支覆盖补全；分支清单 + 用例映射写入测试文件顶部注释；`planned_cases` 是下限不是上限
+- 不凭直觉生成用例：必须先按等价类 + 边界值建模输入空间，再按分支覆盖补全；分支清单 + 用例映射写入测试文件顶部注释；按 level/factors 推导的用例数下限不是上限
 - 不用 `EXPECT_ANY_THROW` / `EXPECT_NO_FATAL_FAILURE` 充数异常断言：异常路径必须 `EXPECT_THROW(stmt, ExcType)` 精确匹配异常类型
 - 不混用 stub_ext 与 gMock 同一方法：项目内接口类用 gMock；Qt 内置类、全局函数、无虚函数/不可注入类用 stub_ext；同一目标不得既 `stub.set_lamda` 又 `MOCK_METHOD`

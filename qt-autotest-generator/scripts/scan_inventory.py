@@ -179,6 +179,7 @@ def build_inventory(mcp_data: dict, project_name: str, base_sha: str) -> dict:
     all_classes = mcp_data.get("classes", [])
     dbus_classes = mcp_data.get("dbus_classes", [])
     concurrent_classes = mcp_data.get("concurrent_classes", [])
+    gui_classes = mcp_data.get("gui_classes", [])
     dbus_slots_map = mcp_data.get("dbus_slots", {})
     q_invokables_map = mcp_data.get("q_invokables", {})
     q_plugins_map = mcp_data.get("q_plugins", {})
@@ -438,6 +439,17 @@ def build_inventory(mcp_data: dict, project_name: str, base_sha: str) -> dict:
         "gate_thresholds": GATE_THRESHOLDS,
         "scope_rules": SCOPE_RULES,
         "file_overrides": [],
+        # 类级画像：只列 GUI 类，不在列表中的类 is_gui=false（Mode 2 直接读，不再查图谱）
+        # 注意：qualified_name 是图谱全限定名，name 是短名；methods[].class_qn 用短名，匹配时用 name
+        "classes": [
+            {
+                "qualified_name": c.get("qualified_name", ""),
+                "name": c.get("name", ""),
+                "file_path": c.get("file_path", ""),
+                "is_gui": True,
+            }
+            for c in gui_classes
+        ],
         "methods": inventory_methods,
         "review_queue": review_queue
     }

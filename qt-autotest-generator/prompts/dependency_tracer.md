@@ -1,18 +1,31 @@
 # 依赖追踪
 
-> 前置条件：`class_analyzer` 已完成目标类的分析（该类有 `test_plan`（内存变量）），图谱 ready。
+> 前置条件：知识图谱已就绪（`environment_check` 通过），`.ut-inventory.json` 存在，目标类已从 inventory 提取（`testable_classes`（内存变量）），图谱 ready。
 
 > 通过 mcp_provider 调用知识图谱工具（详见 resources/references/mcp-providers.md）
 
 ## 概述
 
-用知识图谱的 `trace_path` 追踪目标类每个方法的出向调用链，按决策矩阵决定哪些依赖需要 stub、哪些需要编入 CMake。此阶段只产出 stub 清单和源码目录清单，不生成测试代码。
+从 inventory 读取目标类的 GUI 标记（`is_gui`），再用知识图谱的 `trace_path` 追踪目标类每个方法的出向调用链，按决策矩阵决定哪些依赖需要 stub、哪些需要编入 CMake。此阶段只产出 GUI 标记、stub 清单和源码目录清单，不生成测试代码。
 
 ## 工作步骤
 
-### 1. 获取目标类所有方法的出向调用链
+### 1. 读取 GUI 标记（is_gui）
 
-对 test_plan 中的每个方法：
+从 `.ut-inventory.json` 的 `classes` 数组读取（Mode 1 建表时已用 GUI 基类检测写入，不查图谱）：
+
+```python
+gui_names = {c["name"] for c in inventory.get("classes", []) if c.get("is_gui")}
+is_gui = class_qn in gui_names   # methods[].class_qn 是短名，用 classes[].name 匹配
+```
+
+GUI 类（`is_gui=true`）后续测试代码生成特殊处理：`QCoreApplication` 而非 `QApplication`、不直接实例化、CMake 链 `Qt::Widgets`，避免 X11/Wayland 下 segfault。
+
+> **旧版 inventory 无 `classes` 字段时兜底**：读目标类头文件，检查基类列表是否含 GUI 基类（QWidget / QDialog / QMainWindow / DMainWindow / DFrame / DWidget / DAbstractDialog）。
+
+### 2. 获取目标类所有方法的出向调用链
+
+对 inventory 中该类的每个 testable 方法：
 
 ```python
 callees = codebase_memory_mcp.trace_path(
@@ -23,7 +36,7 @@ callees = codebase_memory_mcp.trace_path(
 )
 ```
 
-### 2. stub 决策矩阵
+### 3. stub 决策矩阵
 
 遍历所有 callees，按以下矩阵分类：
 
@@ -37,7 +50,7 @@ callees = codebase_memory_mcp.trace_path(
 | 全局函数 | `qPrintable`、`getenv`、`qDebug` | **stub**（按行为） |
 | 其他外部库 | 任意 | 评估是否需要 stub（默认不 stub，编译失败再补） |
 
-### 3. 收集 CMake 源码目录
+### 4. 收集 CMake 源码目录
 
 从"本项目"类别的 callees 聚合源码目录：
 
@@ -50,7 +63,7 @@ for callee in callees:
 
 **规则**：若模块 A 的源码 `#include` 了模块 B 的头文件，测试 CMakeLists 必须编译 A 和 B 的源码文件。缺少传递依赖会导致 `undefined reference`。
 
-### 4. 用 Cypher 补充 IMPORTS 链
+### 5. 用 Cypher 补充 IMPORTS 链
 
 ```python
 imports = codebase_memory_mcp.query_graph(
@@ -66,7 +79,7 @@ imports = codebase_memory_mcp.query_graph(
 
 注意：IMPORTS 边的目标节点是 `Module` 标签（不是 `File`），属性名是 `file_path`。拿不准时用 `get_graph_schema()` 确认。
 
-### 5. 产出 stub 清单
+### 6. 产出 stub 清单
 
 为每个需要 stub 的 callee，记录：
 
@@ -89,12 +102,13 @@ stub 类型选择规则：
 
 **深度限制**：depth=2 是基础值。若发现 callee 包含本项目代码且未完全覆盖传递依赖，提高到 depth=3。超过 depth=3 仍遗漏 → 标记 `incomplete_trace: true`。
 
-### 6. 记录依赖追踪结果
+### 7. 记录依赖追踪结果
 
 将追踪结果记录到内存变量 `class_status[classname]`：
 
 ```json
 {
+  "is_gui": false,
   "stub_list": [...],
   "source_dirs": ["src/lib/ui", "src/lib/core"],
   "status": "dependency_traced"
@@ -103,8 +117,8 @@ stub 类型选择规则：
 
 ## 关键约束
 
-- 不生成测试代码（只产出 stub 清单和目录清单）
-- `qualified_name` 必须用 class_analyzer 返回的全限定名，不自己拼
+- 不生成测试代码（只产出 GUI 标记、stub 清单和目录清单）
+- `qualified_name` 必须用 `.ut-inventory.json` 中的 `class_qn` / `qualified_name`，不自己拼
 - IMPORTS 链必须用 Cypher 补充，不遗漏传递依赖
 - 本项目代码编入 CMake 即可，不 stub
 - UI/IO/网络/定时器类依赖不 stub 会导致测试崩溃或副作用，不跳过 stub 决策矩阵

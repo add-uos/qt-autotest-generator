@@ -20,6 +20,14 @@
     { "pattern": "ui_*", "scope": "exempt" },
     { "pattern": "*.pb.*", "scope": "exempt" }
   ],
+  "classes": [
+    {
+      "qualified_name": "project.src.FileView",
+      "name": "FileView",
+      "file_path": "src/lib/ui/fileview.h",
+      "is_gui": true
+    }
+  ],
   "methods": [
     {
       "qualified_name": "project.src.MyClass.methodA",
@@ -85,6 +93,7 @@
 | `base_sha` | string | 生成时的 Git base SHA（对账用） |
 | `gate_thresholds` | object | 三级覆盖率门禁阈值 |
 | `scope_rules` | array | 文件模式规则（exempt/core/normal） |
+| `classes` | array | 类级画像：**只列 GUI 类**（`is_gui=true`），不在列表中的类隐含 `is_gui=false` |
 | `methods` | array | 全量方法列表 |
 | `review_queue` | array | 待人工复核条目 |
 
@@ -97,6 +106,22 @@
 | `low` | — | — | — | 无硬性门禁 |
 
 > `branch: 0` 表示不检查分支覆盖率。
+
+### classes 条目
+
+类级静态画像，Mode 1 建表时一次写入，Mode 2 直接读取（**不再运行时查图谱**）。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `qualified_name` | string | 图谱全限定名 |
+| `name` | string | 类名 |
+| `file_path` | string | 头文件路径 |
+| `is_gui` | bool | 是否继承 GUI 基类（QWidget/QDialog/QMainWindow/DMainWindow/DFrame/DWidget/DAbstractDialog）|
+
+> Mode 2 匹配时用 `name`（短名）与 `methods[].class_qn` 比对，不用 `qualified_name`（全限定名格式不同）。
+
+> `is_gui` 是**环境约束**（怎么测不死），与 `methods[].level` 的**重要性分级**（测多严）正交：
+> GUI 类决定 QCoreApplication、不直接实例化、CMake 链 Widgets 三处特殊处理，避免 X11/Wayland 下 segfault。
 
 ### methods 条目
 

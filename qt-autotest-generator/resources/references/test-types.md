@@ -190,7 +190,7 @@ protected:
 
 1. **黑盒先行**：按 §1 §2 对公开接口生成"等价类 + 边界值"用例（只看规约/签名）
 2. **白盒补全**：用 `get_code_snippet` 读源码，列出每条分支（`if/else/switch/for/while/异常`）
-3. **覆盖率对账**：每条分支至少 1 个用例触发；若某分支无黑盒用例触达 → 补白盒用例（哪怕超出 `planned_cases`）
+3. **覆盖率对账**：每条分支至少 1 个用例触发；若某分支无黑盒用例触达 → 补白盒用例（哪怕超出用例数下限）
 4. **分支清单**写入测试文件顶部注释，格式：
 
 ```cpp
@@ -225,7 +225,7 @@ protected:
 
 - ❌ 只读签名不读实现，漏掉"边界外边界"（如 `if (n > 0 && n != 10)` 漏 `n=10`）
 - ❌ 分支清单仅写注释不映射到用例名，无法对账
-- ❌ `planned_cases` 满了就停，漏掉的分支用 self_checker 也查不出（self_checker 不查分支覆盖）
+- ❌ 用例数下限（level/factors 推导）够了就停，漏掉的分支用 self_checker 也查不出（self_checker 不查分支覆盖）
 
 ---
 
@@ -521,5 +521,5 @@ gMock 模板示例见 `resources/templates/stub-patterns.cpp` 第 17-19 节。
 | A8 | Qt 类强行抽 gMock 接口层 | §7.5 |
 | A9 | 同一方法既 stub_ext 又 gMock | §7.5 |
 | A10 | 用例名不带 `Negative`/`Invalid`/`Boundary`/`Empty` 等场景标识 | §1.1 / §6.4 |
-| A11 | `planned_cases` 满了就停，未对账分支覆盖 | §4.1 |
+| A11 | 用例数下限够了就停，未对账分支覆盖 | §4.1 |
 | A12 | `SetUp()` 抛异常路径未保护资源（`TearDown()` 不会执行） | §3.4.4 |

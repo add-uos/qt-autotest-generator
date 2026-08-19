@@ -132,7 +132,7 @@ else:
     in_degree_p75 = 1  # fallback
 ```
 
-**1D. 继承链匹配（DBus / 并发基类）**
+**1D. 继承链匹配（DBus / 并发 / GUI 基类）**
 
 ```python
 # 推荐方案：query_graph 直接筛选
@@ -153,6 +153,18 @@ concurrent_classes = mcp.query_graph(
         RETURN c.name, c.qualified_name, c.file_path, c.base_classes
     """
 )
+
+# GUI 基类 → 写入 inventory.classes[].is_gui（Mode 2 直接读，不再查图谱）
+gui_classes = mcp.query_graph(
+    project=project_name,
+    query="""
+        MATCH (c:Class)
+        WHERE ANY(b IN c.base_classes WHERE b IN ['QWidget', 'QDialog', 'QMainWindow',
+                                                  'DMainWindow', 'DFrame', 'DWidget', 'DAbstractDialog'])
+        RETURN c.name, c.qualified_name, c.file_path, c.base_classes
+    """
+)
+# GUI 类入 classes 数组（is_gui=true）；不在数组中的类 is_gui=false
 ```
 
 **1E. DBus 内省 XML**
@@ -252,15 +264,16 @@ for test_file in glob(f"{test_dir}/**/test_*.cpp"):
     for match in re.finditer(r'TEST_F\s*\(\s*(\w+)Test\s*,\s*(\w+)', content):
         class_test_name = match.group(1)
         method_test_name = match.group(2)
+        # 用例名首段是 PascalCase（Add/FindMax），方法名是 camelCase（add/findMax）→ 统一小写匹配
         method_name = method_test_name.split('_')[0] if '_' in method_test_name else method_test_name
-        key = f"{class_test_name}.{method_name}"
+        key = f"{class_test_name}.{method_name.lower()}"
         usecase_map[key] = usecase_map.get(key, 0) + 1
 
 # 映射到 inventory methods
 for m in inventory_methods:
     if m["testable"] and m["class_qn"]:
         class_short = m["class_qn"].split('.')[-1]
-        key = f"{class_short}.{m['name']}"
+        key = f"{class_short}.{m['name'].lower()}"
         m["usecase_count"] = usecase_map.get(key, 0)
 ```
 
@@ -306,6 +319,7 @@ Agent 输出 Markdown 摘要 + review_queue，与用户交互：
 | `base_sha` | string | Git base SHA（对账用） |
 | `gate_thresholds` | object | high/mid/low 三级覆盖率门禁 |
 | `scope_rules` | array | exempt 文件模式规则 |
+| `classes` | array | 类级画像：GUI 类列表（`is_gui=true`），不在列表中的类 `is_gui=false` |
 | `methods` | array | 全量方法列表（含 level/factors/usecase_count） |
 | `review_queue` | array | 待人工复核条目 |
 
@@ -324,7 +338,7 @@ python3 tools/fetch_mcp_data.py \
 
 脚本自动完成 5 个步骤：
 1. `search_graph` 分页收集所有 Method + Function
-2. `query_graph` 检测继承链
+2. `query_graph` 检测继承链（DBus / 并发 / GUI 基类 → `classes[].is_gui`）
 3. `query_graph` 获取 DBus Adaptor 类方法 → dbus_slots
 4. `search_code` 检测 Q_INVOKABLE / Q_PLUGIN_METADATA
 5. 客户端计算 P75 → 调用 `scan_inventory.build_inventory()` 评分

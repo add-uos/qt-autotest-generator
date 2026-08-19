@@ -89,11 +89,12 @@ timeout 120 ./${test_dir}/<module>/test_<classname> --gtest_output=xml:${PROJECT
 
 ### 7. 覆盖率信号（轻量）
 
-运行后从 gtest XML 输出提取已跑的 TEST_F 名，与 test_plan 对比：
+运行后从 gtest XML 输出提取已跑的 TEST_F 名，与 inventory 待测方法对比：
 
 ```python
-tested = parse_test_names_from_xml(xml_output)
-planned = {m.name for m in test_plan}
+tested = {n.lower() for n in parse_test_names_from_xml(xml_output)}  # PascalCase → 小写归一化
+planned = {m["name"].lower() for m in inventory["methods"]
+           if m["testable"] and m.get("class_qn") == class_qn}
 coverage_gap = planned - tested
 ```
 

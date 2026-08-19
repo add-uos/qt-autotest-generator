@@ -66,11 +66,11 @@ Mode 2 的子步骤按需读取：
 |--------|------|--------|
 | 项目准备 | `prompts/project_preparer.md` | 用户提供 repo_url 时 |
 | 框架搭建 | `prompts/framework_builder.md` | `{test_dir}/` 不存在时 |
-| 类分析 | `prompts/class_analyzer.md` | 逐类闭环第 1 步 |
-| 依赖追踪 | `prompts/dependency_tracer.md` | 逐类闭环第 2 步 |
-| 测试代码生成 | `prompts/test_code_gen.md` | 逐类闭环第 3 步 |
-| 编译验证 | `prompts/build_verifier.md` | 逐类闭环第 4 步 |
-| 自检 | `prompts/self_checker.md` | 逐类闭环第 5 步 |
+| 类准备 | `prompts/inventory.md` | 方法分级入表，`test_writer` §4 从中提取待测类 |
+| 依赖追踪 | `prompts/dependency_tracer.md` | 读 inventory 的 is_gui、MCP trace_path 出向、stub 决策、CMake 目录 |
+| 测试代码生成 | `prompts/test_code_gen.md` | 逐类闭环第 2 步 |
+| 编译验证 | `prompts/build_verifier.md` | 逐类闭环第 3 步 |
+| 自检 | `prompts/self_checker.md` | 逐类闭环第 4 步 |
 | 增量补全 | `prompts/incremental_updater.md` | 覆盖率缺口时 |
 | 失败修复 | `prompts/failure_repairer.md` | 编译/运行失败时 |
 | 代码提交 | `prompts/code_committer.md` | 批次自检通过后 |
@@ -85,7 +85,7 @@ Mode 2 的子步骤按需读取：
 | 步骤 | 文件 | 用途 |
 |------|------|------|
 | 门禁 | `prompts/environment_check.md` | MCP 提供方解析、索引验证 |
-| 主流程 | `prompts/inventory.md` | 全量扫描 → 评分 → 产出 `.ut-inventory.json` |
+| 主流程 | `prompts/inventory.md` | 全量扫描 → 评分 → 产出 `.ut-inventory.json`（含 classes/is_gui） |
 
 ### Mode 2
 
@@ -94,8 +94,7 @@ Mode 2 的子步骤按需读取：
 | 门禁 | `prompts/environment_check.md` | MCP 提供方解析、索引验证 |
 | 项目准备 | `prompts/project_preparer.md` | 拉取代码、校验基线、安装依赖 |
 | 框架搭建 | `prompts/framework_builder.md` | `{test_dir}/` 脚手架、CMake、stub、runner |
-| 类分析 | `prompts/class_analyzer.md` | MCP 拉类+方法、GUI 识别、用例规划 |
-| 依赖追踪 | `prompts/dependency_tracer.md` | MCP trace_path 出向、stub 决策、CMake 目录 |
+| 依赖追踪 | `prompts/dependency_tracer.md` | 读 inventory 的 is_gui、MCP trace_path、stub 决策、CMake 目录 |
 | 测试代码生成 | `prompts/test_code_gen.md` | 读模板生成测试代码、AAA、命名 |
 | 编译验证 | `prompts/build_verifier.md` | 强制编译+运行、错误分类→修复表 |
 | 自检 | `prompts/self_checker.md` | 覆盖率/命名/SPDX/stub/断言强度/环境隔离 |
@@ -113,7 +112,7 @@ Mode 2 的子步骤按需读取：
 3. **函数覆盖率门禁** —— 有 `.ut-inventory.json` 时按方法分级：🌟high 行90%+分支80%+函数100%，⚖mid 行60%+函数100%，💤low 无硬性门禁
 4. **强制编译+运行验证** —— 编译并跑通后才能报完成
 5. **内置 stub-ext** —— 从 `resources/stub/` 复制，不从网络下载
-6. **逐类闭环** —— 每个类独立走完 分析→追踪→生成→验证→自检；单类失败记录跳过，不阻塞其他类
+6. **逐类闭环** —— 每个类独立走完 依赖追踪→生成→验证→自检；单类失败记录跳过，不阻塞其他类
 7. **不修源码** —— 疑似源码缺陷只标红交还用户
 8. **只 APPEND 不改已有** —— 不注释/删除/修改已有 CMake 代码
 9. **批次提交** —— 只 commit，不 push
@@ -164,7 +163,7 @@ Mode 2 的子步骤按需读取：
 □ Mode 2：已 Read prompts/environment_check.md；.ut-inventory.json 存在（不存在则先执行 Mode 1）
 □ Mode 2：已按步骤 Read 对应 prompts 子步骤文件
 □ MCP 提供方已解析（远端优先，本地兜底），互斥使用
-□ 逐类闭环：每类走 类分析 → 依赖追踪 → 测试生成 → 编译验证 → 自检
+□ 逐类闭环：每类走 依赖追踪 → 测试生成 → 编译验证 → 自检（类列表与 level 来自 inventory）
 □ 单类失败：已记录 failure_reason + 跳过 + 继续下一个类
 □ 每类编译通过后：已更新 .ut-inventory.json 的 usecase_count
 □ 批次提交：本批次自检通过后已执行代码提交（只 commit 不 push）

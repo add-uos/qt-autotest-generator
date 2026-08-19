@@ -3,11 +3,24 @@
   "project": "home-user-sample-qt-project",
   "base_sha": "a1b2c3d",
   "gate_thresholds": {
-    "high": { "line": 90, "branch": 80, "function": 100 },
-    "mid": { "line": 60, "branch": 0, "function": 100 },
-    "low": { "line": 0, "branch": 0, "function": 0 }
+    "high": {
+      "line": 90,
+      "branch": 80,
+      "function": 100
+    },
+    "mid": {
+      "line": 60,
+      "branch": 0,
+      "function": 100
+    },
+    "low": {
+      "line": 0,
+      "branch": 0,
+      "function": 0
+    }
   },
   "scope_rules": [],
+  "classes": [],
   "methods": [
     {
       "qualified_name": "sample-qt-project.src.Calculator.add",
@@ -17,7 +30,9 @@
       "access": "public",
       "level": "mid",
       "score": 1,
-      "factors": ["complexity_ge_5"],
+      "factors": [
+        "complexity_ge_5"
+      ],
       "source": "auto",
       "testable": true,
       "usecase_count": 3
@@ -56,7 +71,9 @@
       "access": "public",
       "level": "mid",
       "score": 2,
-      "factors": ["complexity_ge_10"],
+      "factors": [
+        "complexity_ge_10"
+      ],
       "source": "auto",
       "testable": true,
       "usecase_count": 2
@@ -95,7 +112,9 @@
       "access": "public",
       "level": "mid",
       "score": 1,
-      "factors": ["complexity_ge_5"],
+      "factors": [
+        "complexity_ge_5"
+      ],
       "source": "auto",
       "testable": true,
       "usecase_count": 2
@@ -121,7 +140,9 @@
       "access": "public",
       "level": "mid",
       "score": 1,
-      "factors": ["complexity_ge_5"],
+      "factors": [
+        "complexity_ge_5"
+      ],
       "source": "auto",
       "testable": true,
       "usecase_count": 3
