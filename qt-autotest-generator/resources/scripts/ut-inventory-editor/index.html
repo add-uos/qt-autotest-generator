@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
 <script src="https://cdn.tailwindcss.com"></script>
 <script>tailwind.config={theme:{extend:{fontFamily:{mono:['JetBrains Mono','ui-monospace','monospace'],sans:['IBM Plex Sans','system-ui','sans-serif']}}}};</script>
-<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://unpkg.com/lucide@0.344.0"></script>
 <script>(function(){try{var s=localStorage.getItem('utie-theme');var d=window.matchMedia('(prefers-color-scheme:light)').matches?'light':'dark';document.documentElement.setAttribute('data-theme',s||d)}catch(e){document.documentElement.setAttribute('data-theme','dark')}})();</script>
 <style>
 :root{--bg:#0f172a;--bg-elev:#1e293b;--bg-elev2:#273449;--bg-hover:#334155;--border:#334155;--border-soft:#1e293b;--text:#f8fafc;--text-dim:#94a3b8;--text-muted:#475569;--accent:#22c55e;--accent-hover:#16a34a;--accent-soft:rgba(34,197,94,.14);--warn:#f59e0b;--danger:#ef4444;--info:#38bdf8;--high:#22c55e;--mid:#f59e0b;--low:#64748b;--exempt:#ef4444;--factor-pos3:#22c55e;--factor-pos:#38bdf8;--factor-suggest:#f59e0b;--factor-neg:#ef4444}
@@ -297,7 +297,7 @@ function getFiltered(){let l=S.methods;l=l.filter(m=>S.filters.levels.has(m.leve
 
 // ── Rendering ──
 function updateAll(){updateStats();updateFilters();updateClassTree();updateScopeRules();updateTable();updateDetail();updateReviewBtn()}
-function updateStats(){const st=recalcStats();$('#stat-high').textContent='🌟 '+st.high;$('#stat-mid').textContent='⚖ '+st.mid;$('#stat-low').textContent='💤 '+st.low;$('#stat-exempt').textContent='🚫 '+st.exempt;$('#stat-review').textContent='待复核: '+st.review_pending;const mc=S.modified.size,el=$('#stat-modified');if(mc>0){el.textContent='已修改: '+mc;el.classList.remove('hidden')}else el.classList.add('hidden');$('#btn-save').disabled=mc===0;const fe=$('#stat-factor');if(S.filters.factor){fe.textContent='因子: '+S.filters.factor;fe.classList.remove('hidden')}else fe.classList.add('hidden')}}
+function updateStats(){const st=recalcStats();$('#stat-high').textContent='🌟 '+st.high;$('#stat-mid').textContent='⚖ '+st.mid;$('#stat-low').textContent='💤 '+st.low;$('#stat-exempt').textContent='🚫 '+st.exempt;$('#stat-review').textContent='待复核: '+st.review_pending;const mc=S.modified.size,el=$('#stat-modified');if(mc>0){el.textContent='已修改: '+mc;el.classList.remove('hidden')}else el.classList.add('hidden');$('#btn-save').disabled=mc===0;const fe=$('#stat-factor');if(S.filters.factor){fe.textContent='因子: '+S.filters.factor;fe.classList.remove('hidden')}else fe.classList.add('hidden')}
 function updateFilters(){const m=S.methods,c={high:0,mid:0,low:0,exempt:0,Method:0,Function:0};m.forEach(x=>{c[x.level]=(c[x.level]||0)+1;c[x.node_type||'Method']++});$('#fc-high').textContent=c.high;$('#fc-mid').textContent=c.mid;$('#fc-low').textContent=c.low;$('#fc-exempt').textContent=c.exempt;$('#fc-method').textContent=c.Method;$('#fc-function').textContent=c.Function}
 function updateClassTree(){const tree={};S.methods.forEach(m=>{const c=m.class_qn||'(free function)';if(!tree[c])tree[c]=[];tree[c].push(m)});const el=$('#class-tree');el.innerHTML='';Object.keys(tree).sort().forEach(cls=>{const methods=tree[cls],g=document.createElement('div');g.className='class-group';const row=document.createElement('div');row.className='class-row';row.innerHTML=`<i data-lucide="chevron-right" class="icon chevron" style="width:14px;height:14px"></i><span class="name">${shortClass(cls)}</span><span class="badge">${methods.length}</span>`;let exp=false;const sub=document.createElement('div');sub.className='hidden';methods.forEach(m=>{const mr=document.createElement('div');mr.className='class-method';mr.innerHTML=`<span class="level-badge level-${m.level}" style="padding:0 4px;font-size:9px">${levelEmoji(m.level)}</span><span class="mname">${m.name}</span>`;mr.onclick=e=>{e.stopPropagation();S.activeQn=m.qn;updateTable();updateDetail()};sub.appendChild(mr)});row.onclick=()=>{exp=!exp;row.classList.toggle('expanded',exp);sub.classList.toggle('hidden',!exp);S.filters.classQn=exp?cls:null;row.classList.toggle('active',exp);el.querySelectorAll('.class-row').forEach(r=>{if(r!==row){r.classList.remove('active','expanded');r.nextElementSibling?.classList.add('hidden')}});updateTable()};g.appendChild(row);g.appendChild(sub);el.appendChild(g)});lucide.createIcons()}
 function updateScopeRules(){const rules=S.inventory?.scope_rules||[];const el=$('#scope-rules-list');el.innerHTML='';rules.forEach(r=>{const d=document.createElement('div');d.className='scope-rule-item';d.innerHTML=`<span class="pattern">${r.pattern}</span><span class="arrow">→</span><span class="reason">${r.reason}</span>`;el.appendChild(d)})}
@@ -366,7 +366,10 @@ window.addEventListener('beforeunload',e=>{if(S.modified.size>0){e.preventDefaul
 }
 
 // ── Init ──
-document.addEventListener('DOMContentLoaded',()=>{lucide.createIcons();initEvents();loadInventory(SAMPLE_DATA)});
+// Script is at end of body, DOM is already parsed
+// Use DOMContentLoaded only if document still loading, else run immediately
+function boot(){try{lucide.createIcons()}catch(e){console.warn('lucide icons failed:',e)}initEvents();loadInventory(SAMPLE_DATA)}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else requestAnimationFrame(boot);
 </script>
 </body>
 </html>
