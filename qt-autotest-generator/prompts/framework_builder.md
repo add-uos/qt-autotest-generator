@@ -65,8 +65,6 @@ TEST_DIR=tests bash ${SKILL_DIR}/scripts/generate-runner.sh
 读模板：`templates/cmake-autotests.txt`
 
 替换占位符：
-- `{TEST_DIR}` → `test_dir` 值（如 `autotests` 或 `tests`）
-- `{QT_VERSION}` → 5 或 6
 - `{THIRD_PARTY_PACKAGES}` → 检测到的依赖的 `find_package` 命令
 - `{ADD_SUBDIRECTORIES}` → `add_subdirectory()` 调用（初始为空，后续阶段会补充）
 

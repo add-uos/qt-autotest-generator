@@ -166,8 +166,8 @@ Mode 2 的子步骤按需读取：
 | 文件 | 用途 | 使用阶段 | 占位符 |
 |------|------|---------|--------|
 | `google-test-base.cpp` | GTest 测试夹具基类骨架：TEST_F 类结构、SetUp/TearDown、stub 声明、SPDX 头 | 测试代码生成（每类） | `{ClassName}` `{header_file}` `{SPDX_YEAR}` `{SetUpTestSuite}` `{TestCases}` 等 |
-| `stub-patterns.cpp` | 常用 stub 模式速查：UI 显示/尺寸、信号监听、虚函数、文件 IO、网络、定时器等 19 节模式 | 依赖追踪 + 测试代码生成（参考用，不直接复制） | 无（参考库） |
-| `cmake-autotests.txt` | 测试根 `CMakeLists.txt` 模板：GTest 依赖、覆盖率标志、子目录挂载 | 框架搭建 | `{TEST_DIR}` `{QT_VERSION}` `{THIRD_PARTY_PACKAGES}` `{ADD_SUBDIRECTORIES}` |
+| `stub-patterns.cpp` | 常用 stub 模式速查：UI 显示/尺寸、信号监听、虚函数、文件 IO、网络、定时器等 19 节模式 | 依赖追踪 + 测试代码生成（参考用，不直接复制） | `{ClassName}` `{MethodName}` `{SignalName}`（示例占位符，参考用） |
+| `cmake-autotests.txt` | 测试根 `CMakeLists.txt` 模板：GTest 依赖、覆盖率标志、子目录挂载 | 框架搭建 | `{THIRD_PARTY_PACKAGES}` `{ADD_SUBDIRECTORIES}` |
 | `cmake-submodule.txt` | 测试子模块 `CMakeLists.txt` 模板：可执行目标、stub-shadow 链接、Qt 版本、include 路径 | 测试代码生成（每模块） | `{QT_VERSION}` `{PROJECT_LIBRARIES}` `{QT_EXTRA_LIBS}` `{module_name}` `{test_dir}` `{source_module_path}` |
 
 ### stub-ext 库（`templates/stub-ext/`）
