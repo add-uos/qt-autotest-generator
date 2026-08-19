@@ -1,8 +1,8 @@
 # 类分析
 
-> 前置条件：`environment_check` 已通过（图谱 ready），`framework_builder` 已通过（`{test_dir}/` 存在），session 中 `project_name_in_graph` 已记录。
+> 前置条件：`environment_check` 已通过（图谱 ready），`framework_builder` 已通过（`{test_dir}/` 存在），`project_name_in_graph` 已确定（内存变量）。
 
-> 通过 session.mcp_provider 调用知识图谱工具（详见 resources/references/mcp-providers.md）
+> 通过 mcp_provider 调用知识图谱工具（详见 resources/references/mcp-providers.md）
 
 ## 概述
 
@@ -10,17 +10,17 @@
 
 支持两种模式：
 - `full`（全量分析）：分析目标范围内所有类
-- `diff`（对账模式）：与 session 记录做差集，找出新增/删除/签名变更的方法
+- `diff`（对账模式）：与已记录的类/方法做差集，找出新增/删除/签名变更的方法
 
 ### 分支切换后的 stale 类处理
 
 当 reconcile 检测到分支切换时，类分析需额外处理：
 
-1. 遍历 `session.classes`，用 MCP `get_code_snippet` 或 `git show HEAD:<file_path>` 检查每个类的源文件是否在当前分支仍存在
-2. 不存在的类 → 标记 `status="stale"`，更新到 session
+1. 遍历 `class_status`（内存变量 dict），用 MCP `get_code_snippet` 或 `git show HEAD:<file_path>` 检查每个类的源文件是否在当前分支仍存在
+2. 不存在的类 → 标记 `status="stale"`，更新到 `class_status`
 3. 从 `{test_dir}/CMakeLists.txt` 中移除 stale 类对应的 `add_subdirectory` 行（避免编译失败）
 4. **保留** stale 类的测试文件（不删除，供切回原分支后恢复）
-5. 将 stale 类名列表写入 `session.stale_classes`
+5. 将 stale 类名列表写入 `stale_classes`（内存变量 list）
 6. 新分支的类走正常的 `full` 或 `diff` 分析
 
 ## 工作步骤
@@ -28,7 +28,7 @@
 ### 1. 确认图谱 ready
 
 ```python
-status = codebase_memory_mcp.index_status(project=session.project_name_in_graph)
+status = codebase_memory_mcp.index_status(project=project_name_in_graph)
 # 必须 status == "ready"，否则停止（environment_check 已保证）
 ```
 
@@ -36,7 +36,7 @@ status = codebase_memory_mcp.index_status(project=session.project_name_in_graph)
 
 ```python
 classes = codebase_memory_mcp.search_graph(
-    project=session.project_name_in_graph,
+    project=project_name_in_graph,
     label="Class",
     file_pattern=target_scope,   # 如 "src/lib/ui/*"
     limit=200
@@ -53,7 +53,7 @@ classes = codebase_memory_mcp.search_graph(
 ```python
 for cls in classes:
     methods = codebase_memory_mcp.search_graph(
-        project=session.project_name_in_graph,
+        project=project_name_in_graph,
         label="Method",
         qn_pattern=f".*\\.{cls.name}\\..*",
         limit=100
@@ -70,7 +70,7 @@ for cls in classes:
 
 ```python
 gui_classes = codebase_memory_mcp.query_graph(
-    project=session.project_name_in_graph,
+    project=project_name_in_graph,
     query="""
         MATCH (c:Class)-[:INHERITS*1..5]->(base:Class)
         WHERE base.name IN ['QWidget', 'QDialog', 'QMainWindow', 'DMainWindow',
@@ -99,11 +99,11 @@ GUI 类标记 `is_gui=true`，后续测试代码生成阶段会特殊处理（�
 
 ### 6. diff 模式（对账）
 
-若 `mode="diff"`：与 session 中已记录的类/方法做 diff：
+若 `mode="diff"`：与已记录的类/方法做 diff：
 
 ```python
-# session 中已记录的方法
-recorded_methods = {m.name for m in session.classes[cls].methods}
+# 已记录的方法
+recorded_methods = {m.name for m in class_status[cls].methods}
 # 图谱当前全量方法
 current_methods = {m.name for m in methods_from_graph}
 
@@ -117,9 +117,9 @@ removed_methods = recorded_methods - current_methods       # 删除
 - 签名变更 → `test_writer`（重新生成该类）
 - 方法删除 → `failure_repairer`（清理引用）
 
-### 7. 更新 session
+### 7. 记录类分析结果
 
-为每个类写入/更新记录：
+将每个类的分析结果记录到内存变量 `class_status[classname]`：
 
 ```json
 {

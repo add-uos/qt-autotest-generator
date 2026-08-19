@@ -1,8 +1,8 @@
 # 测试代码生成
 
-> 前置条件：`class_analyzer` 已完成目标类分析（session 中有 `test_plan`），`dependency_tracer` 已完成目标类追踪（session 中有 `stub_list` + `source_dirs`），图谱 ready。
+> 前置条件：`class_analyzer` 已完成目标类分析（有 `test_plan`（内存变量）），`dependency_tracer` 已完成目标类追踪（有 `stub_list` + `source_dirs`（内存变量）），图谱 ready。
 
-> 通过 session.mcp_provider 调用知识图谱工具（详见 resources/references/mcp-providers.md）
+> 通过 mcp_provider 调用知识图谱工具（详见 resources/references/mcp-providers.md）
 
 ## 概述
 
@@ -64,7 +64,7 @@ read("${SKILL_DIR}/resources/templates/cmake-submodule.txt")
 
 ### 3. 生成测试文件
 
-文件路径：`{test_dir}/<module>/test_<classname>.cpp`（`test_dir` 从 `session.test_dir` 读取，模块名取自 source_dirs 的最后一段）
+文件路径：`{test_dir}/<module>/test_<classname>.cpp`（`test_dir` 从内存变量读取，模块名取自 source_dirs 的最后一段）
 
 替换模板占位符：
 - `{header_file}` → 目标类头文件路径（相对项目根）
@@ -84,7 +84,7 @@ read("${SKILL_DIR}/resources/templates/cmake-submodule.txt")
 - 测试文件路径 = `{test_dir}/{module_path_flattened}/test_{classname}.cpp`
 - 例：`{test_dir}/a/test_manager.cpp` 和 `{test_dir}/b/test_manager.cpp`
 - CMake 子目录按模块路径拆分，每个路径独立 `add_subdirectory`
-- 依赖追踪（`phases/dependency_tracer.md`）需在 `source_dirs` 中区分同名类的模块路径
+- 依赖追踪（`prompts/dependency_tracer.md`）需在 `source_dirs` 中区分同名类的模块路径
 
 ### 4. 生成测试用例
 
@@ -191,7 +191,7 @@ read("${SKILL_DIR}/resources/templates/cmake-submodule.txt")
 读 `resources/templates/cmake-submodule.txt`，替换：
 - `{module_name}` → 模块名
 - `{ClassName}` → 类名
-- `{QT_VERSION}` → session 中的 qt_version
+- `{QT_VERSION}` → 内存变量中的 qt_version
 - `{PROJECT_LIBRARIES}` → 从根 CMakeLists.txt 检测到的项目目标库（如 `dde-file-manager`）；无则留空
 - `{QT_EXTRA_LIBS}` → GUI 类填 `Qt${QT_VERSION}::Widgets`（及其他 GUI 模块）；纯 Core 模块填空字符串
 - `{source_module_path}` → 依赖追踪的 source_dirs（glob `*.cpp`）
@@ -205,7 +205,9 @@ read("${SKILL_DIR}/resources/templates/cmake-submodule.txt")
 
 > **注意**：绝不修改已有 `add_subdirectory` 行的顺序或内容。
 
-### 7. 更新 session
+### 7. 记录测试生成结果
+
+将生成结果记录到内存变量 `class_status[classname]`：
 
 ```json
 {

@@ -1,6 +1,6 @@
 # 批次测试代码提交
 
-> 前置条件：本批次所有目标类自检已处理完毕（`status` 为 `done` / `failed` / `skipped`，无 `pending` / `in_progress`）；session 中存在 `committed_classes` 字段（首次为 `[]`）；本批次存在至少 1 个 `done` 且不在 `committed_classes` 中的类；上一批次（若有）已提交完成（`session.last_phase == "code_committed"`）。
+> 前置条件：本批次所有目标类自检已处理完毕（`status` 为 `done` / `failed` / `skipped`，无 `pending` / `in_progress`）；本批次存在至少 1 个 `done` 的类；上一批次（若有）已提交完成。
 
 ## 概述
 
@@ -12,30 +12,25 @@
 
 ### 1. 计算本批次待提交类清单
 
-从 session 读取 `committed_classes`（不存在则视为 `[]`），与本批次目标类名清单 `batch_classes` 取差集：
+从内存变量 `classes_status` 读取本批次目标类状态，筛选 `status=done` 的类：
 
 ```python
-import json
-test_dir = session.test_dir
-with open(f'{test_dir}/.ut-session.json') as f:
-    s = json.load(f)
-committed = set(s.get('committed_classes', []))
+test_dir = test_dir  # 内存变量
 # batch_classes 由流程控制传入
 batch_set = set(batch_classes)
-# 仅提交本批次中 status=done 且未提交过的类
-to_commit = [c['name'] for c in s['classes']
+# 仅提交本批次中 status=done 的类（已提交类通过 git log 自证，无需比对）
+to_commit = [c['name'] for c in classes_status
              if c['name'] in batch_set
-             and c['name'] not in committed
              and c.get('status') == 'done']
 ```
 
-**空集处理**：若 `to_commit` 为空（本批次无新完成类或全部已提交），跳过 git commit，但仍在 session `commit_history` 中记录空批次（审计连续性）
+**空集处理**：若 `to_commit` 为空（本批次无新完成类或全部已提交），跳过 git commit
 
 ```json
 {"batch": N, "commit_sha": null, "classes": [], "note": "all_failed_or_skipped"}
 ```
 
-把 session `last_phase` 标记为 `code_committed`，继续进入下一批次或报告生成阶段。
+直接进入下一批次或报告生成阶段。
 
 ### 2. 确认提交范围
 
@@ -46,7 +41,7 @@ cd "$PROJECT_PATH"
 git status --porcelain
 ```
 
-**只提交以下文件**（测试代码，不含构建产物，`test_dir` 从 `session.test_dir` 读取）：
+**只提交以下文件**（测试代码，不含构建产物，`test_dir` 为内存变量）：
 - `{test_dir}/**/*.cpp` — 测试源码
 - `{test_dir}/**/*.h` — 测试头文件
 - `{test_dir}/**/CMakeLists.txt` — 测试 CMake 配置
@@ -63,7 +58,6 @@ git status --porcelain
 - `build-{test_dir}/` — 构建目录
 - `{test_dir}/.results/` — gtest XML 输出
 - `{test_dir}/.reports/` — 报告输出
-- `{test_dir}/.ut-session.json` — session 状态文件
 - `{test_dir}/.pytest_cache/` — pytest 缓存
 - `__pycache__/` — Python 缓存
 - 任何源码修改
@@ -84,7 +78,7 @@ git config user.email >/dev/null 2>&1 || git config user.email "autotest@unionte
 
 只 `git add` 测试相关文件，不动源码：
 
-test_dir = session.test_dir  # "autotests" 或 "tests"
+test_dir = test_dir  # "autotests" 或 "tests"（内存变量）
 
 # 测试源码
 git add ${test_dir}/*.cpp ${test_dir}/*.h 2>/dev/null || true
@@ -104,6 +98,9 @@ git add ${test_dir}/report_generator/ 2>/dev/null || true
 git add ${test_dir}/README.md 2>/dev/null || true
 git add ${test_dir}/.gitignore 2>/dev/null || true
 
+# 项目单元测试状态（真相源，必须提交）
+git add ${test_dir}/.ut-inventory.json 2>/dev/null || true
+
 # 根 CMakeLists.txt 的 BUILD_TESTS 开关行
 git add CMakeLists.txt 2>/dev/null || true
 
@@ -112,38 +109,30 @@ git add .gitignore 2>/dev/null || true
 
 ### 5. 生成提交信息
 
-从 session 提取本批次统计 + 累计统计：
+从内存变量提取本批次统计 + 累计统计：
 
 ```bash
-# 本批次统计 + 累计统计（读取以下 stdout 输出后填入下方模板）
-python3 << 'PYEOF'
-import json
-with open(f'{test_dir}/.ut-session.json') as f:
-    s = json.load(f)
-committed = set(s.get('committed_classes', []))
+# 本批次统计 + 累计统计（从内存变量 classes_status / baseline_commit / branch_name / project_path 读取）
 batch = set(batch_classes)
-classes = s.get('classes', [])
 
 # 本批次新完成类
-batch_done = [c for c in classes if c['name'] in batch and c['name'] not in committed and c.get('status') == 'done']
-batch_total = sum(1 for c in classes if c['name'] in batch)
+batch_done = [c for c in classes_status if c['name'] in batch and c.get('status') == 'done']
+batch_total = sum(1 for c in classes_status if c['name'] in batch)
 batch_done_count = len(batch_done)
 batch_methods = sum(c.get('methods_total', 0) for c in batch_done)
 batch_tested = sum(c.get('methods_tested', 0) for c in batch_done)
 batch_classes_str = ', '.join(c['name'] for c in batch_done)
 
 # 累计统计
-all_done = [c for c in classes if c.get('status') == 'done']
+all_done = [c for c in classes_status if c.get('status') == 'done']
 cumulative_classes = len(all_done)
-cumulative_total = len(classes)
+cumulative_total = len(classes_status)
 cumulative_methods = sum(c.get('methods_total', 0) for c in all_done)
 cumulative_tested = sum(c.get('methods_tested', 0) for c in all_done)
 
-baseline = s.get('baseline_commit', 'unknown')
-branch = s.get('branch', 'unknown')
-project_name = s.get('project_path', '').rstrip('/').split('/')[-1]
-print(f'{batch_done_count}\n{batch_total}\n{batch_methods}\n{batch_tested}\n{batch_classes_str}\n{cumulative_classes}\n{cumulative_total}\n{cumulative_methods}\n{cumulative_tested}\n{baseline}\n{branch}\n{project_name}')
-PYEOF
+baseline = baseline_commit  # 内存变量
+branch = branch_name  # 内存变量
+project_name = project_path.rstrip('/').split('/')[-1]
 ```
 
 按 **`git-commit-workflow` 技能的提交信息格式**生成（`test` 类型，含 `Log` / `Influence` 行）：
@@ -164,7 +153,7 @@ Influence: 新增 <batch_done_count> 个类的单元测试，本批次覆盖率 
 - 标题行 `<type>[scope]: <desc>`，类型固定为 `test`，≤ 80 字符
 - body 行 ≤ 80 字符
 - 必含 `Log:`（中文简述）与 `Influence:`（中文影响）行
-- 若 session 记录了 `pms_no` / `issue_no`，追加 `PMS:` / `Issue:` 行；否则省略
+- 若内存变量记录了 `pms_no` / `issue_no`，追加 `PMS:` / `Issue:` 行；否则省略
 - 本批次为自动化提交：**跳过 `git-commit-workflow` 的 Step 4 人工确认**，生成信息后直接提交
 
 ### 6. 提交前 staged diff 二次复核
@@ -175,7 +164,8 @@ git diff --staged --name-only
 
 **复核规则**：
 - staged 文件中**没有 src/ 下的 .cpp/.h**（源码文件）；若发现 → `git restore --staged <file>` 取消暂存
-- staged 文件中**没有** `build-{test_dir}/` / `.results/` / `.reports/` / `.ut-session.json` / `__pycache__/` / `.pytest_cache/`；若发现 → `git restore --staged <file>` 取消暂存
+- staged 文件中**没有** `build-{test_dir}/` / `.results/` / `.reports/` / `__pycache__/` / `.pytest_cache/`；若发现 → `git restore --staged <file>` 取消暂存
+- `.ut-inventory.json` **必须**在 staged 文件中（它是项目单元测试状态的真相源，跟随测试代码一起提交）
 - staged 文件中至少有 1 个 `{test_dir}/**` 下的文件（除非 `to_commit` 为空）
 
 复核通过后执行提交。
@@ -190,38 +180,24 @@ git commit -m "<提交信息>"
 
 记录返回的 commit sha。
 
-### 8. 更新 session
+### 8. 提交后确认
 
-```json
-{
-  "last_phase": "code_committed",
-  "overall_status": "partial",
-  "last_batch_commit": "<commit sha>",
-  "committed_classes": ["MyClass", "FooBar", "Baz", "<本批次新增类...>"],
-  "commit_history": [
-    {"batch": 1, "commit_sha": "<sha>", "classes": ["MyClass", "FooBar"], "committed_at": "<ISO8601>"},
-    {"batch": 2, "commit_sha": "<sha>", "classes": ["Baz"], "committed_at": "<ISO8601>"}
-  ]
-}
-```
+# 已提交类通过 git log 自证，无需持久化
 
-**字段说明**：
-- `committed_classes`：累计已提交类列表（追加本批次新提交类）
-- `last_batch_commit`：本批次提交 sha
-- `commit_history`：追加本批次记录（batch 序号自增 / sha / 本批次类列表 / ISO8601 时间）
-- `overall_status`：批次提交后保持 `partial`；仅报告生成阶段完成后置 `complete`
+提交成功后记录 commit sha，用于后续批次判断和报告生成。
 
 ### 9. 后续流程
 
 - **提交成功**（有新提交类）：直接进入下一批次或报告生成阶段
-- **无变更**（`no_changes`）：`last_phase` 已标记为 `code_committed`，直接进入下一批次或报告生成阶段
+- **无变更**（`no_changes`）：直接进入下一批次或报告生成阶段
 - **提交失败**：根据原因决定重试或转人工（如 git 冲突、无 git 仓库、staged 误含源码且无法自动取消）
 
 ## 关键约束
 
-- 不重复提交：以 `session.committed_classes` 为准，已提交过的类不再 commit
+- 不重复提交：以 `git log --oneline` 查询已提交类为准，已提交过的类不再 commit
 - 不提交源码修改：只提交 `{test_dir}/` 目录的测试代码；staged 中发现 src/ 文件必须取消暂存
-- 不提交构建产物：`build-{test_dir}/`、`.results/`、`.reports/`、`.ut-session.json`、缓存文件全部排除
+- 不提交构建产物：`build-{test_dir}/`、`.results/`、`.reports/`、缓存文件全部排除
+- `.ut-inventory.json` **必须提交**：它是项目单元测试状态的真相源，跟随测试代码一起纳入版本控制
 - 不修改项目源码
 - 不提交根 CMakeLists.txt 中的已有代码：只提交框架搭建阶段 APPEND 的 `BUILD_TESTS` 开关行
 - 提交信息含基线 commit、类列表、覆盖率摘要、累计统计

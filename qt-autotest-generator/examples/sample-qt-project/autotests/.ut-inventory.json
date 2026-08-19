@@ -1,0 +1,131 @@
+{
+  "version": 1,
+  "project": "home-user-sample-qt-project",
+  "base_sha": "a1b2c3d",
+  "gate_thresholds": {
+    "high": { "line": 90, "branch": 80, "function": 100 },
+    "mid": { "line": 60, "branch": 0, "function": 100 },
+    "low": { "line": 0, "branch": 0, "function": 0 }
+  },
+  "scope_rules": [],
+  "methods": [
+    {
+      "qualified_name": "sample-qt-project.src.Calculator.add",
+      "name": "add",
+      "class_qn": "sample-qt-project.src.Calculator",
+      "file_path": "src/calculator.cpp",
+      "access": "public",
+      "level": "mid",
+      "score": 1,
+      "factors": ["complexity_ge_5"],
+      "source": "auto",
+      "testable": true,
+      "usecase_count": 3
+    },
+    {
+      "qualified_name": "sample-qt-project.src.Calculator.subtract",
+      "name": "subtract",
+      "class_qn": "sample-qt-project.src.Calculator",
+      "file_path": "src/calculator.cpp",
+      "access": "public",
+      "level": "low",
+      "score": 0,
+      "factors": [],
+      "source": "auto",
+      "testable": true,
+      "usecase_count": 1
+    },
+    {
+      "qualified_name": "sample-qt-project.src.Calculator.multiply",
+      "name": "multiply",
+      "class_qn": "sample-qt-project.src.Calculator",
+      "file_path": "src/calculator.cpp",
+      "access": "public",
+      "level": "low",
+      "score": 0,
+      "factors": [],
+      "source": "auto",
+      "testable": true,
+      "usecase_count": 1
+    },
+    {
+      "qualified_name": "sample-qt-project.src.Calculator.divide",
+      "name": "divide",
+      "class_qn": "sample-qt-project.src.Calculator",
+      "file_path": "src/calculator.cpp",
+      "access": "public",
+      "level": "mid",
+      "score": 2,
+      "factors": ["complexity_ge_10"],
+      "source": "auto",
+      "testable": true,
+      "usecase_count": 2
+    },
+    {
+      "qualified_name": "sample-qt-project.src.Calculator.isEmpty",
+      "name": "isEmpty",
+      "class_qn": "sample-qt-project.src.Calculator",
+      "file_path": "src/calculator.cpp",
+      "access": "public",
+      "level": "low",
+      "score": 0,
+      "factors": [],
+      "source": "auto",
+      "testable": true,
+      "usecase_count": 1
+    },
+    {
+      "qualified_name": "sample-qt-project.src.Calculator.pushValue",
+      "name": "pushValue",
+      "class_qn": "sample-qt-project.src.Calculator",
+      "file_path": "src/calculator.cpp",
+      "access": "public",
+      "level": "low",
+      "score": 0,
+      "factors": [],
+      "source": "auto",
+      "testable": true,
+      "usecase_count": 1
+    },
+    {
+      "qualified_name": "sample-qt-project.src.Calculator.sum",
+      "name": "sum",
+      "class_qn": "sample-qt-project.src.Calculator",
+      "file_path": "src/calculator.cpp",
+      "access": "public",
+      "level": "mid",
+      "score": 1,
+      "factors": ["complexity_ge_5"],
+      "source": "auto",
+      "testable": true,
+      "usecase_count": 2
+    },
+    {
+      "qualified_name": "sample-qt-project.src.Calculator.clear",
+      "name": "clear",
+      "class_qn": "sample-qt-project.src.Calculator",
+      "file_path": "src/calculator.cpp",
+      "access": "public",
+      "level": "low",
+      "score": 0,
+      "factors": [],
+      "source": "auto",
+      "testable": true,
+      "usecase_count": 1
+    },
+    {
+      "qualified_name": "sample-qt-project.src.Calculator.findMax",
+      "name": "findMax",
+      "class_qn": "sample-qt-project.src.Calculator",
+      "file_path": "src/calculator.cpp",
+      "access": "public",
+      "level": "mid",
+      "score": 1,
+      "factors": ["complexity_ge_5"],
+      "source": "auto",
+      "testable": true,
+      "usecase_count": 3
+    }
+  ],
+  "review_queue": []
+}

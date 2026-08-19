@@ -110,24 +110,21 @@ if not matched:
 | `remote-codebase-memory-mcp` | `remote_codebase_memory_mcp_*` | `remote_codebase_memory_mcp_search_graph` |
 | `codebase-memory-mcp` | `codebase_memory_mcp_*` | `codebase_memory_mcp_search_graph` |
 
-> ⚠️ 各 phase 文档中的 `codebase_memory_mcp.*` 调用示例均为**概念性写法**，实际调用时替换为 `session.mcp_provider` 对应的前缀。
+> ⚠️ 各 prompt 文档中的 `codebase_memory_mcp.*` 调用示例均为**概念性写法**，实际调用时替换为 `mcp_provider` 对应的前缀。
 
 ## 5. 会话记录
 
-解析结果写入 `{test_dir}/.ut-session.json`：
+解析结果记录为内存变量：
 
-```json
-{
-  "mcp_provider": "remote-codebase-memory-mcp",
-  "mcp_provider_type": "remote",
-  "project_name_in_graph": "home-demo-utest-skills",
-  ...
-}
+```
+mcp_provider = "remote-codebase-memory-mcp"
+mcp_provider_type = "remote"
+project_name_in_graph = "home-demo-utest-skills"
 ```
 
 - `mcp_provider`：解析到的 MCP 名称（如 `remote-codebase-memory-mcp` 或 `codebase-memory-mcp`）
 - `mcp_provider_type`：`remote` 或 `local`
-- 后续所有 phase 从 session 读取 `mcp_provider`，用对应前缀调用工具
+- 后续所有 prompt 从内存变量读取 `mcp_provider`，用对应前缀调用工具
 
 ## 6. 强制提醒规则
 

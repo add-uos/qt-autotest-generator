@@ -2,7 +2,7 @@
 
 > 前置条件：目标项目绝对路径（`project_path`）已就绪。
 
-> 通过 session.mcp_provider 调用知识图谱工具（详见 resources/references/mcp-providers.md）
+> 通过 mcp_provider 调用知识图谱工具（详见 resources/references/mcp-providers.md）
 
 ## 概述
 
@@ -23,7 +23,7 @@ fi
 
 ### 0a. 探测测试目录
 
-确定测试代码存放目录（`autotests/` 或 `tests/`），结果写入 `session.test_dir`：
+确定测试代码存放目录（`autotests/` 或 `tests/`），结果写入 `test_dir`：
 
 ```
 1. 检查项目根下是否存在 autotests/ 目录
@@ -37,7 +37,7 @@ fi
 - `autotests/` 优先：若已存在，直接使用
 - `tests/` 沿用条件：目录存在 **且** 含 GTest C++ 测试代码（检测到 `CMakeLists.txt` 或 `.cpp` 文件含 `#include <gtest`）；含 `#include <QtTest>` 或 Catch2 的目录不沿用，应创建 `autotests/` 代替
 - 空 `tests/` 目录（无测试代码）→ 仍用 `autotests/`
-- 目录选择只在本次探测确定，后续全流程从 `session.test_dir` 读取，不再重新判定
+- 目录选择只在本次探测确定，后续全流程从 `test_dir` 读取，不再重新判定
 
 将 `test_dir` 值写入 session（见 Step 6）。
 
@@ -52,9 +52,9 @@ fi
 
 **执行步骤**：
 
-1. **探测远端**：`remote_codebase_memory_mcp.list_projects()` 调通即远端可用；进一步用 `root_path` 匹配 `project_path`，命中且 `index_status(project=...) == "ready"` → 解析为远端提供方，写 `session.mcp_provider = "remote-codebase-memory-mcp"` / `mcp_provider_type = "remote"`，**跳过本地安装**。
-2. **回退本地**：远端不可用 / 项目未在远端索引 / 远端索引中三者任一成立 → 探测本地 `codebase_memory_mcp.list_projects()`：调通则解析为本地提供方，`session.mcp_provider = "codebase-memory-mcp"` / `mcp_provider_type = "local"`，按 `mcp-providers.md` §6 输出**使用本地**提醒。
-3. **本地不可用 → 安装**：本地亦不可用 → 按 `mcp-providers.md` §6 输出**安装本地**强制提醒 → 运行 `bash ${SKILL_DIR}/resources/scripts/setup-codebase-memory.sh`；退出码 `0` → 设本地提供方；`1`（安装失败）/ `2`（配置失败）/ `3`（验证失败）→ **硬终止**，报告退出码与错误摘要。
+1. **探测远端**：`remote_codebase_memory_mcp.list_projects()` 调通即远端可用；进一步用 `root_path` 匹配 `project_path`，命中且 `index_status(project=...) == "ready"` → 解析为远端提供方，写 `mcp_provider = "remote-codebase-memory-mcp"` / `mcp_provider_type = "remote"`，**跳过本地安装**。
+2. **回退本地**：远端不可用 / 项目未在远端索引 / 远端索引中三者任一成立 → 探测本地 `codebase_memory_mcp.list_projects()`：调通则解析为本地提供方，`mcp_provider = "codebase-memory-mcp"` / `mcp_provider_type = "local"`，按 `mcp-providers.md` §6 输出**使用本地**提醒。
+3. **本地不可用 → 安装**：本地亦不可用 → 按 `mcp-providers.md` §6 输出**安装本地**强制提醒 → 运行 `bash ${SKILL_DIR}/tools/setup-codebase-memory.sh`；退出码 `0` → 设本地提供方；`1`（安装失败）/ `2`（配置失败）/ `3`（验证失败）→ **硬终止**，报告退出码与错误摘要。
 4. **全不可用 → 硬终止**：远端不可用且本地安装失败 → `硬终止：无任何可用的知识图谱 MCP 提供方。`，**不降级 LSP**（`mcp-providers.md` §7）。
 
 ### 2. 确认项目已索引
@@ -132,20 +132,21 @@ if result.total == 0:
 
 ### 6. 写入 session 文件
 
-初始化或更新 `{test_dir}/.ut-session.json`：
+初始化或更新 `{test_dir}/.ut-inventory.json`（若不存在则创建空表）：
 
 ```json
 {
-  "project_path": "<project_path>",
-  "project_name_in_graph": "<project_name>",
-  "test_dir": "autotests",
-  "mcp_provider": "<resolved_provider>",
-  "mcp_provider_type": "<remote|local>",
-  "baseline_commit": "<git rev-parse HEAD>",
-  "qt_version": null,
-  "classes": [],
-  "last_phase": "environment_check",
-  "overall_status": "incomplete"
+  "version": 1,
+  "project": "<project_name>",
+  "base_sha": "<git rev-parse HEAD>",
+  "gate_thresholds": {
+    "high": { "line": 90, "branch": 80, "function": 100 },
+    "mid": { "line": 60, "branch": 0, "function": 100 },
+    "low": { "line": 0, "branch": 0, "function": 0 }
+  },
+  "scope_rules": [],
+  "methods": [],
+  "review_queue": []
 }
 ```
 
@@ -157,7 +158,7 @@ git -C <project_path> rev-parse HEAD
 
 ## 关键约束
 
-- 全流程只用 `session.mcp_provider` 记录的那一个提供方，不混用
+- 全流程只用 `mcp_provider` 记录的那一个提供方，不混用
 - 不对远端 MCP 调用 `index_repository`（远端不可索引，只能查询）
 - 图谱不可用即硬终止，不降级到 LSP
 - 必须确认 `index_status == "ready"` 且图谱非空

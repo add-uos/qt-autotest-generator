@@ -132,28 +132,18 @@ cmake --build . -j$(nproc) 2>&1
 cd "$WT" && rm -rf build-verify
 ```
 
-### 7. 初始化 session 文件
+### 7. 记录项目信息
 
-在 `$WT/{test_dir}/.ut-session.json` 写入初始状态（`test_dir` 默认为 `autotests`，最终值由 environment_check 阶段探测确定）：
+将以下信息记录为内存变量，供后续阶段使用：
 
-```json
-{
-  "project_path": "<WT 绝对路径>",
-  "project_name_in_graph": null,
-  "test_dir": "autotests",
-  "repo_url": "<repo_url>",
-  "branch": "<branch>",
-  "baseline_commit": "<short-sha>",
-  "baseline_date": "<date>",
-  "baseline_title": "<commit-title>",
-  "qt_version": null,
-  "pull_method": "git_clone | git_worktree_fallback",
-  "build_env": "verified | failed",
-  "classes": [],
-  "last_phase": "project_preparer",
-  "overall_status": "incomplete"
-}
-```
+- `project_path`：WT 绝对路径
+- `repo_url`：仓库地址
+- `branch`：分支名
+- `baseline_commit`：`<short-sha>`
+- `baseline_date`：`<date>`
+- `baseline_title`：`<commit-title>`
+- `pull_method`：`git_clone | git_worktree_fallback`
+- `build_env`：`verified | failed`
 
 ## 关键约束
 

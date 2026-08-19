@@ -2,15 +2,15 @@
 
 ## 概述
 
-方法按重要性分为三级，每级有差异化的覆盖率门禁。分类依据来自 Mode 1（函数重要性探测，详见 `phases/importance_inventory.md`）产出的 `.ut-inventory.json`。
+方法按重要性分为三级，每级有差异化的覆盖率门禁。分类依据来自 Mode 1（函数重要性探测，详见 `prompts/inventory.md`）产出的 `.ut-inventory.json`。
 
 ## 分级定义
 
 | 级别 | 标记 | 行覆盖率 | 分支覆盖率 | 函数覆盖率 | 说明 |
 |------|------|---------|-----------|-----------|------|
-| 🌟 核心 | high | ≥ 90% | ≥ 80% | 100% | DBus 契约槽、Q_INVOKABLE、插件导出、高复杂度核心逻辑 |
-| ⚖ 普通 | mid | ≥ 60% | — | 100% | 一般业务方法、中等复杂度、有调用热度 |
-| 💤 豁免 | low | — | — | — | 构造/析构、简单 getter/setter、运算符重载 |
+| 核心 | high | ≥ 90% | ≥ 80% | 100% | DBus 契约槽、Q_INVOKABLE、插件导出、高复杂度核心逻辑 |
+| 普通 | mid | ≥ 60% | — | 100% | 一般业务方法、中等复杂度、有调用热度 |
+| 豁免 | low | — | — | — | 构造/析构、简单 getter/setter、运算符重载 |
 
 > **注意**：函数覆盖率 100% 是 hard gate（每个 public/protected 函数至少被调用一次），
 > 行/分支覆盖率是 soft gate（低于阈值触发增量补全，但不阻塞提交）。
@@ -25,7 +25,7 @@
 
 ## 向后兼容
 
-- 旧格式 `session.coverage_threshold`（单个整数）仍有效，作为 mid 级行覆盖率阈值（默认 90→60，因为 90 是旧的函数覆盖率概念）
+- 旧格式 `coverage_threshold`（单个整数）仍有效，作为 mid 级行覆盖率阈值（默认 90→60，因为 90 是旧的函数覆盖率概念）
 - 当 `.ut-inventory.json` 不存在时，回退到单一门禁：函数覆盖率 ≥ `coverage_threshold`%
 - 当 `.ut-inventory.json` 存在时，按方法分级设定差异化门禁，`coverage_threshold` 不再生效
 
@@ -57,13 +57,13 @@ class_tier = max(m.level for m in class_methods if m.testable)
 
 | 级别 | 行覆盖率缺口 | 分支覆盖率缺口 | 函数覆盖率缺口 |
 |------|------------|-------------|-------------|
-| 🌟 high | 触发增量补全 | 触发增量补全 | 触发增量补全（hard gate） |
-| ⚖ mid | 触发增量补全 | 不检查 | 触发增量补全（hard gate） |
-| 💤 low | 不检查 | 不检查 | 不检查 |
+| high | 触发增量补全 | 触发增量补全 | 触发增量补全（hard gate） |
+| mid | 触发增量补全 | 不检查 | 触发增量补全（hard gate） |
+| low | 不检查 | 不检查 | 不检查 |
 
 ## 产出文件
 
 - 产出路径：`${test_dir}/.ut-inventory.json`
-- 格式详见：`phases/importance_inventory.md` 的 JSON Schema
-- 由 `resources/scripts/scan_inventory.py` 从预采集的 MCP 图谱数据生成
-- MCP 数据采集格式见：`resources/scripts/fetch_mcp_data.py`
+- 格式详见：`resources/references/inventory-schema.md`
+- 由 `tools/scan_inventory.py` 从预采集的 MCP 图谱数据生成
+- MCP 数据采集格式见：`tools/fetch_mcp_data.py`

@@ -80,14 +80,14 @@ sudo apt install lcov
 | `remote-codebase-memory-mcp` | 远端/外部 MCP。已索引项目且 `index_status == "ready"` 时优先使用。**远端无法触发索引**，项目须已在远端索引好 |
 | `codebase-memory-mcp` | 本地 MCP。远端不可用或项目未在远端索引时，自动安装并为本机项目建立索引 |
 
-提供方解析在 `environment_check` 阶段完成，结果记录在 `session.mcp_provider`，详见
+提供方解析在 `environment_check` 阶段完成，结果记录为内存变量 `mcp_provider`，详见
 `resources/references/mcp-providers.md`。
 
 若已接入远端实例（如 `remote-codebase-memory-mcp`）且目标项目已在远端索引，则**跳过本地安装**。
 否则 `environment_check` 会强制提醒用户并安装本地 `codebase-memory-mcp`：
 
 ```bash
-bash resources/scripts/setup-codebase-memory.sh
+bash tools/setup-codebase-memory.sh
 ```
 
 ### 验证安装

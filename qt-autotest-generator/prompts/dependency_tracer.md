@@ -1,8 +1,8 @@
 # 依赖追踪
 
-> 前置条件：`class_analyzer` 已完成目标类的分析（session 中该类有 `test_plan`），图谱 ready。
+> 前置条件：`class_analyzer` 已完成目标类的分析（该类有 `test_plan`（内存变量）），图谱 ready。
 
-> 通过 session.mcp_provider 调用知识图谱工具（详见 resources/references/mcp-providers.md）
+> 通过 mcp_provider 调用知识图谱工具（详见 resources/references/mcp-providers.md）
 
 ## 概述
 
@@ -16,7 +16,7 @@
 
 ```python
 callees = codebase_memory_mcp.trace_path(
-    project=session.project_name_in_graph,
+    project=project_name_in_graph,
     function_name=method.qualified_name,   # 用全限定名，精确
     direction="outbound",
     depth=2
@@ -54,7 +54,7 @@ for callee in callees:
 
 ```python
 imports = codebase_memory_mcp.query_graph(
-    project=session.project_name_in_graph,
+    project=project_name_in_graph,
     query="""
         MATCH (f:File)-[:IMPORTS]->(dep:Module)
         WHERE f.file_path STARTS WITH '<目标类文件路径前缀>'
@@ -89,9 +89,9 @@ stub 类型选择规则：
 
 **深度限制**：depth=2 是基础值。若发现 callee 包含本项目代码且未完全覆盖传递依赖，提高到 depth=3。超过 depth=3 仍遗漏 → 标记 `incomplete_trace: true`。
 
-### 6. 更新 session
+### 6. 记录依赖追踪结果
 
-在目标类的记录中追加：
+将追踪结果记录到内存变量 `class_status[classname]`：
 
 ```json
 {

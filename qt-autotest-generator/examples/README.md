@@ -16,7 +16,7 @@ sample-qt-project/
     ├── run-ut.sh
     ├── report_generator/
     ├── CMakeLists.txt          # 测试根 CMake
-    ├── .ut-session.json       # session 状态文件示例
+    ├── .ut-inventory.json       # inventory 分级表示例
     ├── .results/              # gtest XML 输出
     ├── .reports/              # HTML/CSV 报告
     └── core/

@@ -3,7 +3,7 @@
 > 本指南面向 `qt-autotest-generator` 技能的子 Agent。
 > 它假设 MCP 服务已经由 `setup-codebase-memory.sh` 安装并配置完成。
 
-> **提供方说明**：本技能支持两种知识图谱 MCP 提供方——远端（`remote-codebase-memory-mcp`）和本地（`codebase-memory-mcp`）。提供方在 `environment_check` 阶段一次性解析（远端优先，本地兜底），全流程互斥使用其一，记录在 `session.mcp_provider`。下文所有 `codebase_memory_mcp.*` 调用示例均为**概念性写法**，实际调用时替换为 `session.mcp_provider` 对应的工具前缀。完整解析算法见 `mcp-providers.md`。
+> **提供方说明**：本技能支持两种知识图谱 MCP 提供方——远端（`remote-codebase-memory-mcp`）和本地（`codebase-memory-mcp`）。提供方在 `environment_check` 阶段一次性解析（远端优先，本地兜底），全流程互斥使用其一，记录为内存变量 `mcp_provider`。下文所有 `codebase_memory_mcp.*` 调用示例均为**概念性写法**，实际调用时替换为 `mcp_provider` 对应的工具前缀。完整解析算法见 `mcp-providers.md`。
 
 ## 目录
 
@@ -72,7 +72,7 @@ status = codebase_memory_mcp.index_status(project="my-qt-app")
 
 ### 2.3 首次索引（仅在未索引时）
 
-> ⚠️ **仅本地提供方可触发索引**。若 `session.mcp_provider == "remote-codebase-memory-mcp"`，远端无法调用 `index_repository`——项目必须已在远端索引好（由 `environment_check` 在解析阶段确认）。本节仅适用于本地提供方。
+> ⚠️ **仅本地提供方可触发索引**。若 `mcp_provider == "remote-codebase-memory-mcp"`，远端无法调用 `index_repository`——项目必须已在远端索引好（由 `environment_check` 在解析阶段确认）。本节仅适用于本地提供方。
 
 **项目名规则**：codebase-memory-mcp 会把 repo 绝对路径转换成「斜杠变短横」的项目名，
 例如 `/home/user/my-qt-app` → `home-user-my-qt-app`。后续所有查询都要用这个名字。

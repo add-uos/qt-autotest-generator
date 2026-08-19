@@ -1,19 +1,20 @@
 {
   "name": "qt-autotest-generator-output-quality",
   "description": "评估技能输出质量的提示词集，覆盖首次搭建、增量补全、失败修复、对账、tests/ 兼容等核心场景",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "evals": [
     {
       "id": "fresh-setup",
       "prompt": "为 /path/to/qt-cmake-project 生成单测",
       "expected_behavior": "执行环境检查 → 框架搭建 → 逐类闭环（分析→追踪→生成→验证→自检）→ 批次提交 → 报告收尾",
       "success_criteria": [
-        "session.test_dir 已记录（autotests 或 tests）",
+        "test_dir 已确定（autotests 或 tests，内存变量）",
         "MCP 提供方已解析且互斥使用",
         "每个类至少走完一轮闭环",
         "编译验证通过后才标记 done",
         "SPDX 头存在于所有测试文件",
-        "函数覆盖率 >= 90% 或已触发增量补全"
+        "函数覆盖率 >= 90% 或已触发增量补全",
+        ".ut-inventory.json 已生成且 usecase_count 已更新"
       ],
       "failure_indicators": [
         "未编译就报完成",
@@ -25,12 +26,13 @@
     {
       "id": "incremental-coverage",
       "prompt": "补全 Calculator 的测试覆盖率",
-      "expected_behavior": "读取 session → 检查覆盖率缺口 → 增量补全缺失用例 → 编译验证 → 自检",
+      "expected_behavior": "读取 .ut-inventory.json → 检查覆盖率缺口 → 增量补全缺失用例 → 编译验证 → 自检",
       "success_criteria": [
         "只补全缺失用例，不重写已有通过的用例",
         "补全后函数覆盖率 >= 阈值",
         "CMake 只 APPEND 不修改已有",
-        "批次提交仅包含新增/修改的测试文件"
+        "批次提交仅包含新增/修改的测试文件",
+        ".ut-inventory.json 的 usecase_count 已更新"
       ],
       "failure_indicators": [
         "重写已通过的用例",
@@ -58,26 +60,26 @@
     {
       "id": "reconcile-sync",
       "prompt": "代码改了重新对账",
-      "expected_behavior": "reconcile → 比对 git HEAD → 检测源码变更 → 按差异路由（新增/签名变更/删除）",
+      "expected_behavior": "reconcile → 比对 git HEAD 与 inventory.base_sha → 检测源码变更 → 按差异路由（新增/签名变更/删除）",
       "success_criteria": [
-        "正确检测 baseline_commit 漂移",
+        "正确检测 base_sha 漂移",
         "新增方法走增量补全",
         "签名变更走测试生成（重新生成该类）",
         "方法删除走失败修复（清理引用）",
-        "更新 session.baseline_commit"
+        "更新 inventory.base_sha"
       ],
       "failure_indicators": [
         "未比对 git HEAD",
-        "未更新 baseline_commit",
+        "未更新 base_sha",
         "全量重新生成而非增量"
       ]
     },
     {
       "id": "tests-dir-compat",
       "prompt": "为已有 tests/ 目录的项目生成单测",
-      "expected_behavior": "environment_check 探测到 tests/ 存在 → session.test_dir = 'tests' → 全流程使用 tests/",
+      "expected_behavior": "environment_check 探测到 tests/ 存在 → test_dir = 'tests' → 全流程使用 tests/",
       "success_criteria": [
-        "session.test_dir 记录为 'tests'",
+        "test_dir 记录为 'tests'（内存变量）",
         "不创建 autotests/ 目录",
         "测试文件生成到 tests/ 下",
         "编译目录为 build-tests",
@@ -85,7 +87,6 @@
       ],
       "failure_indicators": [
         "强制创建 autotests/ 目录",
-        "test_dir 未记录在 session",
         "编译目录仍为 build-autotests"
       ]
     },
@@ -95,7 +96,7 @@
       "expected_behavior": "项目准备（clone + 环境搭建）→ 环境检查 → 框架搭建 → 逐类闭环",
       "success_criteria": [
         "正确 clone 指定分支",
-        "session.repo_url 和 session.branch 已记录",
+        "repo_url 和 branch 已记录为内存变量",
         "项目准备完成后才进入环境检查",
         "依赖安装成功"
       ],
@@ -135,6 +136,23 @@
         "无限循环修复",
         "iteration_count 未递增",
         "阻塞其他类处理"
+      ]
+    },
+    {
+      "id": "mode1-inventory",
+      "prompt": "扫描函数重要性",
+      "expected_behavior": "环境检查 → 全量扫描 → 评分 → 产出 .ut-inventory.json",
+      "success_criteria": [
+        ".ut-inventory.json 已生成",
+        "methods 列表非空",
+        "gate_thresholds 包含 high/mid/low 三级",
+        "scope_rules 包含 exempt 模式",
+        "review_queue 中 suggested 条目默认 mid"
+      ],
+      "failure_indicators": [
+        "生成了测试代码（Mode 1 不生成测试）",
+        "编译或运行了测试",
+        "P75 计算未排除零值"
       ]
     }
   ]

@@ -1,8 +1,8 @@
 # 增量补全
 
-> 前置条件：目标类已有测试文件（session 中 `test_file` 存在，`status` 为 `done` 或 `self_check_failed`），图谱 ready。
+> 前置条件：目标类已有测试文件（`class_status[classname]` 中 `test_file` 存在，`status` 为 `done` 或 `self_check_failed`（内存变量）），图谱 ready。
 
-> 通过 session.mcp_provider 调用知识图谱工具（详见 resources/references/mcp-providers.md）
+> 通过 mcp_provider 调用知识图谱工具（详见 resources/references/mcp-providers.md）
 
 ## 概述
 
@@ -10,7 +10,7 @@
 
 **额外触发**：当自检检出覆盖率低于门禁时，补全未覆盖函数的用例。门禁规则取决于是否有 inventory：
 - **有 `.ut-inventory.json`**：按方法分级门禁（🌟high: 行90%+分支80%+函数100%，⚖mid: 行60%+函数100%，💤low: 无门禁）
-- **无 inventory**：与 `session.coverage_threshold`（默认 90）比对函数覆盖率
+- **无 inventory**：与 `coverage_threshold`（内存变量，默认 90）比对函数覆盖率
 
 ### 0. 迭代计数递增（Iron Law #13）
 
@@ -18,12 +18,12 @@
 
 ```python
 MAX_ITERATIONS = 3
-iter_count = session.classes[name].get("iteration_count", 1) + 1
-session.classes[name]["iteration_count"] = iter_count
+iter_count = iteration_count.get(classname, 1) + 1
+iteration_count[classname] = iter_count
 
 if iter_count > MAX_ITERATIONS:
     # 超过上限，强制标红（self_checker Step 0 也会拦截，此处双重保障）
-    session.classes[name].update({
+    class_status[classname].update({
         "status": "failed",
         "failure_reason": "max_iterations_exceeded",
     })
@@ -39,7 +39,7 @@ if iter_count > MAX_ITERATIONS:
 #### 来源 A：图谱方法名差集（结构性缺口）
 ```python
 all_methods = codebase_memory_mcp.search_graph(
-    project=session.project_name_in_graph,
+    project=project_name_in_graph,
     label="Method",
     qn_pattern=f".*\\.{target_class.name}\\..*",
     limit=100
@@ -72,7 +72,7 @@ methods_to_add = untested_methods | set(uncovered_from_lcov)
 resolved = {}
 for name in methods_to_add:
     nodes = codebase_memory_mcp.search_graph(
-        project=session.project_name_in_graph,
+        project=project_name_in_graph,
         label="Method",
         name_pattern=f".*\\.{target_class.name}\\.{name}$"
     )
@@ -97,7 +97,7 @@ snippet = codebase_memory_mcp.get_code_snippet(
 b. 追踪依赖（复用依赖追踪逻辑）：
 ```python
 callees = codebase_memory_mcp.trace_path(
-    project=session.project_name_in_graph,
+    project=project_name_in_graph,
     function_name=resolved[name].qualified_name,
     direction="outbound",
     depth=2
@@ -135,7 +135,9 @@ TEST_F(MyClassTest, MethodX_ValidInput_ReturnsExpected) {
 
 > **注意**：绝不修改已有 CMake 行，只追加。
 
-### 6. 更新 session
+### 6. 记录补全结果
+
+将补全结果记录到内存变量 `class_status[classname]`：
 
 ```json
 {
@@ -154,5 +156,5 @@ TEST_F(MyClassTest, MethodX_ValidInput_ReturnsExpected) {
 - `qualified_name` 必须从图谱返回值取，不自己拼
 - 新增方法可能引入新依赖：必须 trace_path
 - 不修改项目源码
-- 分支切回原分支时：恢复 `session.stale_classes` 中类的 `add_subdirectory` 行到 CMakeLists.txt，并将 status 从 `stale` 改回原值
+- 分支切回原分支时：恢复 `stale_classes`（内存变量）中类的 `add_subdirectory` 行到 CMakeLists.txt，并将 status 从 `stale` 改回原值
 - 追加后必须回到编译验证阶段重新验证

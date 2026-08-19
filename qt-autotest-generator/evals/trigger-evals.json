@@ -1,8 +1,44 @@
 {
   "name": "qt-autotest-generator-trigger-evals",
   "description": "测试技能 description 触发精准度：应触发的表述必须触发，不应触发的表述必须不触发",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "should_trigger": [
+    {
+      "id": "zh-scan-importance",
+      "input": "扫描函数重要性",
+      "expected": true,
+      "reason": "Mode 1 触发语"
+    },
+    {
+      "id": "zh-gen-inventory",
+      "input": "生成 inventory",
+      "expected": true,
+      "reason": "Mode 1 触发语"
+    },
+    {
+      "id": "zh-probe-level",
+      "input": "探测分级",
+      "expected": true,
+      "reason": "Mode 1 触发语"
+    },
+    {
+      "id": "zh-init-analysis",
+      "input": "项目初始化单测分析",
+      "expected": true,
+      "reason": "Mode 1 触发语"
+    },
+    {
+      "id": "en-scan-importance",
+      "input": "scan method importance",
+      "expected": true,
+      "reason": "Mode 1 英文触发语"
+    },
+    {
+      "id": "en-importance-inventory",
+      "input": "importance inventory",
+      "expected": true,
+      "reason": "Mode 1 英文触发语"
+    },
     {
       "id": "zh-gen-tests",
       "input": "生成单测",

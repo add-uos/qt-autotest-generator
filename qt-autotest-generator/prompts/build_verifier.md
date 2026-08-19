@@ -1,20 +1,20 @@
 # 编译验证
 
-> 前置条件：`test_writer` 已完成目标类（session 中 `status=test_written`），`{test_dir}/<module>/test_<classname>.cpp` 存在。
+> 前置条件：`test_writer` 已完成目标类（`class_status[classname].status=test_written`（内存变量）），`{test_dir}/<module>/test_<classname>.cpp` 存在。
 
-> 通过 session.mcp_provider 调用知识图谱工具（详见 resources/references/mcp-providers.md）
+> 通过 mcp_provider 调用知识图谱工具（详见 resources/references/mcp-providers.md）
 
 ## 概述
 
 强制编译并运行目标类的测试，按错误分类表修复，在重试预算内达成编译+运行通过。产出**双信号**（编译/运行结果 + 覆盖率信号）。**不修源码**，疑似源码缺陷标红交还用户。
 
-若 `session.classes[name].iteration_count` >= 3（Iron Law #13），跳过验证，直接标记 `failed` + `max_iterations_exceeded`。
+若 `iteration_count[classname]` >= 3（Iron Law #13），跳过验证，直接标记 `failed` + `max_iterations_exceeded`。
 
 ## 工作步骤
 
 ### 1. 编译测试
 
-test_dir = session.test_dir  # "autotests" 或 "tests"
+test_dir = test_dir  # "autotests" 或 "tests"（内存变量）
 cd ${PROJECT_PATH}/build-${test_dir}
 cmake .. -DBUILD_TESTS=ON 2>&1
 cmake --build . -j$(nproc) --target test_<classname> 2>&1
@@ -39,7 +39,7 @@ cmake --build . -j$(nproc) --target test_<classname> 2>&1
 
 ### 3. 编译通过 → 运行测试
 
-test_dir = session.test_dir
+test_dir = test_dir  # 内存变量
 cd ${PROJECT_PATH}/build-${test_dir}
 timeout 120 ./${test_dir}/<module>/test_<classname> --gtest_output=xml:${PROJECT_PATH}/${test_dir}/.results/test_<classname>.xml 2>&1
 
@@ -75,7 +75,7 @@ timeout 120 ./${test_dir}/<module>/test_<classname> --gtest_output=xml:${PROJECT
 
 ### 6. 产出双信号
 
-编译+运行结束后，向 session 写入：
+编译+运行结束后，记录到内存变量 `class_status[classname]`：
 
 ```json
 {
@@ -99,7 +99,7 @@ coverage_gap = planned - tested
 
 若 `coverage_gap` 非空 → 信号 B 触发 `incremental_updater`。
 
-> **注意**：此处只做方法名差集（结构性检查）。覆盖率百分比的完整门禁在 `self_checker` 中执行（有 inventory 时按方法分级，无时与 `session.coverage_threshold` 比对）——此处不解析 lcov 数据，避免与 self_checker 重复。
+> **注意**：此处只做方法名差集（结构性检查）。覆盖率百分比的完整门禁在 `self_checker` 中执行（有 inventory 时按方法分级，无时与 `coverage_threshold`（默认 90）比对）——此处不解析 lcov 数据，避免与 self_checker 重复。
 
 ## 后续流程
 

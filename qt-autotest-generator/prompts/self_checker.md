@@ -2,7 +2,7 @@
 
 > 前置条件：`build_verifier` 已通过目标类（session 中 `status=verified`，`build_result=pass`，`run_result=pass`）。
 
-> 通过 session.mcp_provider 调用知识图谱工具（详见 resources/references/mcp-providers.md）
+> 通过 mcp_provider 调用知识图谱工具（详见 resources/references/mcp-providers.md）
 
 ## 概述
 
@@ -10,15 +10,15 @@
 
 ### 0. 迭代次数检查（Iron Law #13）
 
-在执行任何自检之前，先检查 `session.classes[name].iteration_count`：
+在执行任何自检之前，先检查 `iteration_count[classname]`：
 
 ```python
 MAX_ITERATIONS = 3
-iter_count = session.classes[name].get("iteration_count", 1)
+iter_count = iteration_count.get(classname, 1)
 
 if iter_count >= MAX_ITERATIONS:
     # 达到全局闭环迭代上限，强制标红跳过
-    session.classes[name].update({
+    class_status[classname].update({
         "status": "failed",
         "failure_reason": "max_iterations_exceeded",
     })
@@ -42,7 +42,7 @@ if iter_count >= MAX_ITERATIONS:
 ```python
 # 图谱全量 public/protected 方法
 all_methods = codebase_memory_mcp.search_graph(
-    project=session.project_name_in_graph,
+    project=project_name_in_graph,
     label="Method",
     qn_pattern=f".*\\.{target_class.name}\\..*"
 )
@@ -58,13 +58,13 @@ coverage_gap = all_method_names - tested_names
 
 ##### 1b. lcov 函数覆盖率门禁（百分比）
 
-读取 lcov 生成的 `build-{test_dir}/coverage/filtered.info`（`test_dir` 从 `session.test_dir` 读取），计算该类源文件对应的函数覆盖率百分比：
+读取 lcov 生成的 `build-{test_dir}/coverage/filtered.info`（`test_dir` 从 `test_dir` 读取），计算该类源文件对应的函数覆盖率百分比：
 
 - **有 inventory 时**：按方法分级差异化门禁（详见 `resources/references/coverage-tiers.md`）
-- **无 inventory 时**：与 `session.coverage_threshold`（默认 90）比对
+- **无 inventory 时**：与 `coverage_threshold`（默认 90）比对
 
 ```python
-test_dir = session.test_dir
+test_dir = test_dir
 inventory_path = f"{test_dir}/.ut-inventory.json"
 has_inventory = os.path.exists(inventory_path)
 
@@ -86,7 +86,7 @@ if has_inventory:
     # 详见 resources/references/coverage-tiers.md
 else:
     # 向后兼容：单一门禁
-    threshold = session.get("coverage_threshold", 90)
+    threshold = coverage_threshold
 
 # 解析 lcov info 文件中目标类源文件的函数覆盖率
 func_coverage = parse_function_coverage_from_lcov(
@@ -190,7 +190,7 @@ for method in all_methods:
 
     # 副作用：trace_path 出向调用链，命中 emit/写状态/调下游
     traces = codebase_memory_mcp.trace_path(
-        project=session.project_name_in_graph,
+        project=project_name_in_graph,
         function_name=method.name,
         direction="outbound",
         mode="calls"
@@ -277,7 +277,7 @@ EXTERNAL_ENDPOINTS = {
 }
 for method in all_methods:
     traces = codebase_memory_mcp.trace_path(
-        project=session.project_name_in_graph,
+        project=project_name_in_graph,
         function_name=method.name,
         direction="outbound",
         mode="calls",
@@ -351,7 +351,7 @@ for method in all_methods:
 - 不跳过 GUI 类豁免
 - `qualified_name` 必须从图谱返回值取，不自己拼
 - 不忽略覆盖率门禁：方法名差集为空但覆盖率 < 阈值时，仍必须流转至 `incremental_updater`
-- 覆盖率门禁规则：有 `.ut-inventory.json` 时按方法分级（详见 `resources/references/coverage-tiers.md`），无时从 `session.coverage_threshold`（默认 90）读取
+- 覆盖率门禁规则：有 `.ut-inventory.json` 时按方法分级（详见 `resources/references/coverage-tiers.md`），无时从 `coverage_threshold`（默认 90）读取
 - 不跳过断言强度自检：每用例（`TEST_F` 与 `TEST_P` 均需扫描）至少 2 个有效 `EXPECT_*`（NO_FATAL/NO_THROW/EXPECT_CALL 均不计入）
 - 不跳过环境隔离自检：硬编码绝对路径、`qputenv` 无对应 `qunsetenv`、未 mock 的真实外部资源（QProcess/网络/socket/真实时间）、stub 未 `clear()` 必须检出
 

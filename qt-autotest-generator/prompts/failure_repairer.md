@@ -1,20 +1,20 @@
 # 失败修复
 
-> 前置条件：目标类 `build_result=fail` 或 `run_result=fail`（session 中 `status=failed`）；或源码变更后方法删除导致测试引用失效。
+> 前置条件：目标类 `build_result=fail` 或 `run_result=fail`（`class_status[classname].status=failed`（内存变量））；或源码变更后方法删除导致测试引用失效。
 
-> 通过 session.mcp_provider 调用知识图谱工具（详见 resources/references/mcp-providers.md）
+> 通过 mcp_provider 调用知识图谱工具（详见 resources/references/mcp-providers.md）
 
 ## 概述
 
 修复编译/运行失败的测试，在独立重试预算内尝试修复。**先按测试代码问题修**；修不好则判定根因，疑似源码缺陷的**标红交还用户，不修源码**。支持用户显式"修复"和自动检测失败两种触发方式。
 
-当 failure_repairer 完成修复并成功后回到编译验证时，递增 `session.classes[name].iteration_count`（因为这将开始新一轮闭环）。若 `iteration_count` 已 >= 3（Iron Law #13），不再尝试修复，直接保持 `failed` + `max_iterations_exceeded`。
+当 failure_repairer 完成修复并成功后回到编译验证时，递增 `iteration_count[classname]`（内存变量）（因为这将开始新一轮闭环）。若 `iteration_count[classname]` 已 >= 3（Iron Law #13），不再尝试修复，直接保持 `failed` + `max_iterations_exceeded`。
 
 ## 工作步骤
 
 ### 1. 读失败上下文
 
-从 session 读取：
+从内存变量读取：
 - `failure_reason`：失败类型
 - `build_log_excerpt`：最小错误日志
 
@@ -89,9 +89,10 @@ per-error 3 次重试，总计 max 10 loops（与编译验证的预算独立）�
 - 注释或删除这些用例（加注释 `// Removed: method deleted from source`）；`TEST_P` 清理时连带移除对应的 `INSTANTIATE_TEST_SUITE_P`，避免悬空参数化定义
 - 不视为源码缺陷（正常的代码演进）
 
-### 6. 更新 session
+### 6. 记录修复结果
 
-修复成功：
+修复成功，记录到内存变量 `class_status[classname]`：
+
 ```json
 {
   "status": "test_written",
@@ -102,7 +103,8 @@ per-error 3 次重试，总计 max 10 loops（与编译验证的预算独立）�
 }
 ```
 
-修复失败（标红）：
+修复失败（标红），记录到内存变量：
+
 ```json
 {
   "status": "failed",

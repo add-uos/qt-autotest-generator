@@ -410,10 +410,10 @@ RUNUTEOF
     sed -i "s|__TEST_DIR__|${TEST_DIR}|g" "${AUTOTEST_ROOT}/run-ut.sh"
 
     # Replace SOURCE_DIRS pattern for coverage extraction
-    # If session file exists, read source_dirs; otherwise default to "*/src/*"
-    SESSION_FILE="${AUTOTEST_ROOT}/.ut-session.json"
-    if [ -f "${SESSION_FILE}" ]; then
-        SOURCE_DIRS_JSON=$(python3 -c "import json; s=json.load(open('${SESSION_FILE}')); dirs=s.get('source_dirs',[]); print(' '.join(f'*/{d.split('/')[-1]}/*' for d in dirs))" 2>/dev/null || echo "*/src/*")
+    # If inventory file exists, read source dirs from it; otherwise default to "*/src/*"
+    INVENTORY_FILE="${AUTOTEST_ROOT}/.ut-inventory.json"
+    if [ -f "${INVENTORY_FILE}" ]; then
+        SOURCE_DIRS_JSON=$(python3 -c "import json; s=json.load(open('${INVENTORY_FILE}')); dirs=set(); [dirs.add(m.get('file_path','').split('/')[0] for m in s.get('methods',[]) if m.get('file_path'))]; print(' '.join(f'*/{d}/*' for d in dirs if d))" 2>/dev/null || echo "*/src/*")
         SOURCE_DIRS_PATTERN="${SOURCE_DIRS_JSON}"
     else
         SOURCE_DIRS_PATTERN="*/src/*"

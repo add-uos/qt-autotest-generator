@@ -1,10 +1,10 @@
 # 框架搭建
 
-> 前置条件：`environment_check` 已通过（session 中 `project_name_in_graph` 已记录），且测试目录（`session.test_dir`，默认 `autotests/`）不存在。
+> 前置条件：`environment_check` 已通过（`project_name_in_graph` 已确定（内存变量）），且测试目录（`test_dir`（内存变量，默认 `autotests/`））不存在。
 
 ## 概述
 
-在目标项目根目录下创建测试框架骨架（目录名由 `session.test_dir` 决定，下文以 `{test_dir}` 代指）：目录结构、stub-ext、CMake 工具、测试运行脚本、报告生成器。此阶段只搭建框架，不生成具体测试用例。
+在目标项目根目录下创建测试框架骨架（目录名由 `test_dir` 决定，下文以 `{test_dir}` 代指）：目录结构、stub-ext、CMake 工具、测试运行脚本、报告生成器。此阶段只搭建框架，不生成具体测试用例。
 
 ## 工作步骤
 
@@ -18,9 +18,9 @@
 
 扫描源码目录：`src/`、`source/`、`lib/`、`libs/`、`application/`、`apps/`、`base/`、`common/`、`components/`、`plugins/`
 
-将 Qt 版本写入 session：`qt_version` 字段。
+将 Qt 版本写入内存变量：`qt_version`。
 
-test_dir = session.test_dir  # "autotests" 或 "tests"
+test_dir = test_dir  # "autotests" 或 "tests"
 
 # 创建目录结构
 ```
@@ -40,24 +40,24 @@ cp -r ${SKILL_DIR}/resources/stub/* ${PROJECT_PATH}/{test_dir}/3rdparty/stub/
 
 ### 4. 生成 CMake 工具脚本
 
-bash ${SKILL_DIR}/resources/scripts/generate-cmake-utils.sh
+bash ${SKILL_DIR}/tools/generate-cmake-utils.sh
 ```
 
 生成 `{test_dir}/cmake/UnitTestUtils.cmake`。脚本通过环境变量 `TEST_DIR` 接收目录名（默认 `autotests`）：
 
 ```bash
-TEST_DIR=tests bash ${SKILL_DIR}/resources/scripts/generate-cmake-utils.sh
+TEST_DIR=tests bash ${SKILL_DIR}/tools/generate-cmake-utils.sh
 ```
 
 ### 5. 生成测试运行脚本 + 报告生成器
 
-bash ${SKILL_DIR}/resources/scripts/generate-runner.sh
+bash ${SKILL_DIR}/tools/generate-runner.sh
 ```
 
 生成 `{test_dir}/run-ut.sh` 并复制 `report_generator/`。脚本通过环境变量 `TEST_DIR` 接收目录名（默认 `autotests`）：
 
 ```bash
-TEST_DIR=tests bash ${SKILL_DIR}/resources/scripts/generate-runner.sh
+TEST_DIR=tests bash ${SKILL_DIR}/tools/generate-runner.sh
 ```
 
 ### 6. 生成 {test_dir}/CMakeLists.txt
@@ -65,7 +65,7 @@ TEST_DIR=tests bash ${SKILL_DIR}/resources/scripts/generate-runner.sh
 读模板：`resources/templates/cmake-autotests.txt`
 
 替换占位符：
-- `{TEST_DIR}` → `session.test_dir` 值（如 `autotests` 或 `tests`）
+- `{TEST_DIR}` → `test_dir` 值（如 `autotests` 或 `tests`）
 - `{QT_VERSION}` → 5 或 6
 - `{THIRD_PARTY_PACKAGES}` → 检测到的依赖的 `find_package` 命令
 - `{ADD_SUBDIRECTORIES}` → `add_subdirectory()` 调用（初始为空，后续阶段会补充）
@@ -87,7 +87,7 @@ if(BUILD_TESTS)
 endif()
 ```
 
-其中 `{test_dir}` 替换为 `session.test_dir` 的值（如 `autotests` 或 `tests`）。
+其中 `{test_dir}` 替换为 `test_dir` 的值（如 `autotests` 或 `tests`）。
 
 **绝不**：
 - 注释掉已有 `if()` / `else()` / `endif()` 块
@@ -107,9 +107,7 @@ endif()
 # Build artifacts
 build-*/
 
-# Session & cache
-.ut-session.json
-.ut-session.*.json
+# Test run artifacts
 .results/
 .reports/
 
@@ -132,16 +130,17 @@ coverage/
 build-{test_dir}/
 {test_dir}/.results/
 {test_dir}/.reports/
-{test_dir}/.ut-session.json
 ```
 
-其中 `{test_dir}` 替换为 `session.test_dir` 的值。
+其中 `{test_dir}` 替换为 `test_dir` 的值。
+
+> **注意**：`.ut-inventory.json` **不**加入 `.gitignore`，它是项目单元测试状态的真相源，跟随测试代码一起纳入版本控制。
 
 **绝不**忽略 `{test_dir}/` 本身（测试代码应纳入版本控制），只忽略构建产物和临时状态文件。
 
 ### 10. 验证框架编译
 
-test_dir = session.test_dir  # "autotests" 或 "tests"
+test_dir = test_dir  # "autotests" 或 "tests"
 
 mkdir -p ${PROJECT_PATH}/build-${test_dir}
 cd ${PROJECT_PATH}/build-${test_dir}
@@ -153,15 +152,9 @@ cmake --build . -j$(nproc)
 
 若失败 → 分析错误 → 修 CMakeLists → 重试（max 10 loops）。
 
-### 11. 更新 session
+### 11. 更新内存变量
 
-```json
-{
-  "last_phase": "framework_builder",
-  "overall_status": "incomplete",
-  "qt_version": 5
-}
-```
+记录 `qt_version` 到内存变量。
 
 ## 关键约束
 
@@ -170,6 +163,6 @@ cmake --build . -j$(nproc)
 - 不从网络下载 stub-ext
 - 空框架必须能编译通过，不跳过框架编译验证
 - `{test_dir}/` 已存在时跳过本阶段
-- 必须生成 `{test_dir}/.gitignore`（排除构建产物、session 文件、缓存、覆盖率数据）
+- 必须生成 `{test_dir}/.gitignore`（排除构建产物、缓存、覆盖率数据）
 
 > **并行分片**：当目标类 >= 5 个时，并行处理使用分片 session 机制，详见 `resources/references/parallel-strategy.md`

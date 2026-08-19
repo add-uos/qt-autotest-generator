@@ -2,7 +2,7 @@
 
 # Qt Autotest Generator
 
-> Qt CMake 项目单元测试自动生成：基于 codebase-memory-mcp 知识图谱，搭建 `{test_dir}/` 框架、逐类生成 Google Test 用例、强制编译验证、覆盖率自检与报告。
+> Qt CMake 项目单元测试自动生成：基于 codebase-memory-mcp 知识图谱，**函数重要性探测**（Mode 1）或**按分级补全 GTest 用例**（Mode 2，编译验证+覆盖率门禁+更新 usecase_count）。
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://isocpp.org/)
@@ -42,12 +42,13 @@ Qt 项目代码量大，**单测覆盖率上不去**？<br>
 <tr><th align="left" nowrap width="1%">能力</th><th align="left">说明</th></tr>
 </thead>
 <tbody>
+<tr><td nowrap width="1%"><strong>双模式架构</strong></td><td><strong>Mode 1</strong>（函数重要性探测）：全量扫描知识图谱，多因子评分，产出 <code>.ut-inventory.json</code> 分级表。<strong>Mode 2</strong>（单元测试生成）：读取分级表，按 high→mid→low 优先级逐类生成 GTest 用例，编译验证+覆盖率门禁。Mode 2 启动时若 inventory 不存在则自动触发 Mode 1。</td></tr>
 <tr><td nowrap width="1%"><strong>知识图谱驱动</strong></td><td>基于 codebase-memory-mcp 知识图谱毫秒级拉取类结构、方法签名、调用链、依赖关系；硬门禁，无图谱不执行。<strong>支持远端（<code>remote-codebase-memory-mcp</code>）与本地两种提供方，远端优先</strong></td></tr>
 <tr><td nowrap width="1%"><strong>框架搭建</strong></td><td>自动创建 <code>{test_dir}/</code> 目录（默认 <code>autotests/</code>，若项目已有 <code>tests/</code> 则沿用）：CMake 配置、stub-ext、测试运行脚本、报告生成器</td></tr>
 <tr><td nowrap width="1%"><strong>逐类生成</strong></td><td>按复杂度规划用例数（高复杂度多写边界+异常），AAA 模式，<code>{Feature}_{Scenario}_{ExpectedResult}</code> 命名</td></tr>
 <tr><td nowrap width="1%"><strong>依赖追踪</strong></td><td>MCP <code>trace_path</code> 自动追踪出向调用链，按决策矩阵决定 stub 哪些依赖、编入哪些源码目录</td></tr>
 <tr><td nowrap width="1%"><strong>强制验证</strong></td><td>编译+运行必须通过才报完成；失败自动分类修复，重试预算内尽力修</td></tr>
-<tr><td nowrap width="1%"><strong>覆盖率自检</strong></td><td>lcov 函数覆盖率门禁（默认 90%，可由用户指定），低于阈值触发自动补全；SPDX 头、命名规范、stub 正确性内部自检</td></tr>
+<tr><td nowrap width="1%"><strong>覆盖率自检</strong></td><td>有 <code>.ut-inventory.json</code> 时按方法分级设差异化门禁（🌟high 行90%+分支80%+函数100%，⚖mid 行60%+函数100%，💤low 无硬性门禁）；无时回退单一门禁（默认 90%）。低于阈值触发自动补全</td></tr>
 <tr><td nowrap width="1%"><strong>增量对账</strong></td><td>源码变更后自动 diff，只补新增方法、只修签名变更、只清理已删方法引用</td></tr>
 <tr><td nowrap width="1%"><strong>源码缺陷标红</strong></td><td>疑似源码缺陷（编译不过/运行崩溃/逻辑矛盾）标红交还用户，不自行修源码</td></tr>
 <tr><td nowrap width="1%"><strong>HTML/CSV 报告</strong></td><td>固定收尾生成覆盖率总览、逐类结果、源码缺陷清单、跳过类清单</td></tr>
@@ -116,7 +117,7 @@ Claude Code、Cursor、opencode 等兼容 AgentSkills 的客户端，具体落�
 
 ## 示例
 
-- **示例项目**：见 [examples/README.md](examples/README.md)（含示例 Qt 类、生成的测试文件、session 状态、报告样例）。
+- **示例项目**：见 [examples/README.md](examples/README.md)（含示例 Qt 类、生成的测试文件、inventory 分级表、报告样例）。
 
 ---
 
@@ -124,7 +125,10 @@ Claude Code、Cursor、opencode 等兼容 AgentSkills 的客户端，具体落�
 
 - [技能入口与工作流](SKILL.md)
 - [详细安装说明](INSTALL.md)
+- [Inventory JSON 结构](resources/references/inventory-schema.md)
 - [MCP 提供方解析指南](resources/references/mcp-providers.md)
+- [覆盖率分级门禁](resources/references/coverage-tiers.md)
+- [对账逻辑](resources/references/reconcile-logic.md)
 - [codebase-memory-mcp 使用指南](resources/references/codebase-memory-guide.md)
 - [单元测试用例设计方法论](resources/references/test-types.md)
 - [示例项目](examples/README.md)
