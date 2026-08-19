@@ -82,7 +82,8 @@
 | `pull_method` | string | `"git_clone"` 或 `"git_worktree_fallback"` |
 | `build_env` | string | `"verified"` 或 `"failed"` |
 | `qt_version` | int | Qt 版本（5 或 6） |
-| `coverage_threshold` | int | 函数覆盖率门禁阈值，默认 90 |
+| `coverage_threshold` | int | 函数覆盖率门禁阈值，默认 90（旧格式，有 inventory 时不再生效） |
+| `inventory_path` | string | Mode 1 产出的 `.ut-inventory.json` 路径；存在时按方法分级设覆盖率门禁 |
 | `classes` | array | 目标类列表 |
 | `stale_classes` | array | 分支切换后不存在的类名列表 |
 | `last_phase` | string | 最后执行的 phase |

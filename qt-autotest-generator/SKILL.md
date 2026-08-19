@@ -43,7 +43,7 @@ compatibility:
 - **拉取项目生成单测**："拉取 https://github.com/foo/bar 的 dev 分支生成单测"、"clone 项目建测试" → 用户提供仓库地址 + 分支名，先执行项目准备
 - 首次为 Qt CMake 项目搭建单测框架："建单测"、"生成测试框架"、"add tests"
 - 批量为模块/类生成用例："为 src/lib/ui 生成测试"、"批量生成单测"
-- 增量补全缺失用例："补全测试"、"补全 MyClass 的测试"、"complete test coverage"
+- **函数重要性探测**："探测分级函数"、"扫描方法重要性"、"生成重要性清单"、"importance inventory"、"scan method importance" → 执行 Mode 1（`phases/importance_inventory.md`），产出 `.ut-inventory.json`
 - 修复失败用例："测试编译失败"、"修测试"、"fix test failures"
 - 源码变更后对账："代码改了重新检查"、"重新对账"、"sync tests"
 - **指定覆盖率阈值**："函数覆盖率 90%"、"覆盖率不低于 95%"、"coverage threshold 85%" → 写入 `session.coverage_threshold`，默认 90
@@ -129,6 +129,7 @@ compatibility:
 |-------|------|------|
 | 项目准备 | `phases/project_preparer.md` | 拉取代码、校验基线、安装依赖、验证构建环境；用户提供 repo_url 时第一道前置 |
 | 环境门禁 | `phases/environment_check.md` | MCP 提供方解析（远端优先，本地兜底）、索引、验证；失败硬终止 |
+| **函数重要性探测** | `phases/importance_inventory.md` | **Mode 1**：扫描知识图谱，为每个方法评分分级（🌟high/⚖mid/💤low），产出 `.ut-inventory.json`，按分级差异化设定覆盖率门禁 |
 | 框架搭建 | `phases/framework_builder.md` | {test_dir}/ 脚手架、CMake、stub、runner、report_generator |
 | 类分析 | `phases/class_analyzer.md` | MCP 拉类+方法、GUI 识别、按复杂度规划用例数 |
 | 依赖追踪 | `phases/dependency_tracer.md` | MCP trace_path 出向、stub 决策矩阵、收集源码目录 |
@@ -151,7 +152,8 @@ compatibility:
 - `mcp_provider` / `mcp_provider_type`：解析到的知识图谱 MCP 提供方
 - `status`: `pending` / `in_progress` / `done` / `failed` / `skipped` / `stale`
 - `failure_reason`: `null` / `compile_error` / `runtime_crash` / `stub_incomplete` / `source_defect_compile` / `source_defect_runtime` / `source_defect_logic` / `needs_manual` / `max_iterations_exceeded`
-- `coverage_threshold`: 函数覆盖率门禁阈值，默认 90
+- `coverage_threshold`: 函数覆盖率门禁阈值，默认 90（旧格式，向后兼容；新格式见 `inventory_path` 中的分级门禁）
+- `inventory_path`: Mode 1 产出的 `.ut-inventory.json` 路径；存在时按方法分级设覆盖率门禁（🌟high: 行90%+分支80%+函数100%，⚖mid: 行60%+函数100%，💤low: 无硬性门禁）
 - `iteration_count`：逐类闭环迭代轮数（1-3），达到 3 时强制标 `failed` + `max_iterations_exceeded`（Iron Law #13）
 - `committed_classes` / `commit_history`：批次提交审计
 
@@ -170,9 +172,11 @@ compatibility:
 | CMake 模板 | `resources/templates/cmake-*.txt` |
 | 编译重试 | per-error 3 次，max 10 loops |
 | 函数覆盖率阈值 | 默认 90%，可由用户指定；低于阈值触发增量补全 |
+| 分级覆盖率门禁 | Mode 1 产出 `.ut-inventory.json` 后按方法分级：🌟high 行90%+分支80%+函数100%；⚖mid 行60%+函数100%；💤low 无硬性门禁 |
 | MCP 提供方指南 | `resources/references/mcp-providers.md` |
 | MCP 使用指南 | `resources/references/codebase-memory-guide.md` |
 | 测试方法论 | `resources/references/test-types.md` |
+| 覆盖率分级 | `resources/references/coverage-tiers.md` |
 
 ---
 

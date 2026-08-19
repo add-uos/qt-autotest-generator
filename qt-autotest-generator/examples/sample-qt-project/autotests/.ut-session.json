@@ -4,6 +4,8 @@
   "test_dir": "autotests",
   "baseline_commit": "a1b2c3d",
   "qt_version": 5,
+  "coverage_threshold": 90,
+  "inventory_path": "autotests/.ut-inventory.json",
   "classes": [
     {
       "name": "Calculator",
