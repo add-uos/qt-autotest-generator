@@ -46,10 +46,6 @@ inventory = read_json(inventory_path)
 gui_names = {c["name"] for c in inventory.get("classes", []) if c.get("is_gui")}
 ```
 
-### 1. 项目准备（按需）
-
-若用户提供 `repo_url` + `branch` → `Read prompts/project_preparer.md`
-
 ### 2. 环境门禁
 
 `Read prompts/environment_check.md` → MCP 提供方解析、索引验证

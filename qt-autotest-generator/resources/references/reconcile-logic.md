@@ -6,10 +6,8 @@
 
 ```
 1. 读 {test_dir}/.ut-inventory.json（不存在 → 首次运行）
-2. 首次运行：
-   a. 用户提供了 repo_url + branch → 执行项目准备（prompts/project_preparer.md）
-      项目准备完成后 → 环境检查（prompts/environment_check.md）→ 框架搭建（prompts/framework_builder.md）
-   b. 用户提供了本地 project_path → 环境检查 → 框架搭建
+2. 首次运行（用户提供本地 project_path）：
+   → 环境检查（prompts/environment_check.md）→ 框架搭建（prompts/framework_builder.md）
 3. 有 inventory：
    a. 重新校验 MCP 提供方：确认该提供方仍可用（`list_projects()` 可调通）且目标项目仍索引 ready。
       若提供方已失联（如远端断开），重新走环境检查解析

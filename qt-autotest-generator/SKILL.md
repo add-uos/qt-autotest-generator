@@ -3,7 +3,7 @@ name: qt-autotest-generator
 description: "Qt CMake 项目单元测试：函数重要性探测（Mode 1，生成 .ut-inventory.json 分级表）或按分级补全 GTest 用例（Mode 2，编译验证+覆盖率门禁+更新 usecase_count）。触发于「扫描函数重要性/生成 inventory/探测分级/项目初始化单测分析」→ Mode 1；「生成单测/补全测试/add gtest/写测试/建测试框架/修测试/重新对账」→ Mode 2。硬门禁：codebase-memory-mcp 知识图谱（远端优先，本地兜底）。不触发于：非 Qt 或非 CMake 项目、Qt Test/Catch2 框架、仅运行测试/配 CI 不生成测试代码。"
 version: "3.0.0"
 user-invocable: true
-argument-hint: "[项目路径 / 模块路径 / 类名 / repo_url 分支名]"
+argument-hint: "[项目路径 / 模块路径 / 类名]"
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash
 compatibility:
   required_mcp_any_of:
@@ -64,7 +64,6 @@ Mode 2 的子步骤按需读取：
 
 | 子步骤 | 文件 | 何时读 |
 |--------|------|--------|
-| 项目准备 | `prompts/project_preparer.md` | 用户提供 repo_url 时 |
 | 框架搭建 | `prompts/framework_builder.md` | `{test_dir}/` 不存在时 |
 | 类准备 | `prompts/inventory.md` | 方法分级入表，`test_writer` §4 从中提取待测类 |
 | 依赖追踪 | `prompts/dependency_tracer.md` | 读 inventory 的 is_gui、MCP trace_path 出向、stub 决策、CMake 目录 |
@@ -92,7 +91,6 @@ Mode 2 的子步骤按需读取：
 | 步骤 | 文件 | 用途 |
 |------|------|------|
 | 门禁 | `prompts/environment_check.md` | MCP 提供方解析、索引验证 |
-| 项目准备 | `prompts/project_preparer.md` | 拉取代码、校验基线、安装依赖 |
 | 框架搭建 | `prompts/framework_builder.md` | `{test_dir}/` 脚手架、CMake、stub、runner |
 | 依赖追踪 | `prompts/dependency_tracer.md` | 读 inventory 的 is_gui、MCP trace_path、stub 决策、CMake 目录 |
 | 测试代码生成 | `prompts/test_code_gen.md` | 读模板生成测试代码、AAA、命名 |
