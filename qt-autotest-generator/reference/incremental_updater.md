@@ -2,7 +2,7 @@
 
 > 前置条件：目标类已有测试文件（`class_status[classname]` 中 `test_file` 存在，`status` 为 `done` 或 `self_check_failed`（内存变量）），图谱 ready。
 
-> 通过 mcp_provider 调用知识图谱工具（详见 resources/references/mcp-providers.md）
+> 通过 mcp_provider 调用知识图谱工具（详见 reference/mcp-providers.md）
 
 ## 概述
 

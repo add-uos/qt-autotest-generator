@@ -2,7 +2,7 @@
 
 > 前置条件：目标类 `build_result=fail` 或 `run_result=fail`（`class_status[classname].status=failed`（内存变量））；或源码变更后方法删除导致测试引用失效。
 
-> 通过 mcp_provider 调用知识图谱工具（详见 resources/references/mcp-providers.md）
+> 通过 mcp_provider 调用知识图谱工具（详见 reference/mcp-providers.md）
 
 ## 概述
 

@@ -2,7 +2,7 @@
 
 ## 概述
 
-方法按重要性分为三级，每级有差异化的覆盖率门禁。分类依据来自 Mode 1（函数重要性探测，详见 `prompts/inventory.md`）产出的 `.ut-inventory.json`。
+方法按重要性分为三级，每级有差异化的覆盖率门禁。分类依据来自 Mode 1（函数重要性探测，详见 `reference/inventory.md`）产出的 `.ut-inventory.json`。
 
 ## 分级定义
 
@@ -58,6 +58,6 @@ class_tier = max(m.level for m in class_methods if m.testable)
 ## 产出文件
 
 - 产出路径：`${test_dir}/.ut-inventory.json`
-- 格式详见：`resources/references/inventory-schema.md`
+- 格式详见：`reference/inventory-schema.md`
 - 由 `scripts/scan_inventory.py` 从预采集的 MCP 图谱数据生成
 - MCP 数据采集格式见：`scripts/fetch_mcp_data.py`

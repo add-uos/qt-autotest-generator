@@ -124,12 +124,12 @@ Claude Code、Cursor、opencode 等兼容 AgentSkills 的客户端，具体落�
 
 - [技能入口与工作流](SKILL.md)
 - [详细安装说明](INSTALL.md)
-- [Inventory JSON 结构](resources/references/inventory-schema.md)
-- [MCP 提供方解析指南](resources/references/mcp-providers.md)
-- [覆盖率分级门禁](resources/references/coverage-tiers.md)
-- [对账逻辑](resources/references/reconcile-logic.md)
-- [codebase-memory-mcp 使用指南](resources/references/codebase-memory-guide.md)
-- [单元测试用例设计方法论](resources/references/test-types.md)
+- [Inventory JSON 结构](reference/inventory-schema.md)
+- [MCP 提供方解析指南](reference/mcp-providers.md)
+- [覆盖率分级门禁](reference/coverage-tiers.md)
+- [对账逻辑](reference/reconcile-logic.md)
+- [codebase-memory-mcp 使用指南](reference/codebase-memory-guide.md)
+- [单元测试用例设计方法论](reference/test-types.md)
 - [示例项目](examples/README.md)
 
 ---

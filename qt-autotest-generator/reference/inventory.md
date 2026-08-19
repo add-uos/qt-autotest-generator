@@ -308,7 +308,7 @@ Agent 输出 Markdown 摘要 + review_queue，与用户交互：
 
 ## 产出文件结构
 
-完整 JSON Schema 详见 `resources/references/inventory-schema.md`。
+完整 JSON Schema 详见 `reference/inventory-schema.md`。
 
 关键字段速查：
 

@@ -16,13 +16,13 @@ compatibility:
 
 # Qt Autotest Generator
 
-基于 **codebase-memory-mcp 知识图谱** 的 Qt CMake 项目单元测试技能。支持三种模式；分步指令在 **`prompts/`**，执行前须 **`Read`** 对应文件。
+基于 **codebase-memory-mcp 知识图谱** 的 Qt CMake 项目单元测试技能。支持三种模式；分步指令在 **`reference/`**，执行前须 **`Read`** 对应文件。
 
 | 模式 | 何时用 | 主入口 |
 |------|--------|--------|
-| **Mode 1 · 函数重要性探测** | 项目初始化、扫描方法分级、生成 inventory | 下文 + `Read prompts/inventory.md` |
-| **Mode 2 · 单元测试编写** | 按 inventory 补全 GTest 用例 | 下文 + `Read prompts/test_writer.md` |
-| **Mode 3 · 覆盖率采集与汇总** | 只采集/统计覆盖率，不生成测试代码 | `Read prompts/report_generator.md` + `scripts/collect-coverage-report.py` |
+| **Mode 1 · 函数重要性探测** | 项目初始化、扫描方法分级、生成 inventory | 下文 + `Read reference/inventory.md` |
+| **Mode 2 · 单元测试编写** | 按 inventory 补全 GTest 用例 | 下文 + `Read reference/test_writer.md` |
+| **Mode 3 · 覆盖率采集与汇总** | 只采集/统计覆盖率，不生成测试代码 | `Read reference/report_generator.md` + `scripts/collect-coverage-report.py` |
 
 Mode 2 启动时若 `.ut-inventory.json` 不存在 → **自动触发 Mode 1**。
 
@@ -33,7 +33,7 @@ Mode 3 为**只读采集**，不生成/修改测试代码，适合「跑一下�
 - **语言**：默认与用户语种一致；技术术语用行业常用表述。
 - **测试框架**：Google Test only，不用 Qt Test / Catch2。
 - **测试目录**：优先 `autotests/`；若项目已有 `tests/` 且含 C++ GTest 代码，则沿用 `tests/`。目录在 environment_check 阶段一次性探测确定。
-- **知识图谱 MCP 硬门禁**：无图谱索引不执行，不降级到文件扫描/LSP。远端优先，本地兜底，互斥使用其一。详见 `resources/references/mcp-providers.md`。
+- **知识图谱 MCP 硬门禁**：无图谱索引不执行，不降级到文件扫描/LSP。远端优先，本地兜底，互斥使用其一。详见 `reference/mcp-providers.md`。
 - **不修源码**：疑似源码缺陷只标红交还用户。
 - **只 APPEND 不改已有**：修改根 CMakeLists.txt 和测试 CMake 时只追加新行。
 - **不问用户确认**：直接执行。
@@ -50,9 +50,9 @@ Mode 3 为**只读采集**，不生成/修改测试代码，适合「跑一下�
 
 ## Mode 1 · 函数重要性探测
 
-1. **对账（reconcile）**：`Read` `resources/references/reconcile-logic.md` → 首次运行（无 inventory）直接进入步骤 2；inventory 已存在且 `base_sha` 漂移时按差异路由后再决定是否全量重扫
-2. **`Read`** `prompts/environment_check.md` → MCP 门禁
-3. **`Read`** `prompts/inventory.md` → 全量扫描 → 评分 → 产出 `.ut-inventory.json` + `inventory-summary.md`
+1. **对账（reconcile）**：`Read` `reference/reconcile-logic.md` → 首次运行（无 inventory）直接进入步骤 2；inventory 已存在且 `base_sha` 漂移时按差异路由后再决定是否全量重扫
+2. **`Read`** `reference/environment_check.md` → MCP 门禁
+3. **`Read`** `reference/inventory.md` → 全量扫描 → 评分 → 产出 `.ut-inventory.json` + `inventory-summary.md`
 
 Mode 1 **不生成测试代码、不编译、不运行**，只建表。
 
@@ -60,7 +60,7 @@ Mode 1 **不生成测试代码、不编译、不运行**，只建表。
 
 ## Mode 3 · 覆盖率采集与汇总
 
-1. **`Read`** `prompts/report_generator.md` → 调用 `scripts/collect-coverage-report.py`
+1. **`Read`** `reference/report_generator.md` → 调用 `scripts/collect-coverage-report.py`
 2. 脚本一条命令完成：运行测试 → lcov 采集 → genhtml → 分级覆盖率 → 汇总 JSON
 3. 产出：`report/`（gtest XML）+ `html/`（lcov HTML）+ `coverage_by_level.json`（分级详情）+ `ut-summary.json`（三合一汇总）
 
@@ -70,51 +70,51 @@ Mode 3 **不生成测试代码、不编译新测试、不修改项目**，只采
 
 ## Mode 2 · 单元测试编写
 
-1. **对账（reconcile）**：`Read` `resources/references/reconcile-logic.md` → 若 inventory 不存在走首次运行（步骤 3 会触发 Mode 1）；若 `base_sha` 已漂移按差异路由（新增/签名变更/删除/分支切换）后再进入下方主流程
-2. **`Read`** `prompts/environment_check.md` → MCP 门禁
+1. **对账（reconcile）**：`Read` `reference/reconcile-logic.md` → 若 inventory 不存在走首次运行（步骤 3 会触发 Mode 1）；若 `base_sha` 已漂移按差异路由（新增/签名变更/删除/分支切换）后再进入下方主流程
+2. **`Read`** `reference/environment_check.md` → MCP 门禁
 3. 检查 `{test_dir}/.ut-inventory.json` → 不存在则先执行 Mode 1
-4. **`Read`** `prompts/test_writer.md` → 逐类闭环 → 编译验证 → 更新 `usecase_count`
+4. **`Read`** `reference/test_writer.md` → 逐类闭环 → 编译验证 → 更新 `usecase_count`
 
 Mode 2 的子步骤按需读取：
 
 | 子步骤 | 文件 | 何时读 |
 |--------|------|--------|
-| 框架搭建 | `prompts/framework_builder.md` | `{test_dir}/` 不存在时 |
-| 类准备 | `prompts/inventory.md` | 方法分级入表，`test_writer` §4 从中提取待测类 |
-| 依赖追踪 | `prompts/dependency_tracer.md` | 读 inventory 的 is_gui、MCP trace_path 出向、stub 决策、CMake 目录 |
-| 测试代码生成 | `prompts/test_code_gen.md` | 逐类闭环第 2 步 |
-| 编译验证 | `prompts/build_verifier.md` | 逐类闭环第 3 步 |
-| 自检 | `prompts/self_checker.md` | 逐类闭环第 4 步 |
-| 增量补全 | `prompts/incremental_updater.md` | 覆盖率缺口时 |
-| 失败修复 | `prompts/failure_repairer.md` | 编译/运行失败时 |
-| 代码提交 | `prompts/code_committer.md` | 批次自检通过后 |
-| 报告生成 | `prompts/report_generator.md` | Mode 3 覆盖率采集与汇总 |
+| 框架搭建 | `reference/framework_builder.md` | `{test_dir}/` 不存在时 |
+| 类准备 | `reference/inventory.md` | 方法分级入表，`test_writer` §4 从中提取待测类 |
+| 依赖追踪 | `reference/dependency_tracer.md` | 读 inventory 的 is_gui、MCP trace_path 出向、stub 决策、CMake 目录 |
+| 测试代码生成 | `reference/test_code_gen.md` | 逐类闭环第 2 步 |
+| 编译验证 | `reference/build_verifier.md` | 逐类闭环第 3 步 |
+| 自检 | `reference/self_checker.md` | 逐类闭环第 4 步 |
+| 增量补全 | `reference/incremental_updater.md` | 覆盖率缺口时 |
+| 失败修复 | `reference/failure_repairer.md` | 编译/运行失败时 |
+| 代码提交 | `reference/code_committer.md` | 批次自检通过后 |
+| 报告生成 | `reference/report_generator.md` | Mode 3 覆盖率采集与汇总 |
 
 ---
 
-## Prompt 文件映射
+## Reference 文件映射
 
 ### Mode 1
 
 | 步骤 | 文件 | 用途 |
 |------|------|------|
-| 门禁 | `prompts/environment_check.md` | MCP 提供方解析、索引验证 |
-| 主流程 | `prompts/inventory.md` | 全量扫描 → 评分 → 产出 `.ut-inventory.json`（含 classes/is_gui） |
+| 门禁 | `reference/environment_check.md` | MCP 提供方解析、索引验证 |
+| 主流程 | `reference/inventory.md` | 全量扫描 → 评分 → 产出 `.ut-inventory.json`（含 classes/is_gui） |
 
 ### Mode 2
 
 | 步骤 | 文件 | 用途 |
 |------|------|------|
-| 门禁 | `prompts/environment_check.md` | MCP 提供方解析、索引验证 |
-| 框架搭建 | `prompts/framework_builder.md` | `{test_dir}/` 脚手架、CMake、stub、runner |
-| 依赖追踪 | `prompts/dependency_tracer.md` | 读 inventory 的 is_gui、MCP trace_path、stub 决策、CMake 目录 |
-| 测试代码生成 | `prompts/test_code_gen.md` | 读模板生成测试代码、AAA、命名 |
-| 编译验证 | `prompts/build_verifier.md` | 强制编译+运行、错误分类→修复表 |
-| 自检 | `prompts/self_checker.md` | 覆盖率/命名/SPDX/stub/断言强度/环境隔离 |
-| 增量补全 | `prompts/incremental_updater.md` | 图谱差集补缺失用例、CMake 智能合并 |
-| 失败修复 | `prompts/failure_repairer.md` | 失败修复 + 根因分类 + 源码缺陷标红 |
-| 代码提交 | `prompts/code_committer.md` | 批次增量提交（只 commit 不 push） |
-| 报告生成 | `prompts/report_generator.md` | Mode 3：覆盖率采集 + 汇总 JSON（含分级） |
+| 门禁 | `reference/environment_check.md` | MCP 提供方解析、索引验证 |
+| 框架搭建 | `reference/framework_builder.md` | `{test_dir}/` 脚手架、CMake、stub、runner |
+| 依赖追踪 | `reference/dependency_tracer.md` | 读 inventory 的 is_gui、MCP trace_path、stub 决策、CMake 目录 |
+| 测试代码生成 | `reference/test_code_gen.md` | 读模板生成测试代码、AAA、命名 |
+| 编译验证 | `reference/build_verifier.md` | 强制编译+运行、错误分类→修复表 |
+| 自检 | `reference/self_checker.md` | 覆盖率/命名/SPDX/stub/断言强度/环境隔离 |
+| 增量补全 | `reference/incremental_updater.md` | 图谱差集补缺失用例、CMake 智能合并 |
+| 失败修复 | `reference/failure_repairer.md` | 失败修复 + 根因分类 + 源码缺陷标红 |
+| 代码提交 | `reference/code_committer.md` | 批次增量提交（只 commit 不 push） |
+| 报告生成 | `reference/report_generator.md` | Mode 3：覆盖率采集 + 汇总 JSON（含分级） |
 
 ---
 
@@ -147,13 +147,13 @@ Mode 2 的子步骤按需读取：
 | CMake 模板 | `templates/cmake-*.txt` |
 | 编译重试 | per-error 3 次，max 10 loops |
 | 函数覆盖率阈值 | 默认 90%，可由用户指定 |
-| MCP 提供方指南 | `resources/references/mcp-providers.md` |
-| MCP 使用指南 | `resources/references/codebase-memory-guide.md` |
-| 测试方法论 | `resources/references/test-types.md` |
-| 覆盖率分级 | `resources/references/coverage-tiers.md` |
+| MCP 提供方指南 | `reference/mcp-providers.md` |
+| MCP 使用指南 | `reference/codebase-memory-guide.md` |
+| 测试方法论 | `reference/test-types.md` |
+| 覆盖率分级 | `reference/coverage-tiers.md` |
 | 分级覆盖率采集 | `scripts/collect-coverage-report.py`（Mode 3） |
-| Inventory Schema | `resources/references/inventory-schema.md` |
-| 对账逻辑 | `resources/references/reconcile-logic.md` |
+| Inventory Schema | `reference/inventory-schema.md` |
+| 对账逻辑 | `reference/reconcile-logic.md` |
 
 ---
 
@@ -201,9 +201,9 @@ vendored [stub-ext](https://github.com/guyongling/stub-ext) 库源码，用于�
 ```
 □ 已区分 Mode 1（分析）/ Mode 2（编写）/ Mode 3（采集），未混跑
 □ 已执行 reconcile（比对 git HEAD 与 inventory.base_sha，按差异路由；首次运行无 inventory 直接进入环境检查）
-□ Mode 1：已 Read prompts/environment_check.md + prompts/inventory.md；产出 .ut-inventory.json
-□ Mode 2：已 Read prompts/environment_check.md；.ut-inventory.json 存在（不存在则先执行 Mode 1）
-□ Mode 2：已按步骤 Read 对应 prompts 子步骤文件
+□ Mode 1：已 Read reference/environment_check.md + reference/inventory.md；产出 .ut-inventory.json
+□ Mode 2：已 Read reference/environment_check.md；.ut-inventory.json 存在（不存在则先执行 Mode 1）
+□ Mode 2：已按步骤 Read 对应 reference 子步骤文件
 □ MCP 提供方已解析（远端优先，本地兜底），互斥使用
 □ 逐类闭环：每类走 依赖追踪 → 测试生成 → 编译验证 → 自检（类列表与 level 来自 inventory）
 □ 单类失败：已记录 failure_reason + 跳过 + 继续下一个类
