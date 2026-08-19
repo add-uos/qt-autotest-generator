@@ -21,6 +21,26 @@ if [ ! -f "${project_path}/CMakeLists.txt" ]; then
 fi
 ```
 
+### 0a. 探测测试目录
+
+确定测试代码存放目录（`autotests/` 或 `tests/`），结果写入 `session.test_dir`：
+
+```
+1. 检查项目根下是否存在 autotests/ 目录
+   → 存在 → test_dir = "autotests"
+2. 若 autotests/ 不存在，检查是否存在 tests/ 目录且含 C++ 测试代码
+   → tests/ 存在且含 CMakeLists.txt 或含 #include <gtest/ 的 .cpp 文件 → test_dir = "tests"
+3. 两者都不存在 → test_dir = "autotests"（默认创建）
+```
+
+**判定规则**：
+- `autotests/` 优先：若已存在，直接使用
+- `tests/` 沿用条件：目录存在 **且** 含 C++ 测试代码（检测到 `CMakeLists.txt` 或 `.cpp` 文件含 `#include <gtest` / `#include <QtTest`）
+- 空 `tests/` 目录（无测试代码）→ 仍用 `autotests/`
+- 目录选择只在本次探测确定，后续全流程从 `session.test_dir` 读取，不再重新判定
+
+将 `test_dir` 值写入 session（见 Step 6）。
+
 ### 1. MCP 提供方解析（远端优先，本地兜底）
 
 **完整解析算法（候选优先级、`probe_available` 探测、远端项目已索引判定、4 种强制提醒规则）见 [`resources/references/mcp-providers.md`](../resources/references/mcp-providers.md)，该文档为单一权威来源。** 本步骤只列执行要点：
@@ -75,7 +95,14 @@ if resolved_provider == "codebase-memory-mcp" and target is None:
 
 ```python
 import time
+max_wait = 300  # 硬超时 300 秒（5 分钟）
+start = time.time()
 while True:
+    elapsed = time.time() - start
+    if elapsed > max_wait:
+        # 硬终止：远端索引 5 分钟未 ready
+        print("[FATAL] 远端索引 5 分钟未 ready，请手动刷新远端或切换本地提供方")
+        break
     status = provider.index_status(project=project_name)
     if status.status == "ready":
         break
@@ -105,12 +132,13 @@ if result.total == 0:
 
 ### 6. 写入 session 文件
 
-初始化或更新 `autotests/.ut-session.json`：
+初始化或更新 `{test_dir}/.ut-session.json`：
 
 ```json
 {
   "project_path": "<project_path>",
   "project_name_in_graph": "<project_name>",
+  "test_dir": "autotests",
   "mcp_provider": "<resolved_provider>",
   "mcp_provider_type": "<remote|local>",
   "baseline_commit": "<git rev-parse HEAD>",

@@ -252,6 +252,24 @@ install_from_official_script() {
         }
     fi
 
+    # SHA256 校验（防止供应链篡改）
+    # 注意：此校验值需随上游 install.sh 更新而同步更新
+    # 若校验失败且确认上游已更新，请更新 CBM_INSTALL_SHA256 值
+    local cbm_install_sha256
+    cbm_install_sha256="${CBM_INSTALL_SHA256:-}"
+    if [ -n "$cbm_install_sha256" ]; then
+        log_info "校验 install.sh 完整性 (SHA256)..."
+        echo "$cbm_install_sha256  $tmp_script" | sha256sum -c >/dev/null 2>&1 || {
+            log_error "SHA256 校验失败！文件可能被篡改"
+            log_error "若确认上游已更新，请设置 CBM_INSTALL_SHA256 环境变量为新值"
+            log_error "跳过校验: CBM_INSTALL_SHA256= bash $0"
+            return 1
+        }
+        log_ok "SHA256 校验通过"
+    else
+        log_warn "未设置 CBM_INSTALL_SHA256，跳过完整性校验（建议设置以增强安全性）"
+    fi
+
     log_info "执行安装脚本（该过程会自动检测并配置 MCP 客户端）..."
     if ! bash "$tmp_script"; then
         log_error "官方 install.sh 执行失败"

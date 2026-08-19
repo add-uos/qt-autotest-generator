@@ -1,7 +1,8 @@
-// SPDX-FileCopyrightText: 2026 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: {SPDX_YEAR} UnionTech Software Technology Co., Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <gtest/gtest.h>
+// #include <QCoreApplication>  // GUI 类需要此 include，由 test_writer 按需取消注释
 #include "stubext.h"
 #include "{header_file}"
 

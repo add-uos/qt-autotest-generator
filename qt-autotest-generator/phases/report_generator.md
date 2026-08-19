@@ -12,16 +12,16 @@
 
 报告生成器入口是 `report_generator/main.py`，已内置 `__main__` CLI 块，可直接调用。它会自动从 `.results/test_*.xml`（gtest XML）和 `.reports/test_output.log`（ctest 输出）两个来源合并解析测试结果：
 
-```bash
-cd ${PROJECT_PATH}/autotests
-python3 -m report_generator.main \
-  --build-dir ${PROJECT_PATH}/build-autotests \
-  --report-dir ${PROJECT_PATH}/autotests/.reports \
-  --project-root ${PROJECT_PATH} \
-  --results-dir ${PROJECT_PATH}/autotests/.results
-```
+test_dir = session.test_dir  # "autotests" 或 "tests"
 
-若 `run-ut.sh` 已跑过（产出了 `test_output.log`），报告生成器优先用 ctest 合并输出；否则回退到逐类 gtest XML 解析。覆盖率数据从 `build-autotests/coverage/filtered.info` 自动检测。
+cd ${PROJECT_PATH}/${test_dir}
+python3 -m report_generator.main \
+  --build-dir ${PROJECT_PATH}/build-${test_dir} \
+  --report-dir ${PROJECT_PATH}/${test_dir}/.reports \
+  --project-root ${PROJECT_PATH} \
+  --results-dir ${PROJECT_PATH}/${test_dir}/.results
+
+若 `run-ut.sh` 已跑过（产出了 `test_output.log`），报告生成器优先用 ctest 合并输出；否则回退到逐类 gtest XML 解析。覆盖率数据从 `build-{test_dir}/coverage/filtered.info` 自动检测。
 
 ### 2. 补充 session 维度的报告数据
 
@@ -31,7 +31,7 @@ python3 -m report_generator.main \
 - 每类 `status`（done / failed / skipped）
 - 每类 `failure_reason`
 
-将这部分追加到报告或单独生成 `autotests/.reports/session-summary.json`。
+将这部分追加到报告或单独生成 `{test_dir}/.reports/session-summary.json`。
 
 ### 3. 生成疑似源码缺陷清单
 
@@ -71,7 +71,7 @@ python3 -m report_generator.main \
 
 ### 4. 流程复盘数据（可选）
 
-从 session 聚合流程维度统计，追加到报告或单独生成 `autotests/.reports/process-summary.json`：
+从 session 聚合流程维度统计，追加到报告或单独生成 `{test_dir}/.reports/process-summary.json`：
 
 ```json
 {
@@ -130,7 +130,7 @@ python3 -m report_generator.main \
 {
   "last_phase": "report_generation",
   "overall_status": "complete",
-  "report_path": "autotests/.reports/report.html"
+  "report_path": "{test_dir}/.reports/report.html"
 }
 ```
 
@@ -146,7 +146,7 @@ python3 -m report_generator.main \
 
 ## 产出
 
-- `autotests/.reports/report.html`：HTML 报告
-- `autotests/.reports/report.csv`：CSV 报告
-- `autotests/.reports/session-summary.json`：session 维度数据
+- `{test_dir}/.reports/report.html`：HTML 报告
+- `{test_dir}/.reports/report.csv`：CSV 报告
+- `{test_dir}/.reports/session-summary.json`：session 维度数据
 - session 更新 `last_phase` + `overall_status=complete`

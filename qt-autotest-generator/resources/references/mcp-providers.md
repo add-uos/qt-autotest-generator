@@ -114,7 +114,7 @@ if not matched:
 
 ## 5. 会话记录
 
-解析结果写入 `autotests/.ut-session.json`：
+解析结果写入 `{test_dir}/.ut-session.json`：
 
 ```json
 {

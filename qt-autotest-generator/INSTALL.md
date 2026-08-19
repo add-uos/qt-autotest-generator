@@ -152,4 +152,4 @@ Could not find Qt6::Widgets
 undefined reference to stub_ext::freeWrapper
 ```
 
-解决：确认 `autotests/3rdparty/stub/stub-shadow.cpp` 已编入 test target（CMakeLists 检查）。
+解决：确认 `{test_dir}/3rdparty/stub/stub-shadow.cpp` 已编入 test target（CMakeLists 检查）。

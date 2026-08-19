@@ -1,6 +1,6 @@
 # 类分析
 
-> 前置条件：`environment_check` 已通过（图谱 ready），`framework_builder` 已通过（`autotests/` 存在），session 中 `project_name_in_graph` 已记录。
+> 前置条件：`environment_check` 已通过（图谱 ready），`framework_builder` 已通过（`{test_dir}/` 存在），session 中 `project_name_in_graph` 已记录。
 
 > 通过 session.mcp_provider 调用知识图谱工具（详见 resources/references/mcp-providers.md）
 
@@ -11,6 +11,17 @@
 支持两种模式：
 - `full`（全量分析）：分析目标范围内所有类
 - `diff`（对账模式）：与 session 记录做差集，找出新增/删除/签名变更的方法
+
+### 分支切换后的 stale 类处理
+
+当 reconcile 检测到分支切换时，类分析需额外处理：
+
+1. 遍历 `session.classes`，用 MCP `get_code_snippet` 或 `git show HEAD:<file_path>` 检查每个类的源文件是否在当前分支仍存在
+2. 不存在的类 → 标记 `status="stale"`，更新到 session
+3. 从 `{test_dir}/CMakeLists.txt` 中移除 stale 类对应的 `add_subdirectory` 行（避免编译失败）
+4. **保留** stale 类的测试文件（不删除，供切回原分支后恢复）
+5. 将 stale 类名列表写入 `session.stale_classes`
+6. 新分支的类走正常的 `full` 或 `diff` 分析
 
 ## 工作步骤
 
@@ -52,7 +63,6 @@ for cls in classes:
 **访问级别过滤**：
 - 只保留 **public** 和 **protected** 方法
 - **绝不**为 private 方法生成测试（不可访问）
-- 用 LSP `lsp_symbols`(scope=document) 补充确认访问级别（图谱对部分语言支持不全）
 
 ### 4. GUI 继承识别
 
@@ -148,3 +158,12 @@ removed_methods = recorded_methods - current_methods       # 删除
 - 截断时必须提高 limit 或缩小范围，不忽略 `has_more`
 - 不跳过 GUI 识别（GUI 类不特殊处理会导致 segfault）
 - 不修改项目源码
+
+### MCP 查询失败处理策略
+
+| 查询类型 | 严重程度 | 失败处理 |
+|---------|---------|----------|
+| `search_graph`（类/方法结构） | 关键 | **硬终止** + 明确错误：`[FATAL] 图谱类结构查询失败，请检查 MCP 提供方和索引状态` |
+| `get_code_snippet`（源码签名） | 关键 | **硬终止** + 明确错误：无法获取源码签名则不能生成测试 |
+| `trace_path`（依赖链） | 关键 | **硬终止** + 明确错误：依赖追踪失败则 CMake 无法正确配置 |
+| `query_graph`（辅助查询） | 非关键 | **降级** + 警告：返回空时用文件读取兜底，继续执行 |

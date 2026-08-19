@@ -9,7 +9,8 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AUTOTEST_ROOT="${AUTOTEST_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)/autotests}"
+TEST_DIR="${TEST_DIR:-autotests}"
+AUTOTEST_ROOT="${AUTOTEST_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)/${TEST_DIR}}"
 
 GREEN='\033[0;32m'
 NC='\033[0m'
@@ -39,24 +40,9 @@ endfunction()
 function(ut_init_test_environment)
     message(STATUS "UT: Initializing test environment...")
     
-    # 根据用户选择的测试框架进行初始化
-    if(USE_QT_TEST)
-        # Qt Test 框架
-        find_package(Qt${QT_VERSION} COMPONENTS Test REQUIRED)
-        message(STATUS "UT: Using Qt${QT_VERSION} Test")
-    elseif(USE_GTEST)
-        # Google Test 框架
-        find_package(GTest REQUIRED)
-        message(STATUS "UT: Using Google Test")
-    elseif(USE_CATCH2)
-        # Catch2 框架
-        find_package(Catch2 3 REQUIRED)
-        message(STATUS "UT: Using Catch2")
-    else()
-        # 默认使用 Google Test
-        find_package(GTest REQUIRED)
-        message(STATUS "UT: Using Google Test (default)")
-    endif()
+    # Google Test only (Iron Law #3)
+    find_package(GTest REQUIRED)
+    message(STATUS "UT: Using Google Test")
     
     # 设置 stub 工具
     ut_setup_test_stubs()
@@ -68,7 +54,7 @@ function(ut_init_test_environment)
 endfunction()
 
 function(ut_setup_test_stubs)
-    if(NOT EXISTS "${CMAKE_SOURCE_DIR}/autotests/3rdparty/stub")
+    if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${TEST_DIR_PLACEHOLDER}/3rdparty/stub")
         message(WARNING "UT: stub not found, stub functionality will be limited")
         return()
     endif()
@@ -76,9 +62,9 @@ function(ut_setup_test_stubs)
     message(STATUS "UT: Setting up test stubs...")
     
     file(GLOB STUB_SRC_FILES
-        "${CMAKE_SOURCE_DIR}/autotests/3rdparty/stub/*.h"
-        "${CMAKE_SOURCE_DIR}/autotests/3rdparty/stub/*.hpp"
-        "${CMAKE_SOURCE_DIR}/autotests/3rdparty/stub/*.cpp"
+        "${CMAKE_SOURCE_DIR}/${TEST_DIR_PLACEHOLDER}/3rdparty/stub/*.h"
+        "${CMAKE_SOURCE_DIR}/${TEST_DIR_PLACEHOLDER}/3rdparty/stub/*.hpp"
+        "${CMAKE_SOURCE_DIR}/${TEST_DIR_PLACEHOLDER}/3rdparty/stub/*.cpp"
     )
     
     if(STUB_SRC_FILES)
@@ -89,7 +75,7 @@ function(ut_setup_test_stubs)
         endforeach()
         
         include_directories(
-            "${CMAKE_SOURCE_DIR}/autotests/3rdparty/stub"
+            "${CMAKE_SOURCE_DIR}/${TEST_DIR_PLACEHOLDER}/3rdparty/stub"
         )
         message(STATUS "UT: Stub tools configured")
     else()
@@ -144,14 +130,8 @@ function(ut_create_test_executable test_name)
         message(STATUS "UT: Applied test flags to ${test_name}: ${UT_TEST_CXX_FLAGS}")
     endif()
     
-    # 链接测试框架库
-    if(USE_QT_TEST)
-        target_link_libraries(${test_name} PRIVATE Qt${QT_VERSION}::Test)
-    elseif(USE_GTEST)
-        target_link_libraries(${test_name} PRIVATE GTest::gtest GTest::gtest_main)
-    elseif(USE_CATCH2)
-        target_link_libraries(${test_name} PRIVATE Catch2::Catch2WithMain)
-    endif()
+    # 链接测试框架库 (Google Test only, Iron Law #3)
+    target_link_libraries(${test_name} PRIVATE GTest::gtest GTest::gtest_main)
     
     # 链接用户指定的库
     if(TEST_LINK_LIBRARIES)
@@ -171,6 +151,9 @@ endfunction()
 
 message(STATUS "UT: Unit test utilities loaded")
 CMAKEEOF
+
+    # Replace placeholder with actual TEST_DIR value
+    sed -i "s|\${TEST_DIR_PLACEHOLDER}|${TEST_DIR}|g" "${AUTOTEST_ROOT}/cmake/UnitTestUtils.cmake"
 
     echo -e "${GREEN}[✓]${NC} 生成 cmake/UnitTestUtils.cmake"
 }

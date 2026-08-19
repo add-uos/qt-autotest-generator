@@ -32,7 +32,7 @@ def main():
     parser.add_argument("--build-dir", required=True, help="Build directory path")
     parser.add_argument("--report-dir", required=True, help="Report output directory path")
     parser.add_argument("--project-root", required=True, help="Project root directory path")
-    parser.add_argument("--results-dir", default=None, help="gtest XML results dir (default: <project-root>/autotests/.results)")
+    parser.add_argument("--results-dir", default=None, help="gtest XML results dir (default: <project-root>/{test_dir}/.results)")
     parser.add_argument("--test-passed", required=True, help="Whether tests passed (true/false)")
     parser.add_argument("--test-duration", type=int, required=True, help="Test duration in seconds")
     parser.add_argument("--coverage-success", required=True, help="Whether coverage generation succeeded (true/false)")

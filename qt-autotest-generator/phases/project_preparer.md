@@ -134,12 +134,13 @@ cd "$WT" && rm -rf build-verify
 
 ### 7. 初始化 session 文件
 
-在 `$WT/autotests/.ut-session.json` 写入初始状态：
+在 `$WT/{test_dir}/.ut-session.json` 写入初始状态（`test_dir` 默认为 `autotests`，最终值由 environment_check 阶段探测确定）：
 
 ```json
 {
   "project_path": "<WT 绝对路径>",
   "project_name_in_graph": null,
+  "test_dir": "autotests",
   "repo_url": "<repo_url>",
   "branch": "<branch>",
   "baseline_commit": "<short-sha>",

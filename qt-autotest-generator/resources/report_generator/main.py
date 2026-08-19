@@ -30,7 +30,7 @@ class TestReportGenerator:
         self.build_dir = Path(build_dir)
         self.report_dir = Path(report_dir)
         self.project_root = Path(project_root)
-        self.results_dir = Path(results_dir) if results_dir else self.project_root / "autotests" / ".results"
+        self.results_dir = Path(results_dir) if results_dir else self.project_root / self._detect_test_dir() / ".results"
         self.test_data = {}
         
         # Initialize parsers and generators
@@ -39,6 +39,23 @@ class TestReportGenerator:
         self.html_generator = HtmlReportGenerator(self.build_dir, self.project_root)
         self.csv_generator = CsvReportGenerator(self.report_dir)
     
+    def _detect_test_dir(self) -> str:
+        """Detect test directory name from session file or default to autotests"""
+        session_file = self.project_root / "autotests" / ".ut-session.json"
+        if session_file.exists():
+            try:
+                import json
+                with open(session_file) as f:
+                    data = json.load(f)
+                return data.get("test_dir", "autotests")
+            except Exception:
+                pass
+        # Check if tests/ directory exists with session
+        session_file_tests = self.project_root / "tests" / ".ut-session.json"
+        if session_file_tests.exists():
+            return "tests"
+        return "autotests"
+
     def parse_test_output(self, test_passed: bool, test_duration: int) -> Dict:
         """Parse test output using TestOutputParser"""
         return self.test_parser.parse_test_output(test_passed, test_duration)
@@ -156,15 +173,28 @@ if __name__ == "__main__":
     cli.add_argument("--report-dir", required=True, help="Report output directory")
     cli.add_argument("--project-root", required=True, help="Project root path")
     cli.add_argument("--results-dir", default=None,
-                     help="gtest XML results dir (default: <project-root>/autotests/.results)")
+                     help="gtest XML results dir (default: <project-root>/{test_dir}/.results)"))
     cli.add_argument("--session", default=None,
-                     help="session JSON path (default: <project-root>/autotests/.ut-session.json)")
+                     help="session JSON path (default: <project-root>/{test_dir}/.ut-session.json)"))
     args = cli.parse_args()
 
     build_dir = Path(args.build_dir)
     report_dir = Path(args.report_dir)
     project_root = Path(args.project_root)
     results_dir = Path(args.results_dir) if args.results_dir else project_root / "autotests" / ".results"
+    # Try to detect test_dir from session file
+    for candidate in ["autotests", "tests"]:
+        session_path = project_root / candidate / ".ut-session.json"
+        if session_path.exists():
+            try:
+                import json
+                with open(session_path) as sf:
+                    sd = json.load(sf)
+                candidate = sd.get("test_dir", candidate)
+            except Exception:
+                pass
+            results_dir = project_root / candidate / ".results"
+            break"
 
     report_dir.mkdir(parents=True, exist_ok=True)
 

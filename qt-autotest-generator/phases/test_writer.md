@@ -49,8 +49,6 @@ snippet = codebase_memory_mcp.get_code_snippet(
 )
 ```
 
-**LSP 补充**：若方法涉及重载/模板/宏，用 `lsp_document_symbols` 或 `lsp_goto_definition` 获取精确签名。
-
 ### 2. 读模板
 
 ```python
@@ -66,18 +64,27 @@ read("${SKILL_DIR}/resources/templates/cmake-submodule.txt")
 
 ### 3. 生成测试文件
 
-文件路径：`autotests/<module>/test_<classname>.cpp`（模块名取自 source_dirs 的最后一段）
+文件路径：`{test_dir}/<module>/test_<classname>.cpp`（`test_dir` 从 `session.test_dir` 读取，模块名取自 source_dirs 的最后一段）
 
 替换模板占位符：
-- `{BranchList}` → 分支清单 + 用例映射注释块（test-types §4.1 要求，复杂方法必须落，简单方法可省）；插入位置：`{Namespace}` 之前、`#include` 之后
 - `{header_file}` → 目标类头文件路径（相对项目根）
 - `{ClassName}` → 类名
-- `{Namespace}` / `{NamespaceEnd}` → 命名空间开闭（若有）
-- `{SetUpTestSuite}` / `{TearDownTestSuite}` → GUI 类填 QCoreApplication 初始化；非 GUI 类删除 SetUpTestSuite/TearDownTestSuite 整个函数
+- `{TestCases}` → 生成的测试用例
+- `{SPDX_YEAR}` → 当前年份（如 2026），由 test_writer 填入
+
+**占位符说明**：
+- `{BranchList}` → 分支清单 + 用例映射注释块（test-types §4.1 要求，复杂方法必须落，简单方法可省）；插入位置：`{Namespace}` 之前、`#include` 之后
+- `{Namespace}` / `{NamespaceEnd}` → 命名空间开闭（若有）。若类在命名空间 `namespace X { namespace Y { ... } }` 内，则 `{Namespace}` = `namespace X { namespace Y {`，`{NamespaceEnd}` = `}} // namespace X::Y`；无命名空间则两者均为空
+- `{SetUpTestSuite}` → GUI 类填 QCoreApplication 初始化代码；非 GUI 类删除 SetUpTestSuite/TearDownTestSuite 整个函数
 - `{SetUpObject}` → 非 GUI 类填 `obj = new {ClassName}()`；GUI 类填空或 helper 构造
 - `{TearDownObject}` → 非 GUI 类填 `delete obj`；GUI 类填空
 - `{SetUpStubs}` → dependency_tracer 产出的 stub 初始化代码
-- `{TestCases}` → 生成的测试用例
+
+**同名类消歧**：若项目内存在不同路径下的同名类（如 `A/Manager.h` 和 `B/Manager.h`），测试文件路径按模块路径拆分，不合并：
+- 测试文件路径 = `{test_dir}/{module_path_flattened}/test_{classname}.cpp`
+- 例：`{test_dir}/a/test_manager.cpp` 和 `{test_dir}/b/test_manager.cpp`
+- CMake 子目录按模块路径拆分，每个路径独立 `add_subdirectory`
+- 依赖追踪（`phases/dependency_tracer.md`）需在 `source_dirs` 中区分同名类的模块路径
 
 ### 4. 生成测试用例
 
@@ -191,8 +198,8 @@ read("${SKILL_DIR}/resources/templates/cmake-submodule.txt")
 
 ### 6. 智能合并 CMake
 
-将新生成的 `add_subdirectory(<module>)` 合并到 `autotests/CMakeLists.txt`：
-- 读现有 `autotests/CMakeLists.txt`
+将新生成的 `add_subdirectory(<module>)` 合并到 `{test_dir}/CMakeLists.txt`：
+- 读现有 `{test_dir}/CMakeLists.txt`
 - 若已有该模块的 `add_subdirectory`，跳过
 - 若无，在 `{ADD_SUBDIRECTORIES}` 区域追加
 
@@ -203,7 +210,7 @@ read("${SKILL_DIR}/resources/templates/cmake-submodule.txt")
 ```json
 {
   "status": "test_written",
-  "test_file": "autotests/ui/test_myclass.cpp",
+  "test_file": "{test_dir}/ui/test_myclass.cpp",
   "methods_tested": 15
 }
 ```

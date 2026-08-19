@@ -308,6 +308,10 @@ EXPECT_EQ(obj->itemAt(0), QString("item1"));      // 内容验证
 
 // 17. Mock 类定义（gMock）
 //
+// ⚠️⚠️⚠️ 以下 #include <gmock/gmock.h> 仅为展示 gMock 模式起始位置！
+// 实际使用时，gMock include 必须放测试文件顶部（与 #include <gtest/gtest.h> 同区）。
+// 绝不可照搬此位置到文件中部！
+//
 // 假设被测代码有接口：
 //   class IStorage {
 //   public:
@@ -410,3 +414,26 @@ TEST_F(ManagerTest, Load_DefaultConfig_ReturnsCached) {
 //   Field(&T::m, m_)        结构体字段匹配
 
 // ==================== gMock 模式结束 ====================
+
+// ==================== 20. 访问 protected/private 成员（仅测试文件内，不改源码） ====================
+//
+// 方法 1：#define 预处理（最常用，推荐）
+// #define 必须在 #include 之前，且 #undef 紧随其后防止污染
+//
+// #define protected public
+// #define private public
+// #include "myclass.h"
+// #undef protected
+// #undef private
+//
+// 注意：此方法仅用于测试文件中暴露被测类的 protected/private 成员，
+// 不适用于修改第三方头文件的访问级别（可能导致 ODR 违规）。
+// Iron Law #9 禁止修改源码，因此方法 2（FRIEND_TEST）不适用。
+//
+// 方法 2：测试友元（需源码加 FRIEND_TEST 声明，但 Iron Law #9 禁止改源码，此方法不适用）
+// class MyClass {
+//     FRIEND_TEST(MyClassTest, TestPrivateMethod);  // 需在源码中添加
+//     ...
+// };
+
+// ==================== Stub 模式结束 ====================

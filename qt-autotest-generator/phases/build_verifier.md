@@ -1,6 +1,6 @@
 # 编译验证
 
-> 前置条件：`test_writer` 已完成目标类（session 中 `status=test_written`），`autotests/<module>/test_<classname>.cpp` 存在。
+> 前置条件：`test_writer` 已完成目标类（session 中 `status=test_written`），`{test_dir}/<module>/test_<classname>.cpp` 存在。
 
 > 通过 session.mcp_provider 调用知识图谱工具（详见 resources/references/mcp-providers.md）
 
@@ -8,15 +8,16 @@
 
 强制编译并运行目标类的测试，按错误分类表修复，在重试预算内达成编译+运行通过。产出**双信号**（编译/运行结果 + 覆盖率信号）。**不修源码**，疑似源码缺陷标红交还用户。
 
+若 `session.classes[name].iteration_count` >= 3（Iron Law #13），跳过验证，直接标记 `failed` + `max_iterations_exceeded`。
+
 ## 工作步骤
 
 ### 1. 编译测试
 
-```bash
-cd ${PROJECT_PATH}/build-autotests
+test_dir = session.test_dir  # "autotests" 或 "tests"
+cd ${PROJECT_PATH}/build-${test_dir}
 cmake .. -DBUILD_TESTS=ON 2>&1
 cmake --build . -j$(nproc) --target test_<classname> 2>&1
-```
 
 捕获完整编译输出。
 
@@ -38,10 +39,9 @@ cmake --build . -j$(nproc) --target test_<classname> 2>&1
 
 ### 3. 编译通过 → 运行测试
 
-```bash
-cd ${PROJECT_PATH}/build-autotests
-timeout 120 ./autotests/<module>/test_<classname> --gtest_output=xml:${PROJECT_PATH}/autotests/.results/test_<classname>.xml 2>&1
-```
+test_dir = session.test_dir
+cd ${PROJECT_PATH}/build-${test_dir}
+timeout 120 ./${test_dir}/<module>/test_<classname> --gtest_output=xml:${PROJECT_PATH}/${test_dir}/.results/test_<classname>.xml 2>&1
 
 > **注意**：用 `timeout 120` 限制单类测试执行不超过 2 分钟。超时 → 判定为 `runtime_crash`（可能死循环或 stub 缺失导致真实 IO），记录 `timeout` 标记。
 

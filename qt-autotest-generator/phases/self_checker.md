@@ -8,6 +8,25 @@
 
 对单个类的测试做内部自检——覆盖率完整性、命名规范、SPDX 头、stub 正确性、结构。**内部执行，不产出交付文件**，发现问题流转到修正阶段。
 
+### 0. 迭代次数检查（Iron Law #13）
+
+在执行任何自检之前，先检查 `session.classes[name].iteration_count`：
+
+```python
+MAX_ITERATIONS = 3
+iter_count = session.classes[name].get("iteration_count", 1)
+
+if iter_count >= MAX_ITERATIONS:
+    # 达到全局闭环迭代上限，强制标红跳过
+    session.classes[name].update({
+        "status": "failed",
+        "failure_reason": "max_iterations_exceeded",
+    })
+    return  # 跳过该类，不进入修正流转
+```
+
+若未达上限，正常执行后续自检步骤。
+
 ---
 
 ## 工作步骤
@@ -39,14 +58,15 @@ coverage_gap = all_method_names - tested_names
 
 ##### 1b. lcov 函数覆盖率门禁（百分比）
 
-读取 lcov 生成的 `build-autotests/coverage/filtered.info`，计算该类源文件对应的函数覆盖率百分比，与 `session.coverage_threshold`（默认 90）比对：
+读取 lcov 生成的 `build-{test_dir}/coverage/filtered.info`（`test_dir` 从 `session.test_dir` 读取），计算该类源文件对应的函数覆盖率百分比，与 `session.coverage_threshold`（默认 90）比对：
 
 ```python
+test_dir = session.test_dir
 threshold = session.get("coverage_threshold", 90)
 
 # 解析 lcov info 文件中目标类源文件的函数覆盖率
 func_coverage = parse_function_coverage_from_lcov(
-    info_file="build-autotests/coverage/filtered.info",
+    info_file=f"build-{test_dir}/coverage/filtered.info",
     source_file=target_class.file_path
 )
 # 返回: { "function_coverage": 86.7, "functions_hit": 13, "functions_found": 15 }
@@ -56,7 +76,7 @@ coverage_pass = pct >= threshold
 
 # 同时提取未被执行的函数名列表（lcov FNDA:0 行），供 incremental_updater 精准补全
 uncovered_functions = parse_uncovered_functions_from_lcov(
-    info_file="build-autotests/coverage/filtered.info",
+    info_file=f"build-{test_dir}/coverage/filtered.info",
     source_file=target_class.file_path
 )
 ```
@@ -306,3 +326,5 @@ for method in all_methods:
 - 覆盖率阈值从 `session.coverage_threshold`（默认 90）读取，不硬编码
 - 不跳过断言强度自检：每用例（`TEST_F` 与 `TEST_P` 均需扫描）至少 2 个有效 `EXPECT_*`（NO_FATAL/NO_THROW/EXPECT_CALL 均不计入）
 - 不跳过环境隔离自检：硬编码绝对路径、`qputenv` 无对应 `qunsetenv`、未 mock 的真实外部资源（QProcess/网络/socket/真实时间）、stub 未 `clear()` 必须检出
+
+> **并行分片**：当目标类 >= 5 个时，并行处理使用分片 session 机制，详见 `resources/references/parallel-strategy.md`

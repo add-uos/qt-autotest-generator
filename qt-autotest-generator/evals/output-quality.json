@@ -1,0 +1,141 @@
+{
+  "name": "qt-autotest-generator-output-quality",
+  "description": "评估技能输出质量的提示词集，覆盖首次搭建、增量补全、失败修复、对账、tests/ 兼容等核心场景",
+  "version": "1.0.0",
+  "evals": [
+    {
+      "id": "fresh-setup",
+      "prompt": "为 /path/to/qt-cmake-project 生成单测",
+      "expected_behavior": "执行环境检查 → 框架搭建 → 逐类闭环（分析→追踪→生成→验证→自检）→ 批次提交 → 报告收尾",
+      "success_criteria": [
+        "session.test_dir 已记录（autotests 或 tests）",
+        "MCP 提供方已解析且互斥使用",
+        "每个类至少走完一轮闭环",
+        "编译验证通过后才标记 done",
+        "SPDX 头存在于所有测试文件",
+        "函数覆盖率 >= 90% 或已触发增量补全"
+      ],
+      "failure_indicators": [
+        "未编译就报完成",
+        "使用 Qt Test 或 Catch2 框架",
+        "MCP 未 ready 就开始生成",
+        "修改了项目源码"
+      ]
+    },
+    {
+      "id": "incremental-coverage",
+      "prompt": "补全 Calculator 的测试覆盖率",
+      "expected_behavior": "读取 session → 检查覆盖率缺口 → 增量补全缺失用例 → 编译验证 → 自检",
+      "success_criteria": [
+        "只补全缺失用例，不重写已有通过的用例",
+        "补全后函数覆盖率 >= 阈值",
+        "CMake 只 APPEND 不修改已有",
+        "批次提交仅包含新增/修改的测试文件"
+      ],
+      "failure_indicators": [
+        "重写已通过的用例",
+        "修改已有 CMake 代码",
+        "覆盖率未提升"
+      ]
+    },
+    {
+      "id": "failure-repair",
+      "prompt": "测试编译失败了，帮我修",
+      "expected_behavior": "读取失败上下文 → 根因分析 → 修复测试代码 → 重新编译验证",
+      "success_criteria": [
+        "先按测试代码问题修，不直接标红源码缺陷",
+        "per-error 重试不超过 3 次",
+        "总重试不超过 10 loops",
+        "stub_incomplete 先尝试补 stub 再标红",
+        "疑似源码缺陷标红但不修源码"
+      ],
+      "failure_indicators": [
+        "修改项目源码",
+        "重试超过预算",
+        "未读源码就标红"
+      ]
+    },
+    {
+      "id": "reconcile-sync",
+      "prompt": "代码改了重新对账",
+      "expected_behavior": "reconcile → 比对 git HEAD → 检测源码变更 → 按差异路由（新增/签名变更/删除）",
+      "success_criteria": [
+        "正确检测 baseline_commit 漂移",
+        "新增方法走增量补全",
+        "签名变更走测试生成（重新生成该类）",
+        "方法删除走失败修复（清理引用）",
+        "更新 session.baseline_commit"
+      ],
+      "failure_indicators": [
+        "未比对 git HEAD",
+        "未更新 baseline_commit",
+        "全量重新生成而非增量"
+      ]
+    },
+    {
+      "id": "tests-dir-compat",
+      "prompt": "为已有 tests/ 目录的项目生成单测",
+      "expected_behavior": "environment_check 探测到 tests/ 存在 → session.test_dir = 'tests' → 全流程使用 tests/",
+      "success_criteria": [
+        "session.test_dir 记录为 'tests'",
+        "不创建 autotests/ 目录",
+        "测试文件生成到 tests/ 下",
+        "编译目录为 build-tests",
+        "红旗不误报 tests/ 目录"
+      ],
+      "failure_indicators": [
+        "强制创建 autotests/ 目录",
+        "test_dir 未记录在 session",
+        "编译目录仍为 build-autotests"
+      ]
+    },
+    {
+      "id": "repo-clone-setup",
+      "prompt": "拉取 https://github.com/foo/bar 的 dev 分支生成单测",
+      "expected_behavior": "项目准备（clone + 环境搭建）→ 环境检查 → 框架搭建 → 逐类闭环",
+      "success_criteria": [
+        "正确 clone 指定分支",
+        "session.repo_url 和 session.branch 已记录",
+        "项目准备完成后才进入环境检查",
+        "依赖安装成功"
+      ],
+      "failure_indicators": [
+        "未 clone 就开始生成",
+        "分支不正确",
+        "缺少项目准备阶段"
+      ]
+    },
+    {
+      "id": "gui-class-handling",
+      "prompt": "为 DMainWindow 的子类生成单测",
+      "expected_behavior": "类分析识别 GUI 类 → 测试生成用 QCoreApplication → 不直接实例化 GUI 类",
+      "success_criteria": [
+        "is_gui 标记为 true",
+        "SetUpTestSuite 使用 QCoreApplication 而非 QApplication",
+        "不直接 new GUI 类",
+        "编译不因 X11/Wayland 崩溃"
+      ],
+      "failure_indicators": [
+        "使用 QApplication",
+        "直接实例化 QWidget 子类",
+        "未标记 is_gui"
+      ]
+    },
+    {
+      "id": "iteration-limit",
+      "prompt": "某个类反复编译失败，检查是否正确处理迭代上限",
+      "expected_behavior": "同一类闭环最多 3 轮 → 超过标记 failed + max_iterations_exceeded",
+      "success_criteria": [
+        "iteration_count 正确递增",
+        "达到 3 时强制标 failed",
+        "failure_reason 为 max_iterations_exceeded",
+        "不阻塞其他类"
+      ],
+      "failure_indicators": [
+        "无限循环修复",
+        "iteration_count 未递增",
+        "阻塞其他类处理"
+      ]
+    }
+  ]
+}

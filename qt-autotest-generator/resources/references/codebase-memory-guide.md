@@ -275,7 +275,7 @@ all_method_names = {m.name for m in all_methods}
 
 # 步骤 2: 从现有测试文件提取已测试的方法名
 # （这一步仍需读取文件，因为图谱不解析测试用例名称）
-existing_test_content = read("autotests/ui/test_myclass.cpp")
+existing_test_content = read("{test_dir}/ui/test_myclass.cpp")
 tested_method_names = extract_test_names_from_testcases(existing_test_content)
 # 匹配规则：TEST_F(MyClassTest, {MethodName}_...) → MethodName
 

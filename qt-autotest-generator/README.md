@@ -2,7 +2,7 @@
 
 # Qt Autotest Generator
 
-> Qt CMake 项目单元测试自动生成：基于 codebase-memory-mcp 知识图谱，搭建 `autotests/` 框架、逐类生成 Google Test 用例、强制编译验证、覆盖率自检与报告。
+> Qt CMake 项目单元测试自动生成：基于 codebase-memory-mcp 知识图谱，搭建 `{test_dir}/` 框架、逐类生成 Google Test 用例、强制编译验证、覆盖率自检与报告。
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://isocpp.org/)
@@ -43,7 +43,7 @@ Qt 项目代码量大，**单测覆盖率上不去**？<br>
 </thead>
 <tbody>
 <tr><td nowrap width="1%"><strong>知识图谱驱动</strong></td><td>基于 codebase-memory-mcp 知识图谱毫秒级拉取类结构、方法签名、调用链、依赖关系；硬门禁，无图谱不执行。<strong>支持远端（<code>remote-codebase-memory-mcp</code>）与本地两种提供方，远端优先</strong></td></tr>
-<tr><td nowrap width="1%"><strong>框架搭建</strong></td><td>自动创建 <code>autotests/</code> 目录：CMake 配置、stub-ext、测试运行脚本、报告生成器</td></tr>
+<tr><td nowrap width="1%"><strong>框架搭建</strong></td><td>自动创建 <code>{test_dir}/</code> 目录（默认 <code>autotests/</code>，若项目已有 <code>tests/</code> 则沿用）：CMake 配置、stub-ext、测试运行脚本、报告生成器</td></tr>
 <tr><td nowrap width="1%"><strong>逐类生成</strong></td><td>按复杂度规划用例数（高复杂度多写边界+异常），AAA 模式，<code>{Feature}_{Scenario}_{ExpectedResult}</code> 命名</td></tr>
 <tr><td nowrap width="1%"><strong>依赖追踪</strong></td><td>MCP <code>trace_path</code> 自动追踪出向调用链，按决策矩阵决定 stub 哪些依赖、编入哪些源码目录</td></tr>
 <tr><td nowrap width="1%"><strong>强制验证</strong></td><td>编译+运行必须通过才报完成；失败自动分类修复，重试预算内尽力修</td></tr>

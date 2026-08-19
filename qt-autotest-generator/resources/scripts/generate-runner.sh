@@ -4,12 +4,15 @@
 
 ################################################################################
 # 生成测试运行脚本
+# 通过环境变量 TEST_DIR 指定测试目录名（默认 autotests）
+# 生成的 run-ut.sh 内部用 __TEST_DIR__ 占位符，生成后 sed 替换为实际值
 ################################################################################
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AUTOTEST_ROOT="${AUTOTEST_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)/autotests}"
+TEST_DIR="${TEST_DIR:-autotests}"
+AUTOTEST_ROOT="${AUTOTEST_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)/${TEST_DIR}}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -25,7 +28,7 @@ print_step() {
 }
 
 generate_test_runner_script() {
-    cat > "${AUTOTEST_ROOT}/run-ut.sh" << 'EOF'
+    cat > "${AUTOTEST_ROOT}/run-ut.sh" << 'RUNUTEOF'
 #!/bin/bash
 
 ################################################################################
@@ -34,6 +37,9 @@ generate_test_runner_script() {
 ################################################################################
 
 set -e
+
+# Test directory name (autotests or tests, determined at framework build time)
+TEST_DIR="__TEST_DIR__"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -66,6 +72,7 @@ show_usage() {
     echo ""
     echo "Options:"
     echo "  --from-step <N>    Start execution from step N (1-6)"
+    echo "  --parallel <N>    Parallel test execution (default: $(nproc))"
     echo "  -h, --help         Show this help message"
     echo ""
     echo "Steps:"
@@ -85,12 +92,21 @@ show_usage() {
 
 # Parse command line arguments
 START_STEP=1
+PARALLEL_JOBS=$(nproc)
 while [[ $# -gt 0 ]]; do
     case $1 in
         --from-step)
             START_STEP="$2"
             if ! [[ "$START_STEP" =~ ^[1-6]$ ]]; then
                 print_error "Invalid step number: $START_STEP. Must be 1-6."
+                exit 1
+            fi
+            shift 2
+            ;;
+        --parallel)
+            PARALLEL_JOBS="$2"
+            if ! [[ "$PARALLEL_JOBS" =~ ^[1-9][0-9]*$ ]]; then
+                print_error "Invalid parallel value: $PARALLEL_JOBS. Must be a positive integer."
                 exit 1
             fi
             shift 2
@@ -110,7 +126,7 @@ done
 # Get directories
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-BUILD_DIR="$PROJECT_ROOT/build-autotests"
+BUILD_DIR="$PROJECT_ROOT/build-${TEST_DIR}"
 REPORT_DIR="$BUILD_DIR/test-reports"
 
 echo "========================================"
@@ -119,6 +135,7 @@ echo "========================================"
 echo "Project root: $PROJECT_ROOT"
 echo "Build directory: $BUILD_DIR"
 echo "Report directory: $REPORT_DIR"
+echo "Parallel jobs: $PARALLEL_JOBS"
 if [ "$START_STEP" -gt 1 ]; then
     print_info "Starting from step $START_STEP"
 fi
@@ -164,7 +181,7 @@ step_4_run_tests() {
     
     # Run tests and save results to file
     cd "$BUILD_DIR"
-    if ctest --output-on-failure --verbose > "$REPORT_DIR/test_output.log" 2>&1; then
+    if ctest --output-on-failure --verbose --parallel "$PARALLEL_JOBS" > "$REPORT_DIR/test_output.log" 2>&1; then
         print_success "All tests passed"
         TEST_PASSED=true
         TEST_EXIT_CODE=0
@@ -178,7 +195,22 @@ step_4_run_tests() {
     TEST_DURATION=$((TEST_END_TIME - TEST_START_TIME))
     
     # Generate XML format test results
-    ctest --output-junit "$REPORT_DIR/test_results.xml" >/dev/null 2>&1 || true
+    # --output-junit requires CMake/ctest 3.21+
+    CTEST_VERSION=$(ctest --version 2>/dev/null | head -1 | grep -oP '[\d.]+' | head -1)
+    if [ -n "$CTEST_VERSION" ]; then
+        CTEST_MAJOR=$(echo "$CTEST_VERSION" | cut -d. -f1)
+        CTEST_MINOR=$(echo "$CTEST_VERSION" | cut -d. -f2)
+        if [ "$CTEST_MAJOR" -gt 3 ] || { [ "$CTEST_MAJOR" -eq 3 ] && [ "$CTEST_MINOR" -ge 21 ]; }; then
+            ctest --output-junit "$REPORT_DIR/test_results.xml" >/dev/null 2>&1 || true
+        else
+            # Fallback: use GTEST_OUTPUT env var for gtest XML output
+            print_info "ctest < 3.21, using GTEST_OUTPUT for XML results"
+            export GTEST_OUTPUT="xml:$REPORT_DIR/test_results.xml"
+        fi
+    else
+        # Version unknown, try --output-junit anyway
+        ctest --output-junit "$REPORT_DIR/test_results.xml" >/dev/null 2>&1 || true
+    fi
     
     print_info "Test execution completed in ${TEST_DURATION}s"
 }
@@ -206,8 +238,8 @@ step_5_generate_coverage() {
     # Filter coverage data to only include source files
     if [ -f "$BUILD_DIR/coverage/total.info" ]; then
         # Remove test files from coverage
-        lcov --extract "$BUILD_DIR/coverage/total.info" "*/src/*" --output-file "$BUILD_DIR/coverage/filtered.info" >> "$REPORT_DIR/coverage_output.log" 2>&1 || true
-        lcov --remove "$BUILD_DIR/coverage/filtered.info" "*/test*" "*/autotests/*" --output-file "$BUILD_DIR/coverage/filtered.info" >> "$REPORT_DIR/coverage_output.log" 2>&1 || true
+        lcov --extract "$BUILD_DIR/coverage/total.info" __SOURCE_DIRS_PATTERN__ --output-file "$BUILD_DIR/coverage/filtered.info" >> "$REPORT_DIR/coverage_output.log" 2>&1 || true
+        lcov --remove "$BUILD_DIR/coverage/filtered.info" "*/test*" "*/${TEST_DIR}/*" --output-file "$BUILD_DIR/coverage/filtered.info" >> "$REPORT_DIR/coverage_output.log" 2>&1 || true
     fi
     
     # Generate HTML report if we have coverage data
@@ -280,7 +312,7 @@ step_6_generate_test_report() {
     python3 "$SCRIPT_DIR/generate-report.py" \
         --build-dir "$BUILD_DIR" \
         --report-dir "$REPORT_DIR" \
-        --results-dir "$PROJECT_ROOT/autotests/.results" \
+        --results-dir "$PROJECT_ROOT/${TEST_DIR}/.results" \
         --test-passed "$TEST_PASSED" \
         --test-duration "$TEST_DURATION" \
         --coverage-success "$COVERAGE_SUCCESS" \
@@ -372,12 +404,26 @@ echo "========================================"
 if [ "$TEST_PASSED" != true ]; then
     exit 1
 fi
-EOF
+RUNUTEOF
+
+    # Replace placeholder with actual TEST_DIR value
+    sed -i "s|__TEST_DIR__|${TEST_DIR}|g" "${AUTOTEST_ROOT}/run-ut.sh"
+
+    # Replace SOURCE_DIRS pattern for coverage extraction
+    # If session file exists, read source_dirs; otherwise default to "*/src/*"
+    SESSION_FILE="${AUTOTEST_ROOT}/.ut-session.json"
+    if [ -f "${SESSION_FILE}" ]; then
+        SOURCE_DIRS_JSON=$(python3 -c "import json; s=json.load(open('${SESSION_FILE}')); dirs=s.get('source_dirs',[]); print(' '.join(f'*/{d.split('/')[-1]}/*' for d in dirs))" 2>/dev/null || echo "*/src/*")
+        SOURCE_DIRS_PATTERN="${SOURCE_DIRS_JSON}"
+    else
+        SOURCE_DIRS_PATTERN="*/src/*"
+    fi
+    sed -i "s|__SOURCE_DIRS_PATTERN__|${SOURCE_DIRS_PATTERN}|g" "${AUTOTEST_ROOT}/run-ut.sh"
 
     chmod +x "${AUTOTEST_ROOT}/run-ut.sh"
-    print_success "Generated autotests/run-ut.sh"
+    print_success "Generated ${TEST_DIR}/run-ut.sh"
     
-    # Copy report_generator to autotests/
+    # Copy report_generator
     print_step 4 "Copying report generator module..."
     cp -r "${SCRIPT_DIR}/../report_generator" "${AUTOTEST_ROOT}/"
     print_success "Report generator module copied"

@@ -11,7 +11,7 @@ set(PROJECT_LIBRARIES "{PROJECT_LIBRARIES}")
 
 # 代码覆盖率：Debug 模式下启用 gcov 插桩
 # run-ut.sh 的 step_5 (lcov --capture) 依赖此标志采集覆盖率数据
-# report_generator 从 build-autotests/coverage/filtered.info 解析覆盖率
+# report_generator 从 build-{test_dir}/coverage/filtered.info 解析覆盖率
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-arcs -ftest-coverage -O0")
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lgcov")
@@ -22,7 +22,7 @@ endif()
 file(GLOB TEST_SOURCES "test_*.cpp")
 
 # stub-ext 运行时依赖
-set(STUB_SHADOW "${CMAKE_SOURCE_DIR}/autotests/3rdparty/stub/stub-shadow.cpp")
+set(STUB_SHADOW "${CMAKE_SOURCE_DIR}/{test_dir}/3rdparty/stub/stub-shadow.cpp")
 
 if(NOT TEST_SOURCES)
     message(WARNING "No test files found in ${CMAKE_CURRENT_SOURCE_DIR}")
@@ -42,7 +42,7 @@ target_link_libraries(test_{module_name}
 )
 
 # 如果项目有自定义库，添加
-if(PROJECT_LIBRARIES)
+if(PROJECT_LIBRARIES AND NOT PROJECT_LIBRARIES STREQUAL "")
     target_link_libraries(test_{module_name}
         PRIVATE
         ${PROJECT_LIBRARIES}
@@ -57,7 +57,7 @@ endif()
 # 包含目录
 target_include_directories(test_{module_name}
     PRIVATE
-    ${CMAKE_SOURCE_DIR}/autotests/3rdparty/stub
+    ${CMAKE_SOURCE_DIR}/{test_dir}/3rdparty/stub
     ${CMAKE_SOURCE_DIR}/{source_module_path}
 )
 

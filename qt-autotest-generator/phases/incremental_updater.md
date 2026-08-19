@@ -10,6 +10,24 @@
 
 **额外触发**：当自检检出 lcov 函数覆盖率低于 `session.coverage_threshold`（默认 90）时，从 lcov `filtered.info` 的 `FNDA:0` 行解析**未被执行的函数**，补全这些函数的用例以提升函数覆盖率。
 
+### 0. 迭代计数递增（Iron Law #13）
+
+当增量补全被触发（无论是覆盖率缺口还是方法名差集），意味着该类即将进入新一轮闭环，递增迭代计数：
+
+```python
+MAX_ITERATIONS = 3
+iter_count = session.classes[name].get("iteration_count", 1) + 1
+session.classes[name]["iteration_count"] = iter_count
+
+if iter_count > MAX_ITERATIONS:
+    # 超过上限，强制标红（self_checker Step 0 也会拦截，此处双重保障）
+    session.classes[name].update({
+        "status": "failed",
+        "failure_reason": "max_iterations_exceeded",
+    })
+    return  # 不再补全，跳过
+```
+
 ## 工作步骤
 
 ### 1. 确定补全目标
@@ -109,7 +127,7 @@ TEST_F(MyClassTest, MethodX_ValidInput_ReturnsExpected) {
 ### 5. CMake 智能合并
 
 若新增方法引入了新的源码依赖目录：
-- 读 `autotests/<module>/CMakeLists.txt`
+- 读 `{test_dir}/<module>/CMakeLists.txt`
 - 检查是否已 glob 该目录
 - 若无，追加到 `file(GLOB ...)` 或 `target_sources`
 
@@ -134,4 +152,5 @@ TEST_F(MyClassTest, MethodX_ValidInput_ReturnsExpected) {
 - `qualified_name` 必须从图谱返回值取，不自己拼
 - 新增方法可能引入新依赖：必须 trace_path
 - 不修改项目源码
+- 分支切回原分支时：恢复 `session.stale_classes` 中类的 `add_subdirectory` 行到 CMakeLists.txt，并将 status 从 `stale` 改回原值
 - 追加后必须回到编译验证阶段重新验证

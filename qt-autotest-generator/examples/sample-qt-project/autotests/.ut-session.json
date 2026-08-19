@@ -1,6 +1,7 @@
 {
   "project_path": "/home/user/sample-qt-project",
   "project_name_in_graph": "home-user-sample-qt-project",
+  "test_dir": "autotests",
   "baseline_commit": "a1b2c3d",
   "qt_version": 5,
   "classes": [

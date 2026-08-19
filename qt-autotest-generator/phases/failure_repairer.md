@@ -8,6 +8,8 @@
 
 修复编译/运行失败的测试，在独立重试预算内尝试修复。**先按测试代码问题修**；修不好则判定根因，疑似源码缺陷的**标红交还用户，不修源码**。支持用户显式"修复"和自动检测失败两种触发方式。
 
+当 failure_repairer 完成修复并成功后回到编译验证时，递增 `session.classes[name].iteration_count`（因为这将开始新一轮闭环）。若 `iteration_count` 已 >= 3（Iron Law #13），不再尝试修复，直接保持 `failed` + `max_iterations_exceeded`。
+
 ## 工作步骤
 
 ### 1. 读失败上下文
@@ -56,9 +58,14 @@ per-error 3 次重试，总计 max 10 loops（与编译验证的预算独立）�
 
 ```
 重试耗尽
-    ├─ 用 MCP 读源码，确认源码本身编译不过（无测试也编不过）
-    │   → failure_reason = "source_defect_compile"
-    │   → 标红：源码编译缺陷
+    ├─ 编译失败：
+    │   1. 检查错误是否涉及 stub 相关符号（stub 签名不匹配/未 stub 的调用）
+    │      → 是 → failure_reason = "stub_incomplete"，走修复（允许额外 3 次重试补 stub）
+    │   2. 检查错误是否涉及项目内非待测类代码（源码本身缺 include、缺 Q_OBJECT、空实现）
+    │      → 是 → failure_reason = "source_defect_compile"
+    │      → 标红：源码编译缺陷
+    │   3. 无法确定 → failure_reason = "needs_manual"
+    │      → 标红：需人工排查
     │
     ├─ stub 已补全，仍运行时崩溃
     │   → failure_reason = "source_defect_runtime"

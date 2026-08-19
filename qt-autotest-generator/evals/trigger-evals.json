@@ -1,0 +1,207 @@
+{
+  "name": "qt-autotest-generator-trigger-evals",
+  "description": "测试技能 description 触发精准度：应触发的表述必须触发，不应触发的表述必须不触发",
+  "version": "1.0.0",
+  "should_trigger": [
+    {
+      "id": "zh-gen-tests",
+      "input": "生成单测",
+      "expected": true,
+      "reason": "核心触发语"
+    },
+    {
+      "id": "zh-build-framework",
+      "input": "建测试框架",
+      "expected": true,
+      "reason": "核心触发语"
+    },
+    {
+      "id": "zh-batch-gen",
+      "input": "批量生成单测",
+      "expected": true,
+      "reason": "核心触发语"
+    },
+    {
+      "id": "zh-complete",
+      "input": "补全测试",
+      "expected": true,
+      "reason": "核心触发语"
+    },
+    {
+      "id": "zh-fix-test",
+      "input": "修测试",
+      "expected": true,
+      "reason": "核心触发语"
+    },
+    {
+      "id": "zh-reconcile",
+      "input": "重新对账",
+      "expected": true,
+      "reason": "核心触发语"
+    },
+    {
+      "id": "zh-add-tests",
+      "input": "加测试",
+      "expected": true,
+      "reason": "核心触发语"
+    },
+    {
+      "id": "en-add-gtest",
+      "input": "add gtest",
+      "expected": true,
+      "reason": "英文触发语"
+    },
+    {
+      "id": "en-setup-unit-tests",
+      "input": "setup unit tests",
+      "expected": true,
+      "reason": "英文触发语"
+    },
+    {
+      "id": "en-coverage-gap",
+      "input": "coverage gap",
+      "expected": true,
+      "reason": "英文触发语"
+    },
+    {
+      "id": "en-fix-test-failures",
+      "input": "fix test failures",
+      "expected": true,
+      "reason": "英文触发语"
+    },
+    {
+      "id": "en-sync-tests",
+      "input": "sync tests",
+      "expected": true,
+      "reason": "英文触发语"
+    },
+    {
+      "id": "en-add-tests",
+      "input": "add tests",
+      "expected": true,
+      "reason": "英文触发语"
+    },
+    {
+      "id": "en-improve-coverage",
+      "input": "improve coverage",
+      "expected": true,
+      "reason": "覆盖率相关触发"
+    },
+    {
+      "id": "zh-coverage-threshold",
+      "input": "函数覆盖率 90%",
+      "expected": true,
+      "reason": "覆盖率阈值指定"
+    },
+    {
+      "id": "zh-clone-repo",
+      "input": "拉取 https://github.com/foo/bar 的 dev 分支生成单测",
+      "expected": true,
+      "reason": "repo_url + branch 触发"
+    },
+    {
+      "id": "zh-module-scope",
+      "input": "为 src/lib/ui 生成测试",
+      "expected": true,
+      "reason": "模块路径触发"
+    },
+    {
+      "id": "zh-class-scope",
+      "input": "补全 MyClass 的测试",
+      "expected": true,
+      "reason": "类名触发"
+    },
+    {
+      "id": "zh-test-compile-fail",
+      "input": "测试编译失败",
+      "expected": true,
+      "reason": "失败修复触发"
+    },
+    {
+      "id": "zh-code-changed",
+      "input": "代码改了重新检查",
+      "expected": true,
+      "reason": "对账触发"
+    }
+  ],
+  "should_not_trigger": [
+    {
+      "id": "no-pure-c",
+      "input": "为纯 C 项目生成测试",
+      "expected": false,
+      "reason": "非 Qt 项目"
+    },
+    {
+      "id": "no-python",
+      "input": "为 Python 项目写单元测试",
+      "expected": false,
+      "reason": "非 C++ 项目"
+    },
+    {
+      "id": "no-qt-test",
+      "input": "用 Qt Test 框架写测试",
+      "expected": false,
+      "reason": "明确要求 Qt Test 框架"
+    },
+    {
+      "id": "no-catch2",
+      "input": "用 Catch2 写测试",
+      "expected": false,
+      "reason": "明确要求 Catch2 框架"
+    },
+    {
+      "id": "no-run-only",
+      "input": "运行已有的单元测试",
+      "expected": false,
+      "reason": "仅运行测试，不生成"
+    },
+    {
+      "id": "no-ci-config",
+      "input": "配置 CI 跑测试",
+      "expected": false,
+      "reason": "仅 CI 配置，不生成测试代码"
+    },
+    {
+      "id": "no-view-logs",
+      "input": "看一下测试日志",
+      "expected": false,
+      "reason": "仅查看日志，不生成"
+    },
+    {
+      "id": "no-integration-test",
+      "input": "写集成测试",
+      "expected": false,
+      "reason": "集成测试，非单元测试"
+    },
+    {
+      "id": "no-perf-bench",
+      "input": "写性能基准测试",
+      "expected": false,
+      "reason": "性能测试，非单元测试"
+    },
+    {
+      "id": "no-ui-auto",
+      "input": "写 UI 自动化测试",
+      "expected": false,
+      "reason": "UI 自动化，非单元测试"
+    },
+    {
+      "id": "no-frontend",
+      "input": "为 React 组件写测试",
+      "expected": false,
+      "reason": "前端项目"
+    },
+    {
+      "id": "no-go",
+      "input": "为 Go 项目写单元测试",
+      "expected": false,
+      "reason": "非 C++ 项目"
+    },
+    {
+      "id": "no-doctest",
+      "input": "用 doctest 写测试",
+      "expected": false,
+      "reason": "明确要求 doctest 框架"
+    }
+  ]
+}
