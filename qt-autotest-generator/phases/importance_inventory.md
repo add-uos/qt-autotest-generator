@@ -733,11 +733,16 @@ Agent 输出 Markdown 摘要 + review_queue，与用户交互：
 - `search_graph(label="Class")` 不返回 `base_classes` 字段，需用 `query_graph` 替代
 - 继承检测必须通过 `get_code_snippet()` 读源码确认
 
-### search_graph 分页
+### search_graph 分页与 3rdparty 过滤
 
-- 大项目（如 dde-file-manager ~14007 方法）需多轮分页：`offset=0,200,400,...`
-- 每次最多 200 条，`total` 字段告知总数
-- `has_more` 字段指示是否还有下一页
+- **用 `file_pattern` 在收集时排除 3rdparty**：`search_graph` 支持 `file_pattern` 参数，
+  可用 glob 模式限制返回的文件范围。大项目常嵌入 3rdparty（如 deepin-reader 含 pdfium），
+  全量收集会浪费大量分页调用。
+- **推荐做法**：先探测源码目录（`src/**`、`reader/**` 等），用 `file_pattern` 过滤：
+  - deepin-reader: `file_pattern="reader/**"` → 从 7780 降至 1098 方法
+  - dde-file-manager: `file_pattern="src/**"` → 从 14877 降至 12013 方法
+- 每次最多 200 条，`total` 字段告知过滤后的总数，`has_more` 字段指示是否还有下一页
+- 分页：`offset=0,200,400,...`，过滤后页数大幅减少
 
 ### is_exported 不可靠
 

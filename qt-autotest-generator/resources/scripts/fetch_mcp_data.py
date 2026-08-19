@@ -15,8 +15,11 @@ fetch_mcp_data.py — 采集知识图谱数据，保存为 JSON 供 scan_invento
 # Agent 需要执行的 MCP 调用清单:
 #
 # 1. search_graph(label="Class") 分页 → 全量类 → 写入 mcp_data.classes
-# 2. search_graph(label="Method") 分页 → 全量方法 → 写入 mcp_data.methods
-# 3. search_graph(label="Function") 分页 → 全量函数 → 写入 mcp_data.functions
+# 2. search_graph(label="Method", file_pattern="src/**") 分页 → 源码方法 → mcp_data.methods
+#    ⚠️ 用 file_pattern 排除 3rdparty：大项目（如 deepin-reader 含 pdfium）
+#    可从 7780 降至 1098 方法，避免收集无用 3rdparty 方法。
+#    先探测项目源码目录（src/、reader/ 等），设置 file_pattern 过滤。
+# 3. search_graph(label="Function", file_pattern="src/**") 分页 → 源码函数 → mcp_data.functions
 # 4. ⚠️ P75 客户端计算（MCP 不支持 percentileCont）:
 #    - 收集所有非测试方法的 in_degree
 #    - 排除 in_degree=0 后计算 P75
