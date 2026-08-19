@@ -712,19 +712,20 @@ Agent 输出 Markdown 摘要 + review_queue，与用户交互：
 
 **解决方案**：`in_degree` 因子仅贡献 +1 分（mid-booster），需叠加 `complexity ≥ 10` (+2)
 或 `linear_scan_in_loop` (+1) + `complexity ≥ 5` (+1) 才能达到 high。
-跨项目验证（5 个项目）：`in_degree=+2` 导致 calculator 14.2% high（大量 cx_lo+in_deg 假阳性），
-`in_degree=+1` 降至 9.6%，其他项目保持 0.4%–3.6% 的合理分布。
+跨项目全量验证（6 个项目，18340 方法）：`in_degree=+2` 导致 calculator 14.2% high（大量 cx_lo+in_deg 假阳性），
+`in_degree=+1` 降至 8.1%，全部项目 high 比例保持在 1.2%–8.1% 的合理分布。
 
 | 项目 | 方法总数 | 可测试 | high | mid | low | high% | high 主因 |
 |------|---------|--------|------|-----|-----|-------|----------|
-| deepin-calculator | 1091 | 607 | 58 | 239 | 310 | 9.6% | dbus, cx_mid+in_deg, cx_hi |
-| deepin-ocr | 261 | 101 | 1 | 11 | 89 | 1.0% | cx_hi |
-| deepin-camera | 1632 | 472 | 17 | 99 | 356 | 3.6% | dbus, cx_mid+lsl, cx_hi |
-| deepin-terminal | 2245 | 1136 | 9 | 196 | 931 | 0.8% | cx_mid+lsl, cx_hi |
-| dde-file-manager* | 2600 | 1042 | 4 | 192 | 846 | 0.4% | cx_mid+in_deg |
-| deepin-reader* | 2200 | 36 | 0 | 6 | 30 | 0.0% | (98% 3rdparty 被过滤) |
+| deepin-calculator | 1091 | 607 | 49 | 240 | 318 | 8.1% | dbus, cx_mid+in_deg, cx_hi |
+| deepin-ocr | 261 | 101 | 3 | 56 | 42 | 3.0% | cx_hi |
+| deepin-camera | 1632 | 472 | 27 | 250 | 195 | 5.7% | dbus, cx_mid+lsl, cx_hi |
+| deepin-terminal | 2245 | 1112 | 17 | 360 | 735 | 1.5% | cx_mid+lsl, cx_hi |
+| deepin-reader | 1098 | 1098 | 23 | 306 | 769 | 2.1% | cx_hi, cx_mid+lsl |
+| dde-file-manager | 12013 | 12013 | 141 | 3494 | 8378 | 1.2% | cx_mid+in_deg, cx_hi |
+| **合计** | **18340** | **15403** | **260** | **4706** | **10437** | **1.7%** | |
 
-> *部分收集，仅用于趋势分析。
+> 全量收集（collect_all_methods.py，HTTP MCP 直连，limit=2000/页）。
 
 ### MCP 不支持 Cypher 查询
 
@@ -733,16 +734,36 @@ Agent 输出 Markdown 摘要 + review_queue，与用户交互：
 - `search_graph(label="Class")` 不返回 `base_classes` 字段，需用 `query_graph` 替代
 - 继承检测必须通过 `get_code_snippet()` 读源码确认
 
-### search_graph 分页与 3rdparty 过滤
+### 全量收集脚本（HTTP MCP 直连）
 
-- **用 `file_pattern` 在收集时排除 3rdparty**：`search_graph` 支持 `file_pattern` 参数，
-  可用 glob 模式限制返回的文件范围。大项目常嵌入 3rdparty（如 deepin-reader 含 pdfium），
-  全量收集会浪费大量分页调用。
-- **推荐做法**：先探测源码目录（`src/**`、`reader/**` 等），用 `file_pattern` 过滤：
-  - deepin-reader: `file_pattern="reader/**"` → 从 7780 降至 1098 方法
-  - dde-file-manager: `file_pattern="src/**"` → 从 14877 降至 12013 方法
-- 每次最多 200 条，`total` 字段告知过滤后的总数，`has_more` 字段指示是否还有下一页
-- 分页：`offset=0,200,400,...`，过滤后页数大幅减少
+**`resources/scripts/collect_all_methods.py`** 直接通过 HTTP 调用远程 MCP 服务器，
+绕过 pi 网关，全自动分页收集所有 Method 节点。
+
+```bash
+# 收集项目全部方法（自动分页，limit=2000/页）
+python3 resources/scripts/collect_all_methods.py \
+  --project home-uos-service-codebase-repos-dde-file-manager \
+  --file-pattern "src/**" \
+  --output ${test_dir}/all_methods.json
+```
+
+- **HTTP 直连**：MCP 服务器 `http://10.8.12.80:13626/mcp`，JSON-RPC 协议
+- **limit=2000**：每次返回 2000 条（默认 limit=200 需 61 页，limit=2000 仅需 7 页）
+- **file_pattern 过滤**：收集时排除 3rdparty，避免无用数据
+  - deepin-reader: `reader/**` → 7780 降至 1098 方法
+  - dde-file-manager: `src/**` → 14877 降至 12013 方法
+- **性能**：12013 方法全量收集仅需 ~1.3 秒
+- **输出**：JSON 数组，每元素为一个 Method 节点的完整属性
+
+> 若 `collect_all_methods.py` 不可用（如 MCP URL 变更），
+> Agent 可退回手动调用 `search_graph` 分页（limit=2000, offset 递增）。
+
+### search_graph 分页参数（手动回退）
+
+- `limit`: 每次最多 2000 条（默认 200，建议设为 2000 减少分页次数）
+- `offset`: 分页偏移，`offset=0,2000,4000,...`
+- `file_pattern`: glob 过滤源码目录
+- `total` 字段告知过滤后的总数，`has_more` 字段指示是否还有下一页
 
 ### is_exported 不可靠
 
