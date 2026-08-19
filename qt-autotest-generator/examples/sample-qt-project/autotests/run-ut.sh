@@ -248,23 +248,20 @@ step_6_generate_test_report() {
         print_info "Loaded: TEST_PASSED=$TEST_PASSED, COVERAGE_SUCCESS=$COVERAGE_SUCCESS"
     fi
     
-    # Call Python script to generate test report
-    python3 "$SCRIPT_DIR/generate-report.py" \
-        --build-dir "$BUILD_DIR" \
-        --report-dir "$REPORT_DIR" \
-        --results-dir "$PROJECT_ROOT/autotests/.results" \
-        --test-passed "$TEST_PASSED" \
-        --test-duration "$TEST_DURATION" \
-        --coverage-success "$COVERAGE_SUCCESS" \
-        --coverage-duration "$COVERAGE_DURATION" \
-        --project-root "$PROJECT_ROOT"
+    # Call Mode 3 coverage collection script
+    python3 "$SCRIPT_DIR/../../scripts/collect-coverage-report.py" \
+        "$PROJECT_ROOT" \
+        --build-dir "$(basename $BUILD_DIR)" \
+        --report-dir "$(basename $REPORT_DIR)" \
+        --inventory "$PROJECT_ROOT/autotests/.ut-inventory.json" \
+        --skip-build
     
     if [ $? -eq 0 ]; then
-        print_success "Test report generated successfully"
-        REPORT_PATH="$REPORT_DIR/test_report.html"
-        print_success "Test report: file://$REPORT_PATH"
+        print_success "Coverage report generated successfully"
+        SUMMARY_PATH="$REPORT_DIR/ut-summary.json"
+        print_success "Summary: file://$SUMMARY_PATH"
     else
-        print_warning "Test report generation failed"
+        print_warning "Coverage report generation failed"
     fi
 }
 

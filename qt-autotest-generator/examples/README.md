@@ -14,11 +14,9 @@ sample-qt-project/
     ├── 3rdparty/stub/         # stub-ext（从 resources/stub/ 复制）
     ├── cmake/UnitTestUtils.cmake
     ├── run-ut.sh
-    ├── report_generator/
     ├── CMakeLists.txt          # 测试根 CMake
     ├── .ut-inventory.json       # inventory 分级表示例
     ├── .results/              # gtest XML 输出
-    ├── .reports/              # HTML/CSV 报告
     └── core/
         ├── CMakeLists.txt     # 模块 CMake
         └── test_calculator.cpp # 生成的测试文件

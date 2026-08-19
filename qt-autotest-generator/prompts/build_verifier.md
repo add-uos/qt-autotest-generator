@@ -153,7 +153,7 @@ python3 ${SKILL_DIR}/scripts/coverage_by_level.py \
 
 - `by_level.<lv>.pass` = 函数覆盖率达 `gate.function` 且行覆盖率达 `gate.line`（阈值取自 inventory 的 `gate_thresholds`）
 - `uncovered_functions` = FNDA:0 的方法名列表，供 `incremental_updater` 精准补全
-- 脚本依赖 `c++filt`（binutils 自带）；解析 FN/FNDA/DA + demangle 关联 inventory 分级，补 `coverage_parser.py`（仅文件级）缺失的函数级+行级能力
+- 脚本依赖 `c++filt`（binutils 自带）；解析 FN/FNDA/DA + demangle 关联 inventory 分级，产出函数级+行级覆盖率
 
 > **注意**：此处只产出覆盖率快照，**不做门禁达标判定**（不因 `pass:false` 阻塞 `verified`）。门禁达标在 `self_checker` 第 1b 步执行——`self_checker` 直接复用此 JSON，避免重复解析 lcov。
 

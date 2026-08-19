@@ -162,7 +162,7 @@ gate = inventory["gate_thresholds"]
 
 全类完成 → `Read prompts/report_generator.md`
 
-产出 HTML/CSV 报告，含覆盖率总览、逐类结果、疑似源码缺陷清单。
+产出覆盖率采集报告：gtest XML + lcov HTML + 分级覆盖率 + 汇总 JSON。
 
 ## MCP 查询策略
 

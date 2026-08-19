@@ -29,7 +29,7 @@ test_dir = test_dir  # "autotests" 或 "tests"
 ├── cmake/               # CMake 工具脚本
 ├── .gitignore            # 忽略构建产物和临时状态
 ├── run-ut.sh            # 测试运行脚本
-└── report_generator/    # 报告生成器（从 resources/report_generator/ 复制）
+└── run-ut.sh            # 测试运行脚本
 ```
 
 ### 3. 复制 stub-ext
@@ -54,7 +54,7 @@ TEST_DIR=tests bash ${SKILL_DIR}/scripts/generate-cmake-utils.sh
 bash ${SKILL_DIR}/scripts/generate-runner.sh
 ```
 
-生成 `{test_dir}/run-ut.sh` 并复制 `report_generator/`。脚本通过环境变量 `TEST_DIR` 接收目录名（默认 `autotests`）：
+生成 `{test_dir}/run-ut.sh`。脚本通过环境变量 `TEST_DIR` 接收目录名（默认 `autotests`）：
 
 ```bash
 TEST_DIR=tests bash ${SKILL_DIR}/scripts/generate-runner.sh
@@ -71,7 +71,7 @@ TEST_DIR=tests bash ${SKILL_DIR}/scripts/generate-runner.sh
 - `{ADD_SUBDIRECTORIES}` → `add_subdirectory()` 调用（初始为空，后续阶段会补充）
 
 **覆盖率编译标志**：模板已内置 `-fprofile-arcs -ftest-coverage`（Debug 模式下启用）。
-不要删除此标志——`run-ut.sh` 的 step_5 (lcov --capture) 和 `report_generator` 的覆盖率解析都依赖它。
+不要删除此标志——`run-ut.sh` 的 step_5 (lcov --capture) 和 Mode 3 `collect-coverage-report.py` 的覆盖率采集都依赖它。
 若项目根 CMakeLists.txt 已有覆盖率标志，{test_dir} 的标志不冲突（追加模式）。
 
 ### 7. 修改根 CMakeLists.txt
@@ -148,7 +148,7 @@ cmake .. -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
 cmake --build . -j$(nproc)
 
 **必须使用 `-DCMAKE_BUILD_TYPE=Debug`**：覆盖率编译标志（`-fprofile-arcs -ftest-coverage`）仅在 Debug 模式下启用。
-若不传 Debug，编译出的二进制无 gcov 插桩，`run-ut.sh` 的 lcov 步骤和 `report_generator` 的覆盖率解析将全部失效。
+若不传 Debug，编译出的二进制无 gcov 插桩，`run-ut.sh` 的 lcov 步骤和 Mode 3 `collect-coverage-report.py` 的覆盖率采集将全部失效。
 
 若失败 → 分析错误 → 修 CMakeLists → 重试（max 10 loops）。
 

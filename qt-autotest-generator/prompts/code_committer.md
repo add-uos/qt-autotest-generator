@@ -48,7 +48,6 @@ git status --porcelain
 - `{test_dir}/3rdparty/stub/*` — stub-ext 库
 - `{test_dir}/cmake/UnitTestUtils.cmake` — CMake 工具
 - `{test_dir}/run-ut.sh` — 测试运行脚本
-- `{test_dir}/report_generator/**` — 报告生成器
 - `{test_dir}/README.md` — 使用说明
 - `{test_dir}/.gitignore` — gitignore
 - 根 `CMakeLists.txt` 中 APPEND 的 `BUILD_TESTS` 开关行
@@ -92,9 +91,8 @@ git add ${test_dir}/cmake/UnitTestUtils.cmake 2>/dev/null || true
 # stub-ext
 git add ${test_dir}/3rdparty/stub/ 2>/dev/null || true
 
-# 运行脚本 + 报告生成器
+# 运行脚本
 git add ${test_dir}/run-ut.sh 2>/dev/null || true
-git add ${test_dir}/report_generator/ 2>/dev/null || true
 git add ${test_dir}/README.md 2>/dev/null || true
 git add ${test_dir}/.gitignore 2>/dev/null || true
 

@@ -86,7 +86,7 @@ gate_failed_levels = [lv for lv in ("high", "mid", "low") if not snapshot["by_le
 uncovered_functions = snapshot["uncovered_functions"]
 ```
 
-> 脚本 `scripts/coverage_by_level.py` 解析 FN/FNDA/DA + `c++filt` demangle 关联 inventory 分级，补 `coverage_parser.py`（仅文件级 LF/LH/FNF/FNH）缺失的函数级+行级能力。门禁阈值取自 inventory 的 `gate_thresholds`，不在 self_checker 内 hardcode。
+> 脚本 `scripts/coverage_by_level.py` 解析 FN/FNDA/DA + `c++filt` demangle 关联 inventory 分级，产出函数级+行级覆盖率。门禁阈值取自 inventory 的 `gate_thresholds`，不在 self_checker 内 hardcode。
 
 **判定规则**：
 - `coverage_gap` 非空 → 流转至 `incremental_updater`（传入 `coverage_gap`）

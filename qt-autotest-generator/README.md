@@ -2,7 +2,7 @@
 
 # Qt Autotest Generator
 
-> Qt CMake 项目单元测试自动生成：基于 codebase-memory-mcp 知识图谱，**函数重要性探测**（Mode 1）或**按分级补全 GTest 用例**（Mode 2，编译验证+覆盖率门禁+更新 usecase_count）。
+> Qt CMake 项目单元测试自动生成：基于 codebase-memory-mcp 知识图谱，**函数重要性探测**（Mode 1）、**按分级补全 GTest 用例**（Mode 2，编译验证+覆盖率门禁+更新 usecase_count）、**覆盖率采集与汇总**（Mode 3，一条命令出分级报告）。
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://isocpp.org/)
@@ -42,7 +42,7 @@ Qt 项目代码量大，**单测覆盖率上不去**？<br>
 <tr><th align="left" nowrap width="1%">能力</th><th align="left">说明</th></tr>
 </thead>
 <tbody>
-<tr><td nowrap width="1%"><strong>双模式架构</strong></td><td><strong>Mode 1</strong>（函数重要性探测）：全量扫描知识图谱，多因子评分，产出 <code>.ut-inventory.json</code> 分级表。<strong>Mode 2</strong>（单元测试生成）：读取分级表，按 high→mid→low 优先级逐类生成 GTest 用例，编译验证+覆盖率门禁。Mode 2 启动时若 inventory 不存在则自动触发 Mode 1。</td></tr>
+<tr><td nowrap width="1%"><strong>三模式架构</strong></td><td><strong>Mode 1</strong>（函数重要性探测）：全量扫描知识图谱，多因子评分，产出 <code>.ut-inventory.json</code> 分级表。<strong>Mode 2</strong>（单元测试生成）：读取分级表，按 high→mid→low 优先级逐类生成 GTest 用例，编译验证+覆盖率门禁。Mode 2 启动时若 inventory 不存在则自动触发 Mode 1。<strong>Mode 3</strong>（覆盖率采集与汇总）：一条命令采集 gtest XML + lcov HTML + 分级覆盖率 + 汇总 JSON，不生成测试代码。</td></tr>
 <tr><td nowrap width="1%"><strong>知识图谱驱动</strong></td><td>基于 codebase-memory-mcp 知识图谱毫秒级拉取类结构、方法签名、调用链、依赖关系；硬门禁，无图谱不执行。<strong>支持远端（<code>remote-codebase-memory-mcp</code>）与本地两种提供方，远端优先</strong></td></tr>
 <tr><td nowrap width="1%"><strong>框架搭建</strong></td><td>自动创建 <code>{test_dir}/</code> 目录（默认 <code>autotests/</code>，若项目已有 <code>tests/</code> 则沿用）：CMake 配置、stub-ext、测试运行脚本、报告生成器</td></tr>
 <tr><td nowrap width="1%"><strong>逐类生成</strong></td><td>按复杂度规划用例数（高复杂度多写边界+异常），AAA 模式，<code>{Feature}_{Scenario}_{ExpectedResult}</code> 命名</td></tr>
@@ -51,7 +51,7 @@ Qt 项目代码量大，**单测覆盖率上不去**？<br>
 <tr><td nowrap width="1%"><strong>覆盖率自检</strong></td><td>有 <code>.ut-inventory.json</code> 时按方法分级设差异化门禁（🌟high 行90%+分支80%+函数100%，⚖mid 行60%+函数100%，💤low 行60%+函数100%）；无时回退单一门禁（默认 90%）。低于阈值触发自动补全</td></tr>
 <tr><td nowrap width="1%"><strong>增量对账</strong></td><td>源码变更后自动 diff，只补新增方法、只修签名变更、只清理已删方法引用</td></tr>
 <tr><td nowrap width="1%"><strong>源码缺陷标红</strong></td><td>疑似源码缺陷（编译不过/运行崩溃/逻辑矛盾）标红交还用户，不自行修源码</td></tr>
-<tr><td nowrap width="1%"><strong>HTML/CSV 报告</strong></td><td>固定收尾生成覆盖率总览、逐类结果、源码缺陷清单、跳过类清单</td></tr>
+<tr><td nowrap width="1%"><strong>Mode 3 · 覆盖率采集</strong></td><td>一条命令采集：gtest XML + lcov HTML + 分级覆盖率 + 汇总 JSON（<code>scripts/collect-coverage-report.py</code>）。不生成测试代码，只读采集。</td></tr>
 </tbody>
 </table>
 
@@ -82,7 +82,7 @@ Claude Code、Cursor、opencode 等兼容 AgentSkills 的客户端，具体落�
 | Qt | 5 或 6 | Core + Widgets 模块 |
 | Google Test | 任意 | `libgtest-dev` 或源码编译 |
 | codebase-memory-mcp | >= 0.8.0 | 知识图谱 MCP（本地兜底，由 `setup-codebase-memory.sh` 自动安装）；或接入已索引本项目的 `remote-codebase-memory-mcp` 远端实例（远端优先） |
-| Python | >= 3.8 | 报告生成（仅用标准库） |
+| Python | >= 3.8 | 覆盖率采集脚本（仅用标准库） |
 | gcc/g++ | 支持 C++17 | 编译器 |
 
 #### 可选

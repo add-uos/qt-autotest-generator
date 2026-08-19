@@ -8,7 +8,7 @@
 """
 coverage_by_level.py — 按 .ut-inventory.json 的 level(high/mid/low) 统计【函数覆盖率】与【行覆盖率】。
 
-补全 coverage_parser.py（仅文件级 LF/LH/FNF/FNH）缺失的【函数级 + 行级】能力：
+按 inventory 分级统计【函数级 + 行级】覆盖率：
 解析 FN/FNDA/DA，c++filt demangle 后关联 inventory 分级，产出按 high/mid/low 的覆盖率。
 
 数据源:
@@ -117,7 +117,7 @@ def class_matches(m, kw):
 
 def main():
     ap = argparse.ArgumentParser(
-        description="按 inventory level 统计函数/行覆盖率（函数级+行级，补 coverage_parser.py）"
+        description="按 inventory level 统计函数/行覆盖率（函数级+行级）"
     )
     ap.add_argument("-i", "--inventory", required=True, help=".ut-inventory.json 路径")
     ap.add_argument("-c", "--coverage", required=True, help="lcov coverage.info / filtered.info 路径")

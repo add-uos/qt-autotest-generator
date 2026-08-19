@@ -1,7 +1,7 @@
 ---
 name: qt-autotest-generator
-description: "Qt CMake 项目单元测试：函数重要性探测（Mode 1，生成 .ut-inventory.json 分级表）或按分级补全 GTest 用例（Mode 2，编译验证+覆盖率门禁+更新 usecase_count）。触发于「扫描函数重要性/生成 inventory/探测分级/项目初始化单测分析」→ Mode 1；「生成单测/补全测试/add gtest/写测试/建测试框架/修测试/重新对账」→ Mode 2。硬门禁：codebase-memory-mcp 知识图谱（远端优先，本地兜底）。不触发于：非 Qt 或非 CMake 项目、Qt Test/Catch2 框架、仅运行测试/配 CI 不生成测试代码。"
-version: "3.0.0"
+description: "Qt CMake 项目单元测试：函数重要性探测（Mode 1，生成 .ut-inventory.json 分级表）、按分级补全 GTest 用例（Mode 2，编译验证+覆盖率门禁+更新 usecase_count）、覆盖率采集与汇总（Mode 3，一条命令出分级报告）。触发于「扫描函数重要性/生成 inventory/探测分级/项目初始化单测分析」→ Mode 1；「生成单测/补全测试/add gtest/写测试/建测试框架/修测试/重新对账」→ Mode 2；「采集覆盖率/统计覆盖率/生成覆盖率报告/collect coverage/coverage report」→ Mode 3。硬门禁：codebase-memory-mcp 知识图谱（远端优先，本地兜底）。不触发于：非 Qt 或非 CMake 项目、Qt Test/Catch2 框架、仅运行测试/配 CI 不生成测试代码。"
+version: "3.1.0"
 user-invocable: true
 argument-hint: "[项目路径 / 模块路径 / 类名]"
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash
@@ -16,14 +16,17 @@ compatibility:
 
 # Qt Autotest Generator
 
-基于 **codebase-memory-mcp 知识图谱** 的 Qt CMake 项目单元测试技能。支持两种模式；分步指令在 **`prompts/`**，执行前须 **`Read`** 对应文件。
+基于 **codebase-memory-mcp 知识图谱** 的 Qt CMake 项目单元测试技能。支持三种模式；分步指令在 **`prompts/`**，执行前须 **`Read`** 对应文件。
 
 | 模式 | 何时用 | 主入口 |
 |------|--------|--------|
 | **Mode 1 · 函数重要性探测** | 项目初始化、扫描方法分级、生成 inventory | 下文 + `Read prompts/inventory.md` |
 | **Mode 2 · 单元测试编写** | 按 inventory 补全 GTest 用例 | 下文 + `Read prompts/test_writer.md` |
+| **Mode 3 · 覆盖率采集与汇总** | 只采集/统计覆盖率，不生成测试代码 | `Read prompts/report_generator.md` + `scripts/collect-coverage-report.py` |
 
 Mode 2 启动时若 `.ut-inventory.json` 不存在 → **自动触发 Mode 1**。
+
+Mode 3 为**只读采集**，不生成/修改测试代码，适合「跑一下看覆盖率」或「出分级覆盖率报告」。
 
 ## 环境与约定
 
@@ -39,7 +42,7 @@ Mode 2 启动时若 `.ut-inventory.json` 不存在 → **自动触发 Mode 1**�
 
 - **Mode 1**：扫描函数重要性、建立分级表、探测分级、生成 inventory、项目初始化单测分析、importance inventory、scan method importance
 - **Mode 2**：生成单测、建测试框架、批量生成单测、补全测试、修测试、重新对账、加测试、add gtest、setup unit tests、coverage gap、fix test failures、sync tests、improve coverage
-- **指定覆盖率阈值**：函数覆盖率 90%、覆盖率不低于 95%、coverage threshold 85% → 写入内存变量，默认 90
+- **Mode 3**：采集覆盖率、统计覆盖率、生成覆盖率报告、collect coverage、coverage report、coverage summary
 
 **不触发于**：非 Qt 或非 CMake 项目、Qt Test/Catch2/doctest 框架、仅运行测试/配 CI/看日志、集成测试/性能测试/UI 自动化
 
@@ -52,6 +55,16 @@ Mode 2 启动时若 `.ut-inventory.json` 不存在 → **自动触发 Mode 1**�
 3. **`Read`** `prompts/inventory.md` → 全量扫描 → 评分 → 产出 `.ut-inventory.json` + `inventory-summary.md`
 
 Mode 1 **不生成测试代码、不编译、不运行**，只建表。
+
+---
+
+## Mode 3 · 覆盖率采集与汇总
+
+1. **`Read`** `prompts/report_generator.md` → 调用 `scripts/collect-coverage-report.py`
+2. 脚本一条命令完成：运行测试 → lcov 采集 → genhtml → 分级覆盖率 → 汇总 JSON
+3. 产出：`report/`（gtest XML）+ `html/`（lcov HTML）+ `coverage_by_level.json`（分级详情）+ `ut-summary.json`（三合一汇总）
+
+Mode 3 **不生成测试代码、不编译新测试、不修改项目**，只采集和统计。
 
 ---
 
@@ -75,7 +88,7 @@ Mode 2 的子步骤按需读取：
 | 增量补全 | `prompts/incremental_updater.md` | 覆盖率缺口时 |
 | 失败修复 | `prompts/failure_repairer.md` | 编译/运行失败时 |
 | 代码提交 | `prompts/code_committer.md` | 批次自检通过后 |
-| 报告生成 | `prompts/report_generator.md` | 全类完成收尾 |
+| 报告生成 | `prompts/report_generator.md` | Mode 3 覆盖率采集与汇总 |
 
 ---
 
@@ -101,7 +114,7 @@ Mode 2 的子步骤按需读取：
 | 增量补全 | `prompts/incremental_updater.md` | 图谱差集补缺失用例、CMake 智能合并 |
 | 失败修复 | `prompts/failure_repairer.md` | 失败修复 + 根因分类 + 源码缺陷标红 |
 | 代码提交 | `prompts/code_committer.md` | 批次增量提交（只 commit 不 push） |
-| 报告生成 | `prompts/report_generator.md` | HTML/CSV 报告（含源码缺陷清单） |
+| 报告生成 | `prompts/report_generator.md` | Mode 3：覆盖率采集 + 汇总 JSON（含分级） |
 
 ---
 
@@ -138,7 +151,7 @@ Mode 2 的子步骤按需读取：
 | MCP 使用指南 | `resources/references/codebase-memory-guide.md` |
 | 测试方法论 | `resources/references/test-types.md` |
 | 覆盖率分级 | `resources/references/coverage-tiers.md` |
-| 分级覆盖率统计 | `scripts/coverage_by_level.py`（函数级+行级，补 coverage_parser.py）|
+| 分级覆盖率采集 | `scripts/collect-coverage-report.py` | Mode 3：一条命令采集 gtest XML + lcov HTML + 分级覆盖率 + 汇总 JSON |
 | Inventory Schema | `resources/references/inventory-schema.md` |
 | 对账逻辑 | `resources/references/reconcile-logic.md` |
 
@@ -159,7 +172,7 @@ Mode 2 的子步骤按需读取：
 ## Agent 自用工作流检查清单
 
 ```
-□ 已区分 Mode 1（分析）/ Mode 2（编写），未混跑
+□ 已区分 Mode 1（分析）/ Mode 2（编写）/ Mode 3（采集），未混跑
 □ 已执行 reconcile（比对 git HEAD 与 inventory.base_sha，按差异路由；首次运行无 inventory 直接进入环境检查）
 □ Mode 1：已 Read prompts/environment_check.md + prompts/inventory.md；产出 .ut-inventory.json
 □ Mode 2：已 Read prompts/environment_check.md；.ut-inventory.json 存在（不存在则先执行 Mode 1）
@@ -170,5 +183,5 @@ Mode 2 的子步骤按需读取：
 □ 每类编译通过后：已更新 .ut-inventory.json 的 usecase_count
 □ 批次提交：本批次自检通过后已执行代码提交（只 commit 不 push）
 □ 疑似源码缺陷：已标红，未自行修源码
-□ 全类完成 + 覆盖达标：已执行报告生成收尾
+□ 全类完成 + 覆盖达标：已执行报告生成收尾（或 Mode 3 单独采集覆盖率）
 ```

@@ -11,7 +11,6 @@ autotests/
 ├── core/                # 测试模块（按源码模块分组）
 │   ├── CMakeLists.txt
 │   └── test_calculator.cpp
-├── report_generator/    # 报告生成器
 ├── run-ut.sh             # 测试运行脚本
 └── CMakeLists.txt        # 测试根 CMake
 ```
