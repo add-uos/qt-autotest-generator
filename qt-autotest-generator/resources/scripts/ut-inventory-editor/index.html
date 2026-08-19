@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>UT Inventory Editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config={theme:{extend:{fontFamily:{mono:['JetBrains Mono','ui-monospace','monospace'],sans:['IBM Plex Sans','system-ui','sans-serif']}}}};</script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script>(function(){try{var s=localStorage.getItem('utie-theme');var d=window.matchMedia('(prefers-color-scheme:light)').matches?'light':'dark';document.documentElement.setAttribute('data-theme',s||d)}catch(e){document.documentElement.setAttribute('data-theme','dark')}})();</script>
+<style>
+:root{--bg:#0f172a;--bg-elev:#1e293b;--bg-elev2:#273449;--bg-hover:#334155;--border:#334155;--border-soft:#1e293b;--text:#f8fafc;--text-dim:#94a3b8;--text-muted:#475569;--accent:#22c55e;--accent-hover:#16a34a;--accent-soft:rgba(34,197,94,.14);--warn:#f59e0b;--danger:#ef4444;--info:#38bdf8;--high:#22c55e;--mid:#f59e0b;--low:#64748b;--exempt:#ef4444;--factor-pos3:#22c55e;--factor-pos:#38bdf8;--factor-suggest:#f59e0b;--factor-neg:#ef4444}
+:root[data-theme='light']{--bg:#f8fafc;--bg-elev:#fff;--bg-elev2:#f1f5f9;--bg-hover:#e2e8f0;--border:#cbd5e1;--border-soft:#e2e8f0;--text:#0f172a;--text-dim:#475569;--text-muted:#94a3b8;--accent:#16a34a;--accent-hover:#15803d;--accent-soft:rgba(22,163,74,.16);--warn:#d97706;--danger:#dc2626;--info:#0284c7;--high:#16a34a;--mid:#d97706;--low:#475569;--exempt:#dc2626;--factor-pos3:#16a34a;--factor-pos:#0284c7;--factor-suggest:#d97706;--factor-neg:#dc2626;color-scheme:light}
+:root[data-theme='dark']{color-scheme:dark}
+*{box-sizing:border-box;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+*::-webkit-scrollbar{width:8px;height:8px}
+*::-webkit-scrollbar-thumb{background:var(--border);border-radius:6px;border:2px solid transparent;background-clip:content-box}
+*::-webkit-scrollbar-track{background:transparent}
+html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.mono,code,kbd{font-family:'JetBrains Mono',ui-monospace,monospace;font-variant-ligatures:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px;border-radius:4px}
+button{font-family:inherit}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg-elev);color:var(--text);cursor:pointer;transition:background .2s,border-color .2s;font-size:13px;white-space:nowrap}
+.btn:hover{background:var(--bg-hover);border-color:var(--bg-hover)}
+.btn:active{background:var(--bg-elev2)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#052e16;font-weight:600}
+.btn-primary:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
+.btn-ghost{background:transparent;border-color:transparent}
+.btn-ghost:hover{background:var(--bg-elev);border-color:var(--border)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-sm{padding:4px 8px;font-size:12px;border-radius:6px}
+.icon{width:18px;height:18px;flex-shrink:0}
+.app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+.app-header{flex-shrink:0;border-bottom:1px solid var(--border-soft);background:linear-gradient(180deg,var(--bg-elev),var(--bg))}
+.app-main{flex:1;display:grid;grid-template-columns:240px 1fr 360px;gap:1px;background:var(--border-soft);overflow:hidden;min-height:0}
+.panel{background:var(--bg);display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.panel-header{padding:10px 12px;border-bottom:1px solid var(--border-soft);display:flex;align-items:center;gap:8px;flex-shrink:0}
+.panel-body{flex:1;overflow:auto;min-height:0}
+.search-input{width:100%;background:var(--bg-elev);border:1px solid var(--border);color:var(--text);padding:8px 10px 8px 34px;border-radius:8px;font-size:13px;transition:border-color .2s,box-shadow .2s}
+.search-input::placeholder{color:var(--text-muted)}
+.search-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.search-wrap{position:relative}
+.search-wrap .icon.search-icon{position:absolute;left:9px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--text-muted)}
+.level-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid transparent;transition:all .15s;user-select:none}
+.level-badge:hover{filter:brightness(1.2)}
+.level-high{background:rgba(34,197,94,.18);color:var(--high);border-color:rgba(34,197,94,.3)}
+.level-mid{background:rgba(245,158,11,.18);color:var(--mid);border-color:rgba(245,158,11,.3)}
+.level-low{background:rgba(100,116,139,.18);color:var(--low);border-color:rgba(100,116,139,.3)}
+.level-exempt{background:rgba(239,68,68,.18);color:var(--exempt);border-color:rgba(239,68,68,.3)}
+.factor-pill{display:inline-flex;align-items:center;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600;letter-spacing:.02em;white-space:nowrap}
+.factor-pos3{background:rgba(34,197,94,.16);color:var(--factor-pos3)}
+.factor-pos{background:rgba(56,189,248,.16);color:var(--factor-pos)}
+.factor-suggest{background:rgba(245,158,11,.16);color:var(--factor-suggest)}
+.factor-neg{background:rgba(239,68,68,.16);color:var(--factor-neg)}
+.type-badge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:18px;border-radius:4px;font-size:10px;font-weight:700}
+.type-m{background:rgba(56,189,248,.16);color:var(--info)}
+.type-f{background:rgba(168,85,247,.16);color:#a855f7}
+.source-badge{font-size:10px;padding:1px 5px;border-radius:4px;font-weight:600}
+.source-auto{background:rgba(34,197,94,.12);color:var(--high)}
+.source-suggested{background:rgba(245,158,11,.12);color:var(--mid)}
+.source-manual{background:rgba(56,189,248,.12);color:var(--info)}
+.review-badge{font-size:10px;padding:1px 5px;border-radius:4px;font-weight:600}
+.review-pending{background:rgba(245,158,11,.16);color:var(--mid)}
+.review-auto{background:rgba(34,197,94,.12);color:var(--high)}
+.review-exempt{background:rgba(100,116,139,.12);color:var(--low)}
+.review-confirmed{background:rgba(56,189,248,.12);color:var(--info)}
+.method-row{display:grid;grid-template-columns:28px 68px 52px 180px 120px 160px 1fr 56px 56px 48px;align-items:center;gap:4px;padding:6px 10px;border-bottom:1px solid var(--border-soft);cursor:pointer;transition:background .12s;font-size:12.5px}
+.method-row:hover{background:var(--bg-elev)}
+.method-row.active{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+.method-row input[type='checkbox']{accent-color:var(--accent);cursor:pointer}
+.method-name{font-family:'JetBrains Mono',monospace;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.method-class{color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px}
+.method-file{color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+.method-factors{display:flex;gap:3px;flex-wrap:nowrap;overflow:hidden}
+.level-popup{position:fixed;z-index:60;background:var(--bg-elev);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.4);padding:4px;min-width:120px;display:none}
+.level-popup.show{display:block}
+.level-popup-item{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;transition:background .12s}
+.level-popup-item:hover{background:var(--bg-hover)}
+.detail-section{padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+.detail-section h4{margin:0 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim);font-weight:600}
+.detail-field{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12.5px}
+.detail-field .label{color:var(--text-dim)}
+.factor-row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:12px;border-bottom:1px dashed var(--border-soft)}
+.factor-row:last-child{border-bottom:none}
+.factor-row .score{font-weight:700;min-width:28px;text-align:right}
+.toggle-switch{position:relative;width:36px;height:20px;background:var(--bg-elev2);border-radius:10px;cursor:pointer;transition:background .2s;border:1px solid var(--border)}
+.toggle-switch.on{background:var(--accent);border-color:var(--accent)}
+.toggle-switch .knob{position:absolute;top:2px;left:2px;width:14px;height:14px;background:#fff;border-radius:50%;transition:transform .2s}
+.toggle-switch.on .knob{transform:translateX(16px)}
+.bulk-bar{position:sticky;top:0;z-index:30;background:var(--bg-elev2);border-bottom:1px solid var(--border);padding:8px 12px;display:flex;align-items:center;gap:8px;font-size:12px}
+.status-bar{flex-shrink:0;border-top:1px solid var(--border-soft);background:var(--bg-elev);padding:6px 14px;display:flex;align-items:center;gap:14px;font-size:12px;color:var(--text-dim)}
+.toast-container{position:fixed;bottom:40px;right:18px;display:flex;flex-direction:column;gap:8px;z-index:100}
+.toast{background:var(--bg-elev2);border:1px solid var(--border);border-left:3px solid var(--accent);color:var(--text);padding:10px 14px;border-radius:8px;font-size:13px;box-shadow:0 6px 18px rgba(0,0,0,.5);animation:slideIn .2s ease;max-width:360px}
+.toast.err{border-left-color:var(--danger)}
+.toast.warn{border-left-color:var(--warn)}
+@keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+.drop-overlay{position:fixed;inset:0;background:rgba(34,197,94,.12);border:3px dashed var(--accent);z-index:200;display:none;align-items:center;justify-content:center;pointer-events:none;font-size:22px;color:var(--accent);font-weight:600}
+.drop-overlay.show{display:flex}
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:48px 24px;color:var(--text-muted);text-align:center}
+.empty-state .icon{width:40px;height:40px;opacity:.4}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:80;display:flex;align-items:center;justify-content:center}
+.modal{background:var(--bg-elev);border:1px solid var(--border);border-radius:12px;padding:20px;min-width:320px;max-width:480px;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+.modal h3{margin:0 0 12px;font-size:15px;font-weight:600}
+.modal input[type='text']{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;font-size:13px;margin:8px 0 16px}
+.modal input[type='text']:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px}
+.review-progress{height:4px;background:var(--bg-elev2);border-radius:2px;overflow:hidden;margin-top:8px}
+.review-progress-bar{height:100%;background:var(--accent);border-radius:2px;transition:width .3s}
+.scope-rule-item{display:flex;align-items:center;gap:6px;padding:4px 12px;font-size:11.5px;color:var(--text-dim)}
+.scope-rule-item .pattern{font-family:'JetBrains Mono',monospace;color:var(--text-muted)}
+.scope-rule-item .arrow{color:var(--text-muted)}
+.scope-rule-item .reason{color:var(--exempt);font-size:10px}
+.filter-checkbox{display:flex;align-items:center;gap:6px;padding:4px 12px;font-size:12px;cursor:pointer;user-select:none;transition:background .12s;border-radius:4px}
+.filter-checkbox:hover{background:var(--bg-elev)}
+.filter-checkbox input{accent-color:var(--accent);cursor:pointer}
+.filter-checkbox .count{font-size:10px;color:var(--text-muted);margin-left:auto}
+.class-group{border-bottom:1px solid var(--border-soft)}
+.class-row{display:flex;align-items:center;gap:6px;padding:5px 12px;cursor:pointer;transition:background .12s;font-size:12px}
+.class-row:hover{background:var(--bg-elev)}
+.class-row.active{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+.class-row .chevron{transition:transform .15s;color:var(--text-muted);flex-shrink:0}
+.class-row.expanded .chevron{transform:rotate(90deg)}
+.class-row .name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.class-row .badge{font-size:10px;background:var(--bg-elev2);color:var(--text-dim);border-radius:10px;padding:1px 6px;flex-shrink:0}
+.class-method{padding:4px 12px 4px 28px;font-size:11px;display:flex;align-items:center;gap:6px;cursor:pointer;transition:background .12s}
+.class-method:hover{background:var(--bg-elev)}
+.class-method .mname{font-family:'JetBrains Mono',monospace;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:1024px){.app-main{grid-template-columns:1fr;grid-template-rows:auto 1fr auto}.panel{max-height:45vh}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<div class="app">
+<header class="app-header">
+<div class="flex items-center justify-between gap-3 px-4 py-2.5 flex-wrap">
+<div class="flex items-center gap-2.5">
+<i data-lucide="flask-conical" class="icon text-[22px]" style="color:var(--accent)"></i>
+<h1 class="text-[15px] font-bold tracking-tight">UT Inventory Editor</h1>
+<span id="project-name" class="text-[11px] text-[var(--text-muted)] hidden sm:inline"></span>
+</div>
+<div class="flex items-center gap-2 flex-wrap">
+<span id="stat-high" class="level-badge level-high" style="cursor:default">🌟 0</span>
+<span id="stat-mid" class="level-badge level-mid" style="cursor:default">⚖ 0</span>
+<span id="stat-low" class="level-badge level-low" style="cursor:default">💤 0</span>
+<span id="stat-exempt" class="level-badge level-exempt" style="cursor:default">🚫 0</span>
+<span class="text-[11px] text-[var(--text-muted)]">|</span>
+<span id="stat-review" class="text-[11px] text-[var(--warn)]">待复核: 0</span>
+<span class="text-[11px] text-[var(--text-muted)]">|</span>
+<span id="stat-modified" class="text-[11px] text-[var(--info)] hidden">已修改: 0</span>
+<span id="stat-factor" class="text-[11px] text-[var(--info)] hidden cursor-pointer" title="点击清除因子筛选">因子: —</span>
+</div>
+<div class="flex items-center gap-2">
+<input id="file-input" type="file" accept=".json" class="hidden"/>
+<button id="btn-theme" class="btn btn-sm btn-ghost" title="切换主题"><i data-lucide="sun" class="icon theme-icon"></i></button>
+<button id="btn-open" class="btn btn-sm" title="打开"><i data-lucide="folder-open" class="icon"></i><span class="label-text">打开</span></button>
+<button id="btn-save" class="btn btn-sm btn-primary" title="保存" disabled><i data-lucide="save" class="icon"></i><span class="label-text">保存</span></button>
+<button id="btn-export" class="btn btn-sm" title="导出CSV"><i data-lucide="download" class="icon"></i><span class="label-text">CSV</span></button>
+</div>
+</div>
+</header>
+<main class="app-main">
+<section class="panel" id="left-panel">
+<div class="px-3 py-2 border-b border-[var(--border-soft)]">
+<div class="search-wrap"><i data-lucide="search" class="icon search-icon"></i>
+<input id="search-input" class="search-input" type="text" placeholder="搜索方法名/类名/文件…" autocomplete="off" spellcheck="false"/></div>
+</div>
+<div class="panel-body" id="left-body">
+<div class="py-2 border-b border-[var(--border-soft)]">
+<div class="px-3 pb-1 text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">Level 筛选</div>
+<label class="filter-checkbox"><input type="checkbox" data-level="high" checked/> 🌟 high <span class="count" id="fc-high">0</span></label>
+<label class="filter-checkbox"><input type="checkbox" data-level="mid" checked/> ⚖ mid <span class="count" id="fc-mid">0</span></label>
+<label class="filter-checkbox"><input type="checkbox" data-level="low" checked/> 💤 low <span class="count" id="fc-low">0</span></label>
+<label class="filter-checkbox"><input type="checkbox" data-level="exempt"/> 🚫 exempt <span class="count" id="fc-exempt">0</span></label>
+</div>
+<div class="py-2 border-b border-[var(--border-soft)]">
+<div class="px-3 pb-1 text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">节点类型</div>
+<label class="filter-checkbox"><input type="checkbox" data-nodetype="Method" checked/> <span class="type-badge type-m">M</span> Method <span class="count" id="fc-method">0</span></label>
+<label class="filter-checkbox"><input type="checkbox" data-nodetype="Function" checked/> <span class="type-badge type-f">F</span> Function <span class="count" id="fc-function">0</span></label>
+</div>
+<div class="py-2 border-b border-[var(--border-soft)]">
+<div class="px-3 pb-1 text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">Class 树</div>
+<div id="class-tree"></div>
+</div>
+<div class="py-2">
+<div class="px-3 pb-1 text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold cursor-pointer flex items-center gap-1" id="scope-toggle">
+<i data-lucide="chevron-right" class="icon" style="width:14px;height:14px"></i> Scope Rules</div>
+<div id="scope-rules-list" class="hidden"></div>
+</div>
+</div>
+</section>
+<section class="panel">
+<div class="panel-header">
+<i data-lucide="list" class="icon" style="color:var(--text-dim)"></i>
+<span class="text-[13px] font-semibold flex-1 truncate" id="table-title">方法列表</span>
+<span id="table-count" class="text-[11px] text-[var(--text-muted)]"></span>
+</div>
+<div id="bulk-bar" class="bulk-bar hidden">
+<span id="bulk-count">已选 0 条</span>
+<button class="btn btn-sm" data-bulk="high">🌟 high</button>
+<button class="btn btn-sm" data-bulk="mid">⚖ mid</button>
+<button class="btn btn-sm" data-bulk="low">💤 low</button>
+<button class="btn btn-sm" data-bulk="exempt">🚫 豁免</button>
+<button class="btn btn-sm" data-bulk="unexempt">✅ 取消豁免</button>
+<button class="btn btn-sm btn-ghost" data-bulk="clear">取消选择</button>
+</div>
+<div class="panel-body" id="method-table-body">
+<div class="method-row" style="cursor:default;font-size:11px;color:var(--text-muted);font-weight:600;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg-elev);z-index:10">
+<span></span><span data-sort="level">Level</span><span>Type</span><span data-sort="name">Name</span><span data-sort="class_qn">Class</span><span data-sort="file">File</span><span>Factors</span><span>Source</span><span>Review</span><span>UC</span>
+</div>
+<div id="method-rows"></div>
+<div id="method-empty" class="empty-state hidden"><i data-lucide="search-x" class="icon"></i><span>无匹配方法</span></div>
+</div>
+</section>
+<section class="panel" id="right-panel">
+<div class="panel-header">
+<i data-lucide="info" class="icon" style="color:var(--text-dim)"></i>
+<span class="text-[13px] font-semibold flex-1 truncate">详情</span>
+<button id="btn-review-mode" class="btn btn-sm hidden" title="Review Queue"><i data-lucide="clipboard-check" class="icon"></i><span class="label-text">复核</span> <span id="review-badge" class="text-[10px] bg-[var(--warn)] text-white rounded-full px-1.5">0</span></button>
+</div>
+<div class="panel-body" id="detail-body">
+<div id="detail-empty" class="empty-state"><i data-lucide="mouse-pointer-click" class="icon"></i><span>选择方法查看详情</span></div>
+<div id="detail-content" class="hidden"></div>
+</div>
+</section>
+</main>
+<footer class="status-bar">
+<span id="status-dot" style="width:8px;height:8px;border-radius:50%;background:var(--accent)"></span>
+<span id="status-text">就绪</span>
+<span class="ml-auto flex items-center gap-3" id="status-stats"></span>
+</footer>
+</div>
+<div class="drop-overlay" id="drop-overlay"><div class="flex flex-col items-center gap-2"><i data-lucide="file-up" style="width:48px;height:48px"></i><span>拖放 .ut-inventory.json 文件</span></div></div>
+<div class="toast-container" id="toast-container"></div>
+<div class="level-popup" id="level-popup">
+<div class="level-popup-item" data-set-level="high"><span class="level-badge level-high">🌟 high</span></div>
+<div class="level-popup-item" data-set-level="mid"><span class="level-badge level-mid">⚖ mid</span></div>
+<div class="level-popup-item" data-set-level="low"><span class="level-badge level-low">💤 low</span></div>
+<div class="level-popup-item" data-set-level="exempt"><span class="level-badge level-exempt">🚫 exempt</span></div>
+</div>
+<div class="modal-overlay hidden" id="exempt-modal">
+<div class="modal"><h3>标记为不可测试</h3>
+<p class="text-[13px] text-[var(--text-dim)] mb-2">豁免原因：</p>
+<input type="text" id="exempt-reason-input" placeholder="手动豁免 - 不需要单测"/>
+<div class="modal-actions"><button class="btn btn-sm btn-ghost" id="exempt-cancel">取消</button><button class="btn btn-sm btn-primary" id="exempt-confirm">确认豁免</button></div>
+</div></div>
+<script>
+// ═══════════════════════════════════════════════════════════════
+// UT Inventory Editor — Main Application
+// ═══════════════════════════════════════════════════════════════
+const SAMPLE_DATA={project:"deepin-calculator",base_sha:"abc1234",scan_stats:{total:20,testable:14,high:4,mid:5,low:5,exempt:6,review_pending:3},scope_rules:[{pattern:"3rdparty/**",testable:false,reason:"第三方库"},{pattern:"tests/**",testable:false,reason:"测试代码本身"},{pattern:"**/moc_*.cpp",testable:false,reason:"MOC 生成"}],review_queue:[{qn:"calc.src.CalculatorInterface.clearItems",name:"clearItems",status:"pending"},{qn:"calc.src.Settings.deleteKey",name:"deleteKey",status:"pending"},{qn:"calc.src.ExpressionBar.handleInput",name:"handleInput",status:"pending"}],methods:[
+{qn:"calc.src.CalculatorInterface.showWindow",name:"showWindow",signature:"bool showWindow()",file:"src/calculatorinterface.cpp",class_qn:"calc.src.CalculatorInterface",testable:true,level:"high",factors:["dbus_slot","complexity:8"],source:"auto",exempt_reason:null,review_status:"auto",usecase_count:0,node_type:"Method"},
+{qn:"calc.src.CalculatorInterface.hideWindow",name:"hideWindow",signature:"void hideWindow()",file:"src/calculatorinterface.cpp",class_qn:"calc.src.CalculatorInterface",testable:true,level:"high",factors:["dbus_slot"],source:"auto",exempt_reason:null,review_status:"auto",usecase_count:0,node_type:"Method"},
+{qn:"calc.src.CalculatorInterface.clearItems",name:"clearItems",signature:"void clearItems()",file:"src/calculatorinterface.cpp",class_qn:"calc.src.CalculatorInterface",testable:true,level:"high",factors:["dbus_slot","name_pattern:clear"],source:"suggested",exempt_reason:null,review_status:"pending",usecase_count:0,node_type:"Method",auto_reason:"方法名含 clear"},
+{qn:"calc.src.InputEdit.handleKeyPress",name:"handleKeyPress",signature:"void handleKeyPress(QKeyEvent*)",file:"src/inputedit.cpp",class_qn:"calc.src.InputEdit",testable:true,level:"high",factors:["complexity:22","in_degree:5"],source:"auto",exempt_reason:null,review_status:"auto",usecase_count:0,node_type:"Method"},
+{qn:"calc.src.Settings.deleteKey",name:"deleteKey",signature:"void deleteKey(const QString&)",file:"src/settings.cpp",class_qn:"calc.src.Settings",testable:true,level:"mid",factors:["name_pattern:delete"],source:"suggested",exempt_reason:null,review_status:"pending",usecase_count:0,node_type:"Method",auto_reason:"方法名含 delete"},
+{qn:"calc.src.ExpressionBar.handleInput",name:"handleInput",signature:"void handleInput(const QString&)",file:"src/expressionbar.cpp",class_qn:"calc.src.ExpressionBar",testable:true,level:"mid",factors:["complexity:12","in_degree:3"],source:"suggested",exempt_reason:null,review_status:"pending",usecase_count:0,node_type:"Method",auto_reason:"complexity≥10"},
+{qn:"calc.src.MainWindow.initUI",name:"initUI",signature:"void initUI()",file:"src/mainwindow.cpp",class_qn:"calc.src.MainWindow",testable:true,level:"mid",factors:["complexity:15"],source:"auto",exempt_reason:null,review_status:"auto",usecase_count:0,node_type:"Method"},
+{qn:"calc.src.MainWindow.onAction",name:"onAction",signature:"void onAction(const QString&)",file:"src/mainwindow.cpp",class_qn:"calc.src.MainWindow",testable:true,level:"mid",factors:["in_degree:8"],source:"auto",exempt_reason:null,review_status:"auto",usecase_count:0,node_type:"Method"},
+{qn:"calc.src.BasicKeypad.buttonClicked",name:"buttonClicked",signature:"void buttonClicked(const QString&)",file:"src/basickeypad.cpp",class_qn:"calc.src.BasicKeypad",testable:true,level:"mid",factors:["in_degree:4"],source:"auto",exempt_reason:null,review_status:"auto",usecase_count:0,node_type:"Method"},
+{qn:"calc.src.InputEdit.cursorPosition",name:"cursorPosition",signature:"int cursorPosition() const",file:"src/inputedit.cpp",class_qn:"calc.src.InputEdit",testable:true,level:"low",factors:[],source:"auto",exempt_reason:null,review_status:"auto",usecase_count:0,node_type:"Method"},
+{qn:"calc.src.InputEdit.setText",name:"setText",signature:"void setText(const QString&)",file:"src/inputedit.cpp",class_qn:"calc.src.InputEdit",testable:true,level:"low",factors:[],source:"auto",exempt_reason:null,review_status:"auto",usecase_count:0,node_type:"Method"},
+{qn:"calc.src.MainWindow.MainWindow",name:"MainWindow",signature:"MainWindow(QWidget*)",file:"src/mainwindow.cpp",class_qn:"calc.src.MainWindow",testable:true,level:"low",factors:[],source:"auto",exempt_reason:null,review_status:"auto",usecase_count:0,node_type:"Method"},
+{qn:"calc.src.MainWindow.~MainWindow",name:"~MainWindow",signature:"~MainWindow()",file:"src/mainwindow.cpp",class_qn:"calc.src.MainWindow",testable:true,level:"low",factors:["destructor"],source:"auto",exempt_reason:null,review_status:"auto",usecase_count:0,node_type:"Method"},
+{qn:"calc.src.Settings.loadConfig",name:"loadConfig",signature:"QVariantMap loadConfig()",file:"src/settings.cpp",class_qn:"calc.src.Settings",testable:true,level:"low",factors:[],source:"auto",exempt_reason:null,review_status:"auto",usecase_count:0,node_type:"Method"},
+{qn:"calc.src.main",name:"main",signature:"int main(int,char**)",file:"src/main.cpp",class_qn:null,testable:true,level:"low",factors:[],source:"auto",exempt_reason:null,review_status:"auto",usecase_count:0,node_type:"Function"},
+{qn:"calc.src.getThemeTypeSetting",name:"getThemeTypeSetting",signature:"int getThemeTypeSetting()",file:"src/main.cpp",class_qn:null,testable:true,level:"low",factors:["complexity:6"],source:"auto",exempt_reason:null,review_status:"auto",usecase_count:0,node_type:"Function"},
+{qn:"calc.3rdparty.float_div",name:"float_div",signature:"float float_div(float,float)",file:"3rdparty/math/floatnum.c",class_qn:null,testable:false,level:"exempt",factors:[],source:"auto",exempt_reason:"scope:3rdparty/**",review_status:"exempt",usecase_count:0,node_type:"Function"},
+{qn:"calc.3rdparty.float_add",name:"float_add",signature:"float float_add(float,float)",file:"3rdparty/math/floatnum.c",class_qn:null,testable:false,level:"exempt",factors:[],source:"auto",exempt_reason:"scope:3rdparty/**",review_status:"exempt",usecase_count:0,node_type:"Function"},
+{qn:"calc.tests.TestMainWindow.testInit",name:"testInit",signature:"void testInit()",file:"tests/test_mainwindow.cpp",class_qn:"calc.tests.TestMainWindow",testable:false,level:"exempt",factors:[],source:"auto",exempt_reason:"scope:tests/**",review_status:"exempt",usecase_count:0,node_type:"Method"},
+{qn:"calc.tests.TestMainWindow.testAction",name:"testAction",signature:"void testAction()",file:"tests/test_mainwindow.cpp",class_qn:"calc.tests.TestMainWindow",testable:false,level:"exempt",factors:[],source:"auto",exempt_reason:"scope:tests/**",review_status:"exempt",usecase_count:0,node_type:"Method"}
+]};
+
+// ── State ──
+const S={inventory:null,methods:[],modified:new Map(),undoStack:[],filters:{levels:new Set(['high','mid','low']),nodeTypes:new Set(['Method','Function']),classQn:null,search:'',factor:null},sort:{col:'level',dir:'desc'},selected:new Set(),activeQn:null,reviewMode:false,levelPopupQn:null,virtual:{rendered:0,sentinel:null,observer:null}};
+
+// ── Factor scoring ──
+function factorScore(f){if(f==='dbus_slot'||f==='q_invokable'||f==='plugin_export')return 3;if(f.startsWith('complexity:')){const v=+f.split(':')[1];return v>=20?3:v>=10?2:v>=5?1:0}if(f.startsWith('linear_scan'))return 1;if(f.startsWith('in_degree'))return 1;if(f==='concurrent_class')return 1;if(f==='destructor'||f==='operator')return -1;if(f.startsWith('name_pattern'))return 0;return 0}
+function factorClass(f){const s=factorScore(f);if(s>=3)return'factor-pos3';if(s>=1)return'factor-pos';if(s<0)return'factor-neg';if(f.startsWith('name_pattern'))return'factor-suggest';return'factor-pos'}
+function computeLevel(factors){let s=0;for(const f of factors)s+=factorScore(f);return s>=3?'high':s>=1?'mid':'low'}
+function levelEmoji(l){return l==='high'?'🌟':l==='mid'?'⚖':l==='low'?'💤':'🚫'}
+function shortClass(qn){if(!qn)return'—';const p=qn.split('.');return p[p.length-1]}
+
+// ── Helpers ──
+const $=s=>document.querySelector(s),$$=s=>document.querySelectorAll(s);
+function toast(msg,type=''){const c=$('#toast-container'),t=document.createElement('div');t.className='toast '+type;t.textContent=msg;c.appendChild(t);setTimeout(()=>{t.style.opacity='0';t.style.transition='opacity .3s';setTimeout(()=>t.remove(),300)},3000)}
+
+// ── Data ──
+function loadInventory(data){S.inventory=JSON.parse(JSON.stringify(data));S.methods=data.methods||[];S.modified.clear();S.undoStack=[];S.selected.clear();S.activeQn=null;S.reviewMode=false;S.filters.levels=new Set(['high','mid','low']);S.filters.classQn=null;S.filters.search='';S.filters.nodeTypes=new Set(['Method','Function']);updateAll();$('#project-name').textContent=data.project||'';$('#status-text').textContent=`已加载 ${S.methods.length} 个方法`;$('#btn-save').disabled=true}
+function recalcStats(){const m=S.methods;const st={total:m.length,testable:m.filter(x=>x.testable).length,high:m.filter(x=>x.level==='high').length,mid:m.filter(x=>x.level==='mid').length,low:m.filter(x=>x.level==='low').length,exempt:m.filter(x=>x.level==='exempt').length,review_pending:m.filter(x=>x.review_status==='pending').length};if(S.inventory)S.inventory.scan_stats=st;return st}
+
+// ── Filtering & Sorting ──
+function getFiltered(){let l=S.methods;l=l.filter(m=>S.filters.levels.has(m.level));l=l.filter(m=>S.filters.nodeTypes.has(m.node_type||'Method'));if(S.filters.classQn)l=l.filter(m=>m.class_qn===S.filters.classQn);if(S.filters.factor){const q=S.filters.factor.toLowerCase();l=l.filter(m=>(m.factors||[]).some(f=>f.toLowerCase().startsWith(q)))}if(S.filters.search){const q=S.filters.search.toLowerCase();l=l.filter(m=>m.name.toLowerCase().includes(q)||(m.class_qn||'').toLowerCase().includes(q)||m.file.toLowerCase().includes(q))}const c=S.sort.col,d=S.sort.dir==='asc'?1:-1,lo={high:0,mid:1,low:2,exempt:3};l.sort((a,b)=>{let va,vb;if(c==='level'){va=lo[a.level]??9;vb=lo[b.level]??9}else if(c==='name'){va=a.name;vb=b.name}else if(c==='class_qn'){va=a.class_qn||'';vb=b.class_qn||''}else if(c==='file'){va=a.file;vb=b.file}else{va=a.name;vb=b.name}if(typeof va==='string')return va.localeCompare(vb)*d;return(va-vb)*d});return l}
+
+// ── Rendering ──
+function updateAll(){updateStats();updateFilters();updateClassTree();updateScopeRules();updateTable();updateDetail();updateReviewBtn()}
+function updateStats(){const st=recalcStats();$('#stat-high').textContent='🌟 '+st.high;$('#stat-mid').textContent='⚖ '+st.mid;$('#stat-low').textContent='💤 '+st.low;$('#stat-exempt').textContent='🚫 '+st.exempt;$('#stat-review').textContent='待复核: '+st.review_pending;const mc=S.modified.size,el=$('#stat-modified');if(mc>0){el.textContent='已修改: '+mc;el.classList.remove('hidden')}else el.classList.add('hidden');$('#btn-save').disabled=mc===0;const fe=$('#stat-factor');if(S.filters.factor){fe.textContent='因子: '+S.filters.factor;fe.classList.remove('hidden')}else fe.classList.add('hidden')}}
+function updateFilters(){const m=S.methods,c={high:0,mid:0,low:0,exempt:0,Method:0,Function:0};m.forEach(x=>{c[x.level]=(c[x.level]||0)+1;c[x.node_type||'Method']++});$('#fc-high').textContent=c.high;$('#fc-mid').textContent=c.mid;$('#fc-low').textContent=c.low;$('#fc-exempt').textContent=c.exempt;$('#fc-method').textContent=c.Method;$('#fc-function').textContent=c.Function}
+function updateClassTree(){const tree={};S.methods.forEach(m=>{const c=m.class_qn||'(free function)';if(!tree[c])tree[c]=[];tree[c].push(m)});const el=$('#class-tree');el.innerHTML='';Object.keys(tree).sort().forEach(cls=>{const methods=tree[cls],g=document.createElement('div');g.className='class-group';const row=document.createElement('div');row.className='class-row';row.innerHTML=`<i data-lucide="chevron-right" class="icon chevron" style="width:14px;height:14px"></i><span class="name">${shortClass(cls)}</span><span class="badge">${methods.length}</span>`;let exp=false;const sub=document.createElement('div');sub.className='hidden';methods.forEach(m=>{const mr=document.createElement('div');mr.className='class-method';mr.innerHTML=`<span class="level-badge level-${m.level}" style="padding:0 4px;font-size:9px">${levelEmoji(m.level)}</span><span class="mname">${m.name}</span>`;mr.onclick=e=>{e.stopPropagation();S.activeQn=m.qn;updateTable();updateDetail()};sub.appendChild(mr)});row.onclick=()=>{exp=!exp;row.classList.toggle('expanded',exp);sub.classList.toggle('hidden',!exp);S.filters.classQn=exp?cls:null;row.classList.toggle('active',exp);el.querySelectorAll('.class-row').forEach(r=>{if(r!==row){r.classList.remove('active','expanded');r.nextElementSibling?.classList.add('hidden')}});updateTable()};g.appendChild(row);g.appendChild(sub);el.appendChild(g)});lucide.createIcons()}
+function updateScopeRules(){const rules=S.inventory?.scope_rules||[];const el=$('#scope-rules-list');el.innerHTML='';rules.forEach(r=>{const d=document.createElement('div');d.className='scope-rule-item';d.innerHTML=`<span class="pattern">${r.pattern}</span><span class="arrow">→</span><span class="reason">${r.reason}</span>`;el.appendChild(d)})}
+
+function updateTable(){const list=getFiltered(),container=$('#method-rows'),empty=$('#method-empty');container.innerHTML='';if(!list.length){empty.classList.remove('hidden');$('#table-count').textContent='0';return}empty.classList.add('hidden');$('#table-count').textContent=list.length+' 条';const BATCH=150;S.virtual.rendered=Math.min(BATCH,list.length);renderBatch(list,0,S.virtual.rendered,container);if(list.length>BATCH){const sentinel=document.createElement('div');sentinel.id='virtual-sentinel';sentinel.style.height='1px';container.appendChild(sentinel);setupVirtualObserver(list,container)}updateBulkBar()}
+
+function renderBatch(list,start,end,container){for(let i=start;i<end&&i<list.length;i++){const m=list[i];const row=document.createElement('div');row.className='method-row'+(m.qn===S.activeQn?' active':'');row.dataset.qn=m.qn;row.innerHTML=`<input type="checkbox" ${S.selected.has(m.qn)?'checked':''} data-select="${m.qn}"/><span class="level-badge level-${m.level}" data-level-click="${m.qn}">${levelEmoji(m.level)} ${m.level}</span><span class="type-badge ${m.node_type==='Function'?'type-f':'type-m'}">${m.node_type==='Function'?'F':'M'}</span><span class="method-name" title="${m.name}">${m.name}</span><span class="method-class" title="${m.class_qn||''}">${shortClass(m.class_qn)}</span><span class="method-file" title="${m.file}">${m.file}</span><span class="method-factors">${(m.factors||[]).map(f=>`<span class="factor-pill ${factorClass(f)}" data-factor-click="${f}" title="点击筛选含此因子的方法">${f}</span>`).join('')}</span><span class="source-badge source-${m.source||'auto'}">${m.source||'auto'}</span><span class="review-badge review-${m.review_status||'auto'}">${m.review_status||'auto'}</span><span style="font-size:11px;color:var(--text-muted)">${m.usecase_count??0}</span>`;row.addEventListener('click',e=>{if(e.target.tagName==='INPUT'||e.target.closest('.level-badge')||e.target.closest('.factor-pill'))return;S.activeQn=m.qn;updateTable();updateDetail()});container.appendChild(row)}}
+
+function setupVirtualObserver(list,container){if(S.virtual.observer)S.virtual.observer.disconnect();S.virtual.observer=new IntersectionObserver(entries=>{for(const e of entries){if(e.isIntersecting){const sentinel=e.target;S.virtual.observer.disconnect();const next=S.virtual.rendered+150;renderBatch(list,S.virtual.rendered,next,container);S.virtual.rendered=next;if(next<list.length){const ns=document.createElement('div');ns.id='virtual-sentinel';ns.style.height='1px';container.appendChild(ns);S.virtual.observer.observe(ns)}sentinel.remove()}}},{root:container.parentElement,rootMargin:'200px'});const sentinel=container.querySelector('#virtual-sentinel');if(sentinel)S.virtual.observer.observe(sentinel)}
+
+function updateBulkBar(){const bar=$('#bulk-bar');if(S.selected.size>0){bar.classList.remove('hidden');$('#bulk-count').textContent=`已选 ${S.selected.size} 条`}else bar.classList.add('hidden')}
+
+function updateDetail(){const empty=$('#detail-empty'),content=$('#detail-content');if(!S.activeQn){empty.classList.remove('hidden');content.classList.add('hidden');return}const m=S.methods.find(x=>x.qn===S.activeQn);if(!m){empty.classList.remove('hidden');content.classList.add('hidden');return}empty.classList.add('hidden');content.classList.remove('hidden');if(S.reviewMode){renderReviewDetail(m);return}let h='';h+=`<div class="detail-section"><div class="text-[16px] font-semibold mono">${m.name}</div><div class="text-[12px] text-[var(--text-dim)] mt-1">${m.class_qn||'<span class="text-[var(--text-muted)]">自由函数</span>'}</div></div>`;h+=`<div class="detail-section"><h4>级别 & 状态</h4><div class="detail-field"><span class="label">Level</span><span class="level-badge level-${m.level}" data-level-click="${m.qn}" style="cursor:pointer">${levelEmoji(m.level)} ${m.level}</span></div><div class="detail-field"><span class="label">可测试</span><div class="toggle-switch ${m.testable?'on':''}" data-toggle-testable="${m.qn}"><div class="knob"></div></div></div><div class="detail-field"><span class="label">Source</span><span class="source-badge source-${m.source||'auto'}">${m.source||'auto'}</span></div><div class="detail-field"><span class="label">Review</span><span class="review-badge review-${m.review_status||'auto'}">${m.review_status||'auto'}</span></div></div>`;h+=`<div class="detail-section"><h4>签名</h4><div class="mono text-[12px] text-[var(--text-dim)]" style="word-break:break-all">${m.signature||'—'}</div></div>`;h+=`<div class="detail-section"><h4>文件</h4><div class="mono text-[12px] text-[var(--text-dim)]">${m.file}</div></div>`;h+=`<div class="detail-section"><h4>评分因子</h4>`;let ts=0;for(const f of(m.factors||[])){const s=factorScore(f);ts+=s;h+=`<div class="factor-row"><span class="factor-pill ${factorClass(f)}">${f}</span><span class="score" style="color:${s>0?'var(--factor-pos3)':s<0?'var(--factor-neg)':'var(--text-muted)'}">${s>0?'+':''}${s}</span></div>`}if(!(m.factors||[]).length)h+=`<div class="text-[12px] text-[var(--text-muted)]">无因子</div>`;h+=`<div style="border-top:1px solid var(--border-soft);margin-top:6px;padding-top:6px;font-size:12px;font-weight:600">总分: ${ts} → ${computeLevel(m.factors||[])} ${levelEmoji(computeLevel(m.factors||[]))}</div></div>`;if(m.testable){const g=m.level==='high'?'行≥90% 分支≥80% 函数=100%':m.level==='mid'?'行≥60% 函数=100%':'无硬性要求';h+=`<div class="detail-section"><h4>覆盖率门禁</h4><div class="text-[12px] text-[var(--text-dim)]">${g}</div></div>`}if(!m.testable&&m.exempt_reason)h+=`<div class="detail-section"><h4>豁免原因</h4><div class="text-[12px] text-[var(--exempt)]">${m.exempt_reason}</div></div>`;if(m.auto_reason)h+=`<div class="detail-section"><h4>自动评分原因</h4><div class="text-[12px] text-[var(--text-dim)]">${m.auto_reason}</div></div>`;h+=`<div class="detail-section"><h4>已有测试用例</h4><div class="text-[12px]">${(m.usecase_count??0)===0?'<span style="color:var(--exempt)">0 个 (未测试)</span>':m.usecase_count+' 个'}</div></div>`;content.innerHTML=h}
+
+function renderReviewDetail(m){const rq=S.inventory?.review_queue||[],pending=rq.filter(x=>x.status==='pending'),idx=pending.findIndex(x=>x.qn===m.qn),total=pending.length;let h=`<div class="detail-section"><div class="flex items-center justify-between"><span class="text-[13px] font-semibold">待复核 (${idx+1}/${total})</span><button class="btn btn-sm btn-ghost" id="btn-exit-review">退出复核</button></div><div class="review-progress"><div class="review-progress-bar" style="width:${((idx+1)/total*100).toFixed(0)}%"></div></div></div>`;h+=`<div class="detail-section"><div class="text-[16px] font-semibold mono">${m.name}</div><div class="text-[12px] text-[var(--text-dim)] mt-1">${m.class_qn||'自由函数'}</div></div>`;if(m.auto_reason)h+=`<div class="detail-section"><h4>自动建议</h4><div class="text-[13px]"><span class="level-badge level-${computeLevel(m.factors||[])}">${levelEmoji(computeLevel(m.factors||[]))} ${computeLevel(m.factors||[])}</span></div><div class="text-[12px] text-[var(--text-dim)] mt-1">原因: ${m.auto_reason}</div><div class="text-[12px] text-[var(--text-muted)]">默认: ⚖ mid</div></div>`;h+=`<div class="detail-section"><h4>你的决定</h4><div class="flex gap-2 mt-2"><button class="btn btn-sm" data-review-level="high" style="flex:1">🌟 high</button><button class="btn btn-sm" data-review-level="mid" style="flex:1">⚖ mid</button><button class="btn btn-sm" data-review-level="low" style="flex:1">💤 low</button></div><div class="flex gap-2 mt-2"><button class="btn btn-sm btn-ghost" data-review-nav="prev">← 上一条</button><button class="btn btn-sm btn-ghost" data-review-nav="skip">跳过</button><button class="btn btn-sm btn-ghost" data-review-nav="next">下一条 →</button></div></div>`;h+=`<div class="detail-section"><h4>因子</h4>${(m.factors||[]).map(f=>`<div class="factor-row"><span class="factor-pill ${factorClass(f)}">${f}</span><span class="score">${factorScore(f)>0?'+':''}${factorScore(f)}</span></div>`).join('')}</div>`;$('#detail-content').innerHTML=h;setTimeout(()=>{const exitBtn=$('#btn-exit-review');if(exitBtn)exitBtn.onclick=()=>{S.reviewMode=false;updateDetail()};$$('[data-review-level]').forEach(btn=>{btn.onclick=()=>{setLevel(m.qn,btn.dataset.reviewLevel);m.review_status='confirmed';const rq=S.inventory?.review_queue||[];const it=rq.find(x=>x.qn===m.qn);if(it)it.status='confirmed';const p=rq.filter(x=>x.status==='pending');if(p.length>0){S.activeQn=p[0].qn;updateTable();updateDetail();updateStats();updateReviewBtn()}else{S.reviewMode=false;toast('所有待复核条目已处理完毕');updateDetail();updateReviewBtn()}}});$$('[data-review-nav]').forEach(btn=>{btn.onclick=()=>{const rq=S.inventory?.review_queue||[],p=rq.filter(x=>x.status==='pending');if(!p.length)return;const ci=p.findIndex(x=>x.qn===S.activeQn);let ni;if(btn.dataset.reviewNav==='prev')ni=Math.max(0,ci-1);else if(btn.dataset.reviewNav==='skip')ni=(ci+1)%p.length;else ni=Math.min(p.length-1,ci+1);S.activeQn=p[ni].qn;updateTable();updateDetail()}})},0)}
+
+function updateReviewBtn(){const p=(S.inventory?.review_queue||[]).filter(x=>x.status==='pending').length,btn=$('#btn-review-mode'),badge=$('#review-badge');if(p>0){btn.classList.remove('hidden');badge.textContent=p}else btn.classList.add('hidden')}
+
+// ── Editing ──
+function pushUndo(qn,field,oldVal){S.undoStack.push({qn,field,oldVal});if(S.undoStack.length>50)S.undoStack.shift();S.modified.set(qn,{...(S.modified.get(qn)||{}),[field]:oldVal})}
+function setLevel(qn,level){const m=S.methods.find(x=>x.qn===qn);if(!m||m.level===level)return;pushUndo(qn,'level',m.level);m.level=level;if(level==='exempt'){pushUndo(qn,'testable',m.testable);m.testable=false}else{if(!m.testable){pushUndo(qn,'testable',m.testable);m.testable=true;m.exempt_reason=null;m.review_status='auto'}pushUndo(qn,'source',m.source);m.source='manual';pushUndo(qn,'review_status',m.review_status);m.review_status='confirmed'}updateStats();updateTable();updateDetail()}
+function setExempt(qn,reason){const m=S.methods.find(x=>x.qn===qn);if(!m)return;pushUndo(qn,'testable',m.testable);pushUndo(qn,'level',m.level);pushUndo(qn,'exempt_reason',m.exempt_reason);pushUndo(qn,'review_status',m.review_status);m.testable=false;m.level='exempt';m.exempt_reason=reason;m.review_status='exempt';updateStats();updateTable();updateDetail()}
+function setUnexempt(qn){const m=S.methods.find(x=>x.qn===qn);if(!m||m.testable)return;const nl=computeLevel(m.factors||[]);pushUndo(qn,'testable',m.testable);pushUndo(qn,'level',m.level);pushUndo(qn,'exempt_reason',m.exempt_reason);pushUndo(qn,'source',m.source);pushUndo(qn,'review_status',m.review_status);m.testable=true;m.level=nl;m.exempt_reason=null;m.source='manual';m.review_status='auto';updateStats();updateTable();updateDetail()}
+function undo(){if(!S.undoStack.length)return;const a=S.undoStack.pop(),m=S.methods.find(x=>x.qn===a.qn);if(!m)return;m[a.field]=a.oldVal;if(!S.undoStack.filter(x=>x.qn===a.qn).length)S.modified.delete(a.qn);updateStats();updateTable();updateDetail();toast('已撤销')}
+
+// ── Level Popup ──
+function showLevelPopup(qn,el){S.levelPopupQn=qn;const p=$('#level-popup'),r=el.getBoundingClientRect();p.style.top=(r.bottom+4)+'px';p.style.left=Math.min(r.left,window.innerWidth-140)+'px';p.classList.add('show')}
+function hideLevelPopup(){S.levelPopupQn=null;$('#level-popup').classList.remove('show')}
+
+// ── Exempt Modal ──
+let exemptModalQn=null,bulkExempt=false;
+function showExemptModal(qn,bulk=false){exemptModalQn=qn;bulkExempt=bulk;$('#exempt-reason-input').value='';$('#exempt-modal').classList.remove('hidden');setTimeout(()=>$('#exempt-reason-input').focus(),50)}
+function hideExemptModal(){exemptModalQn=null;bulkExempt=false;$('#exempt-modal').classList.add('hidden')}
+
+// ── Save / Export ──
+function saveInventory(){if(!S.inventory)return;S.inventory.methods=S.methods;recalcStats();const j=JSON.stringify(S.inventory,null,2),b=new Blob([j],{type:'application/json'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=(S.inventory.project||'inventory')+'.ut-inventory.json';a.click();URL.revokeObjectURL(u);S.modified.clear();S.undoStack=[];updateStats();toast('已保存 '+S.methods.length+' 个方法')}
+function exportCSV(){const l=getFiltered(),h='qn,name,level,testable,class_qn,file,factors,source,review_status,usecase_count,node_type\n',r=l.map(m=>`"${m.qn}","${m.name}","${m.level}",${m.testable},"${m.class_qn||''}","${m.file}","${(m.factors||[]).join(';')}","${m.source}","${m.review_status}",${m.usecase_count??0},"${m.node_type||'Method'}"`).join('\n'),b=new Blob([h+r],{type:'text/csv'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=(S.inventory?.project||'inventory')+'_export.csv';a.click();URL.revokeObjectURL(u);toast('已导出 '+l.length+' 条')}
+
+// ── Events ──
+function initEvents(){
+$('#btn-theme').onclick=()=>{const c=document.documentElement.getAttribute('data-theme'),n=c==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',n);localStorage.setItem('utie-theme',n)};
+$('#btn-open').onclick=()=>$('#file-input').click();
+$('#file-input').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{loadInventory(JSON.parse(ev.target.result));toast('已加载 '+S.methods.length+' 个方法')}catch(err){toast('加载失败: '+err.message,'err')}};r.readAsText(f);e.target.value=''};
+$('#btn-save').onclick=saveInventory;
+$('#btn-export').onclick=exportCSV;
+let st;$('#search-input').oninput=e=>{clearTimeout(st);st=setTimeout(()=>{S.filters.search=e.target.value.trim();updateTable()},120)};
+$$('[data-level]').forEach(cb=>{cb.onchange=()=>{cb.checked?S.filters.levels.add(cb.dataset.level):S.filters.levels.delete(cb.dataset.level);updateTable()}});
+$$('[data-nodetype]').forEach(cb=>{cb.onchange=()=>{cb.checked?S.filters.nodeTypes.add(cb.dataset.nodetype):S.filters.nodeTypes.delete(cb.dataset.nodetype);updateTable()}});
+$('#scope-toggle').onclick=()=>$('#scope-rules-list').classList.toggle('hidden');
+$$('[data-sort]').forEach(th=>{th.style.cursor='pointer';th.onclick=()=>{if(S.sort.col===th.dataset.sort)S.sort.dir=S.sort.dir==='asc'?'desc':'asc';else{S.sort.col=th.dataset.sort;S.sort.dir='asc'}updateTable()}});
+$$('[data-set-level]').forEach(item=>{item.onclick=()=>{if(S.levelPopupQn){const l=item.dataset.setLevel;if(l==='exempt')showExemptModal(S.levelPopupQn);else setLevel(S.levelPopupQn,l)}hideLevelPopup()}});
+$('#exempt-cancel').onclick=hideExemptModal;
+$('#exempt-confirm').onclick=()=>{const reason='manual:'+($('#exempt-reason-input').value.trim()||'不需要单测');if(bulkExempt){for(const qn of S.selected)setExempt(qn,reason);S.selected.clear();updateBulkBar()}else if(exemptModalQn)setExempt(exemptModalQn,reason);hideExemptModal()};
+document.addEventListener('click',e=>{const toggle=e.target.closest('[data-toggle-testable]');if(toggle){const qn=toggle.dataset.toggleTestable,m=S.methods.find(x=>x.qn===qn);if(!m)return;m.testable?showExemptModal(qn):setUnexempt(qn);return}const lvl=e.target.closest('[data-level-click]');if(lvl){e.stopPropagation();showLevelPopup(lvl.dataset.levelClick,lvl);return}const chk=e.target.closest('[data-select]');if(chk){chk.checked?S.selected.add(chk.dataset.select):S.selected.delete(chk.dataset.select);updateBulkBar();return}const fp=e.target.closest('[data-factor-click]');if(fp){e.stopPropagation();const f=fp.dataset.factorClick,base=f.split(':')[0];S.filters.factor=S.filters.factor===base?null:base;updateTable();toast(S.filters.factor?'筛选因子: '+S.filters.factor:'已清除因子筛选');return}});
+$$('[data-bulk]').forEach(btn=>{btn.onclick=()=>{const a=btn.dataset.bulk;if(a==='clear'){S.selected.clear();updateBulkBar();$$('[data-select]').forEach(c=>c.checked=false);return}if(!S.selected.size)return;if(a==='exempt'){showExemptModal(null,true);return}if(a==='unexempt'){for(const qn of S.selected)setUnexempt(qn);S.selected.clear();updateBulkBar();$$('[data-select]').forEach(c=>c.checked=false);return}for(const qn of S.selected)setLevel(qn,a);S.selected.clear();updateBulkBar();$$('[data-select]').forEach(c=>c.checked=false)}});
+$('#btn-review-mode').onclick=()=>{const rq=S.inventory?.review_queue||[],pending=rq.filter(x=>x.status==='pending');if(!pending.length)return;S.reviewMode=true;S.activeQn=pending[0].qn;updateTable();updateDetail()};
+$('#stat-factor').onclick=()=>{S.filters.factor=null;updateTable();toast('已清除因子筛选')};
+// Keyboard shortcuts
+document.addEventListener('keydown',e=>{if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;if(e.ctrlKey&&e.key==='z'){e.preventDefault();undo();return}if(e.ctrlKey&&e.key==='s'){e.preventDefault();saveInventory();return}if(!S.activeQn)return;const m=S.methods.find(x=>x.qn===S.activeQn);if(!m)return;if(e.key==='1')setLevel(S.activeQn,'high');else if(e.key==='2')setLevel(S.activeQn,'mid');else if(e.key==='3')setLevel(S.activeQn,'low');else if(e.key==='4')showExemptModal(S.activeQn)});
+// Close popup on outside click
+document.addEventListener('click',e=>{if(!e.target.closest('.level-popup')&&!e.target.closest('[data-level-click]'))hideLevelPopup()});
+// Drag & drop
+const body=document.body;let dragCount=0;body.addEventListener('dragenter',e=>{e.preventDefault();dragCount++;$('#drop-overlay').classList.add('show')});body.addEventListener('dragleave',e=>{e.preventDefault();dragCount--;if(dragCount<=0){dragCount=0;$('#drop-overlay').classList.remove('show')}});body.addEventListener('dragover',e=>e.preventDefault());body.addEventListener('drop',e=>{e.preventDefault();dragCount=0;$('#drop-overlay').classList.remove('show');const f=e.dataTransfer.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{loadInventory(JSON.parse(ev.target.result));toast('已加载 '+S.methods.length+' 个方法')}catch(err){toast('加载失败: '+err.message,'err')}};r.readAsText(f)});
+// beforeunload
+window.addEventListener('beforeunload',e=>{if(S.modified.size>0){e.preventDefault();e.returnValue=''}});
+}
+
+// ── Init ──
+document.addEventListener('DOMContentLoaded',()=>{lucide.createIcons();initEvents();loadInventory(SAMPLE_DATA)});
+</script>
+</body>
+</html>
