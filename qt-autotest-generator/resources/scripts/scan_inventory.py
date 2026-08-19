@@ -354,20 +354,13 @@ def build_inventory(mcp_data: dict, project_name: str, base_sha: str) -> dict:
             source = "auto"
 
         # review_status：pending 需人工复核，auto 表示自动分级无需复核
+        review_status = "auto"
+        auto_reason = None
         if source == "suggested":
             review_status = "pending"
-            review_queue.append({
-                "qn": qn,
-                "name": name,
-                "auto_suggestion": "high",
-                "auto_reason": f"方法名含 {next((f.split(':')[1] for f in factors if f.startswith('name_pattern:')), name)}",
-                "default_level": "mid",
-                "status": "pending"
-            })
+            auto_reason = f"方法名含 {next((f.split(':')[1] for f in factors if f.startswith('name_pattern:')), name)}"
         elif not testable:
             review_status = "exempt"     # 不可测试：豁免复核
-        else:
-            review_status = "auto"       # 自动分级，无需人工复核
 
         entry = {
             "qn": qn,
@@ -383,7 +376,12 @@ def build_inventory(mcp_data: dict, project_name: str, base_sha: str) -> dict:
             "review_status": review_status,
             "usecase_count": 0  # 模式一不扫描测试文件，默认 0
         }
+        if auto_reason:
+            entry["auto_reason"] = auto_reason
         inventory_methods.append(entry)
+
+        if review_status == "pending":
+            review_queue.append({**entry, "status": "pending"})
 
         # 统计
         if testable:
@@ -475,7 +473,8 @@ def generate_summary(inventory: dict) -> str:
         lines.append(f"## 待复核条目 ({len(rq)})")
         lines.append(f"")
         for item in rq[:30]:
-            lines.append(f"- `{item['qn']}`: {item['auto_reason']} → 建议 high，默认 mid")
+            lines.append(f"- `{item['name']}` ({item['class_qn'] or '-'}, {item['file'] or '-'}): "
+                         f"{item.get('auto_reason', '')} → 建议 high，默认 mid")
 
     return "\n".join(lines)
 
