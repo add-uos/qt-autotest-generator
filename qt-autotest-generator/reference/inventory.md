@@ -51,129 +51,50 @@ if file_exists(inventory_path):
 # 否则 → 全量建表（Step 3）
 ```
 
-### 3. 全量扫描（3-pass）
+### 3. 运行 `fetch_mcp_data.py`（主路径）
 
-#### Pass 1 — 批量图查询
+**首选方式**：一条命令完成 MCP 采集 → 评分 → 产出 `.ut-inventory.json`。
 
-~15 次 MCP 调用，毫秒~秒级。
-
-**1A. 全量类**
-
-```python
-all_classes = []
-offset = 0
-while True:
-    batch = mcp.search_graph(
-        project=project_name,
-        label="Class",
-        limit=200,
-        offset=offset
-    )
-    all_classes.extend(batch.results)
-    if not batch.has_more:
-        break
-    offset += 200
-
-# 过滤: is_test=true 的排除
-target_classes = [c for c in all_classes if not c.get("is_test", False)]
+```bash
+python3 scripts/fetch_mcp_data.py \
+  --project <project_name> \
+  --file-pattern "src/**" \
+  --output ${test_dir}/.ut-inventory.json \
+  --summary
 ```
 
-**1B. 全量方法（含自由函数）**
+- **project**：`environment_check` 解析的 MCP 项目名
+- **file-pattern**：可选，排除 3rdparty 等目录（如 `"src/**"`、`"reader/**"`）
+- **output**：写入 `${test_dir}/.ut-inventory.json`
+- **--summary**：同时产出 `${test_dir}/.reports/inventory-summary.md`
+- **--base-sha**：当前 git HEAD SHA（对账用，默认 `unknown`）
+- **--keep-dump**：保留中间 `mcp_dump.json`（调试用）
 
-```python
-# 类方法
-all_methods = []
-offset = 0
-while True:
-    batch = mcp.search_graph(
-        project=project_name,
-        label="Method",
-        limit=200,
-        offset=offset
-    )
-    all_methods.extend(batch.results)
-    if not batch.has_more:
-        break
-    offset += 200
+脚本内部自动完成 5 步：`search_graph` 分页 → `query_graph` 继承检测 → DBus 槽 → Q_INVOKABLE/Q_PLUGIN → P75 计算 → `scan_inventory.build_inventory()` 评分。
 
-# 自由函数（C 函数）
-all_functions = []
-offset = 0
-while True:
-    batch = mcp.search_graph(
-        project=project_name,
-        label="Function",
-        limit=200,
-        offset=offset
-    )
-    all_functions.extend(batch.results)
-    if not batch.has_more:
-        break
-    offset += 200
+- HTTP 直连 MCP 服务器（JSON-RPC 2.0），~12000 方法端到端仅需 ~2 秒
+- `scan_inventory.py` 提供评分逻辑（`build_inventory()` + `generate_summary()`），被 `fetch_mcp_data.py` import 调用
 
-# 合并，过滤 is_test=true
-target_methods = [
-    m for m in all_methods + all_functions
-    if not m.get("is_test", False)
-]
-```
+> ⚠️ **不要手动调 MCP 再跑 `scan_inventory.py --mcp-dump`**，直接用 `fetch_mcp_data.py` 即可。
 
-**1C. 调用热度百分位（客户端计算）**
+<details>
+<summary>📖 备选：手动 3-pass 流程（仅当 fetch_mcp_data.py 不可用时）</summary>
 
-> ⚠️ MCP 不支持 `percentileCont()` Cypher 函数，必须客户端计算。
+若 `fetch_mcp_data.py` 不可用（如 MCP URL 变更、脚本损坏），Agent 可退回手动 3-pass 流程。
 
-```python
-# 关键：只对 in_degree > 0 的方法计算 P75
-non_zero = sorted([d for d in in_degrees if d > 0])
-if non_zero:
-    p75_idx = int(0.75 * (len(non_zero) - 1))
-    in_degree_p75 = non_zero[p75_idx]
-else:
-    in_degree_p75 = 1  # fallback
-```
+#### Pass 1 — 批量图查询（~15 次 MCP 调用）
 
-**1D. 继承链匹配（DBus / 并发 / GUI 基类）**
+**1A. 全量类**：`search_graph(label="Class")` 分页，过滤 `is_test=true`。
 
-```python
-# 推荐方案：query_graph 直接筛选
-dbus_classes = mcp.query_graph(
-    project=project_name,
-    query="""
-        MATCH (c:Class)
-        WHERE ANY(b IN c.base_classes WHERE b IN ['QDBusAbstractAdaptor', 'QDBusAbstractInterface'])
-        RETURN c.name, c.qualified_name, c.file_path, c.base_classes
-    """
-)
+**1B. 全量方法（含自由函数）**：分别 `search_graph(label="Method")` 和 `search_graph(label="Function")` 分页，合并后过滤 `is_test=true`。
 
-concurrent_classes = mcp.query_graph(
-    project=project_name,
-    query="""
-        MATCH (c:Class)
-        WHERE ANY(b IN c.base_classes WHERE b IN ['QThread', 'QThreadPool', 'QMutex', 'QReadWriteLock', 'QSemaphore', 'QAtomicInt'])
-        RETURN c.name, c.qualified_name, c.file_path, c.base_classes
-    """
-)
+**1C. 调用热度百分位**：客户端计算 P75（仅非零 in_degree），MCP 不支持 `percentileCont()`。
 
-# GUI 基类 → 写入 inventory.classes[].is_gui（Mode 2 直接读，不再查图谱）
-gui_classes = mcp.query_graph(
-    project=project_name,
-    query="""
-        MATCH (c:Class)
-        WHERE ANY(b IN c.base_classes WHERE b IN ['QWidget', 'QDialog', 'QMainWindow',
-                                                  'DMainWindow', 'DFrame', 'DWidget', 'DAbstractDialog'])
-        RETURN c.name, c.qualified_name, c.file_path, c.base_classes
-    """
-)
-# GUI 类入 classes 数组（is_gui=true）；不在数组中的类 is_gui=false
-```
+**1D. 继承链匹配**：`query_graph` 按 `base_classes` 筛选 DBus / 并发 / GUI 基类。
 
-**1E. DBus 内省 XML**
+**1E. DBus 内省**：Pass 2 中对 DBus 类调 `get_code_snippet` 解析 Q_SLOTS/Q_SIGNALS。
 
-已在 1D 中通过 `query_graph` 按继承筛选了 DBus 类。Pass 2 中对 DBus 类调 `get_code_snippet` 解析 Q_SLOTS/Q_SIGNALS。
-
-**1F. exempt 文件模式候选**
-
-scope_rules 已预定义 exempt 模式（3rdparty/**, moc_*, ui_*, .pb. 等），在 Pass 3 评分时按 `file_path` 匹配即可。
+**1F. exempt 文件模式候选**：scope_rules 预定义（3rdparty/**, moc_*, ui_*, .pb. 等）。
 
 #### Pass 2 — 精准源码检查
 
@@ -195,37 +116,11 @@ for cls in target_classes:
         candidates.add(cls["qualified_name"])
 ```
 
-**逐候选类读源码**：
-
-```python
-dbus_slots = {}    # class_qn → [method_name, ...]
-dbus_signals = {}  # class_qn → [signal_name, ...]
-q_invokables = {}  # class_qn → [method_name, ...]
-q_plugins = {}     # class_qn → True
-
-for qn in candidates:
-    snippet = mcp.get_code_snippet(qualified_name=qn)
-    source = snippet.get("source", "")
-
-    slots = parse_qt_section(source, "Q_SLOTS")
-    if slots:
-        dbus_slots[qn] = slots
-
-    signals = parse_qt_section(source, "Q_SIGNALS")
-    if signals:
-        dbus_signals[qn] = signals
-
-    invokables = re.findall(r'Q_INVOKABLE\s+\w+\s+(\w+)\s*\(', source)
-    if invokables:
-        q_invokables[qn] = invokables
-
-    if 'Q_PLUGIN_METADATA' in source or 'Q_INTERFACES' in source:
-        q_plugins[qn] = True
-```
+逐候选类读源码，解析 Q_SLOTS、Q_SIGNALS、Q_INVOKABLE、Q_PLUGIN_METADATA。
 
 #### Pass 3 — 评分与产出
 
-**逐方法评分**（加权评分逻辑）：
+加权评分逻辑见下表，完整实现详见 `scripts/scan_inventory.py` 的 `score_method()` 函数。
 
 | 因子 | 得分 | 检测方式 | source |
 |------|------|---------|--------|
@@ -250,11 +145,13 @@ for qn in candidates:
 
 **scope_rules 应用**：scope=exempt → `testable=false`，不论因子评分多高。
 
-完整评分逻辑详见 `scripts/scan_inventory.py` 的 `score_method()` 函数。
+手动流程完成后，需自行组装 mcp_dump JSON 并调 `scan_inventory.py --mcp-dump` 评分，或用 Agent 内置逻辑复现 `build_inventory()` 的评分逻辑。
 
-### 4. 已有用例数统计
+</details>
 
-扫描 `${test_dir}/` 下所有 `test_*.cpp`，提取已有测试用例：
+### 4. 已有用例数统计 + 写表
+
+`fetch_mcp_data.py` 默认 `usecase_count=0`（不扫描已有测试）。若需统计已有用例，扫描 `${test_dir}/` 下所有 `test_*.cpp`：
 
 ```python
 usecase_map = {}  # "ClassQn.method_name" → count
@@ -264,7 +161,6 @@ for test_file in glob(f"{test_dir}/**/test_*.cpp"):
     for match in re.finditer(r'TEST_F\s*\(\s*(\w+)Test\s*,\s*(\w+)', content):
         class_test_name = match.group(1)
         method_test_name = match.group(2)
-        # 用例名首段是 PascalCase（Add/FindMax），方法名是 camelCase（add/findMax）→ 统一小写匹配
         method_name = method_test_name.split('_')[0] if '_' in method_test_name else method_test_name
         key = f"{class_test_name}.{method_name.lower()}"
         usecase_map[key] = usecase_map.get(key, 0) + 1
@@ -277,7 +173,28 @@ for m in inventory_methods:
         m["usecase_count"] = usecase_map.get(key, 0)
 ```
 
-### 5. 人工复核
+最终产出：
+- `${test_dir}/.ut-inventory.json` — 机器消费（Mode 2 读取）
+- `${test_dir}/.reports/inventory-summary.md` — 人读摘要（`--summary` 自动生成）
+
+## 产出文件结构
+
+完整 JSON Schema 详见 `reference/inventory-schema.md`。
+
+关键字段速查：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `version` | int | 当前 1 |
+| `project` | string | 项目名 |
+| `base_sha` | string | Git base SHA（对账用） |
+| `gate_thresholds` | object | high/mid/low 三级覆盖率门禁 |
+| `scope_rules` | array | exempt 文件模式规则 |
+| `classes` | array | 类级画像：GUI 类列表（`is_gui=true`），不在列表中的类 `is_gui=false` |
+| `methods` | array | 全量方法列表（含 level/factors/usecase_count） |
+| `review_queue` | array | 待人工复核条目 |
+
+## 人工复核
 
 Agent 输出 Markdown 摘要 + review_queue，与用户交互：
 
@@ -298,59 +215,6 @@ Agent 输出 Markdown 摘要 + review_queue，与用户交互：
 
 3. 回写 review_status
 ```
-
-### 6. 写表
-
-产出两个文件：
-
-- `${test_dir}/.ut-inventory.json` — 机器消费（Mode 2 读取）
-- `${test_dir}/.reports/inventory-summary.md` — 人读摘要
-
-## 产出文件结构
-
-完整 JSON Schema 详见 `reference/inventory-schema.md`。
-
-关键字段速查：
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `version` | int | 当前 1 |
-| `project` | string | 项目名 |
-| `base_sha` | string | Git base SHA（对账用） |
-| `gate_thresholds` | object | high/mid/low 三级覆盖率门禁 |
-| `scope_rules` | array | exempt 文件模式规则 |
-| `classes` | array | 类级画像：GUI 类列表（`is_gui=true`），不在列表中的类 `is_gui=false` |
-| `methods` | array | 全量方法列表（含 level/factors/usecase_count） |
-| `review_queue` | array | 待人工复核条目 |
-
-## 端到端脚本
-
-**`scripts/fetch_mcp_data.py`** 一条命令完成全流程：
-MCP 收集 → 继承检测 → DBus 槽 → Q_INVOKABLE/Q_PLUGIN → P75 → 生成 `.ut-inventory.json`。
-
-```bash
-python3 scripts/fetch_mcp_data.py \
-  --project home-uos-service-codebase-repos-dde-file-manager \
-  --file-pattern "src/**" \
-  --output ${test_dir}/.ut-inventory.json \
-  --summary
-```
-
-脚本自动完成 5 个步骤：
-1. `search_graph` 分页收集所有 Method + Function
-2. `query_graph` 检测继承链（DBus / 并发 / GUI 基类 → `classes[].is_gui`）
-3. `query_graph` 获取 DBus Adaptor 类方法 → dbus_slots
-4. `search_code` 检测 Q_INVOKABLE / Q_PLUGIN_METADATA
-5. 客户端计算 P75 → 调用 `scan_inventory.build_inventory()` 评分
-
-- **HTTP 直连**：MCP 服务器 `http://10.8.12.80:13626/mcp`，JSON-RPC 2.0
-- **file_pattern 过滤**：收集时排除 3rdparty
-- **性能**：12013 方法端到端仅需 ~2 秒
-- **依赖**：同目录的 `scan_inventory.py`（提供 `build_inventory()` 评分逻辑）
-- **可选**：`--keep-dump` 保留中间 `mcp_dump.json`，`--summary` 输出 Markdown 摘要
-
-> 若 `fetch_mcp_data.py` 不可用（如 MCP URL 变更），
-> Agent 可退回手动调用 `search_graph` 分页 + `query_graph` + `scan_inventory.py`。
 
 ## TODO
 
