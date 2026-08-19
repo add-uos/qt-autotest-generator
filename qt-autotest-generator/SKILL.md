@@ -129,7 +129,7 @@ compatibility:
 |-------|------|------|
 | 项目准备 | `phases/project_preparer.md` | 拉取代码、校验基线、安装依赖、验证构建环境；用户提供 repo_url 时第一道前置 |
 | 环境门禁 | `phases/environment_check.md` | MCP 提供方解析（远端优先，本地兜底）、索引、验证；失败硬终止 |
-| **函数重要性探测** | `phases/importance_inventory.md` | **Mode 1**：扫描知识图谱，为每个方法评分分级（🌟high/⚖mid/💤low），产出 `.ut-inventory.json`，按分级差异化设定覆盖率门禁 |
+| **函数重要性探测** | `phases/importance_inventory.md` | **Mode 1**：扫描知识图谱，为每个方法评分分级（🌟high/⚖mid/💤low），产出 `.ut-inventory.json`，按分级差异化设定覆盖率门禁；可用 `resources/scripts/ut-inventory-editor/` 可视化编辑 |
 | 框架搭建 | `phases/framework_builder.md` | {test_dir}/ 脚手架、CMake、stub、runner、report_generator |
 | 类分析 | `phases/class_analyzer.md` | MCP 拉类+方法、GUI 识别、按复杂度规划用例数 |
 | 依赖追踪 | `phases/dependency_tracer.md` | MCP trace_path 出向、stub 决策矩阵、收集源码目录 |
