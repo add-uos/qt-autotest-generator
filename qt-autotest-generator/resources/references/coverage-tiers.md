@@ -23,12 +23,6 @@
 | `suggested` | 自动建议 | 默认 mid，进入 review_queue 待人工确认 |
 | `manual` | 人工覆盖 | 用户在 review 中指定，优先级最高 |
 
-## 向后兼容
-
-- 旧格式 `coverage_threshold`（单个整数）仍有效，作为 mid 级行覆盖率阈值（默认 90→60，因为 90 是旧的函数覆盖率概念）
-- 当 `.ut-inventory.json` 不存在时，回退到单一门禁：函数覆盖率 ≥ `coverage_threshold`%
-- 当 `.ut-inventory.json` 存在时，按方法分级设定差异化门禁，`coverage_threshold` 不再生效
-
 ## scope_rules 与分级的关系
 
 `scope_rules` 和方法分级是**正交维度**：

@@ -99,7 +99,7 @@ coverage_gap = planned - tested
 
 若 `coverage_gap` 非空 → 信号 B 触发 `incremental_updater`。
 
-> **注意**：此处只做方法名差集（结构性检查）。覆盖率百分比的完整门禁在 `self_checker` 中执行（有 inventory 时按方法分级，无时与 `coverage_threshold`（默认 90）比对）——此处不解析 lcov 数据，避免与 self_checker 重复。
+> **注意**：此处只做方法名差集（结构性检查）。覆盖率百分比的完整门禁在 `self_checker` 中执行（按方法分级，必须有 inventory）——此处不解析 lcov 数据，避免与 self_checker 重复。
 
 ## 后续流程
 

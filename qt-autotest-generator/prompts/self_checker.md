@@ -61,20 +61,19 @@ coverage_gap = all_method_names - tested_names
 读取 lcov 生成的 `build-{test_dir}/coverage/filtered.info`（`test_dir` 从 `test_dir` 读取），计算该类源文件对应的函数覆盖率百分比：
 
 - **有 inventory 时**：按方法分级差异化门禁（详见 `resources/references/coverage-tiers.md`）
-- **无 inventory 时**：与 `coverage_threshold`（默认 90）比对
+- **无 inventory**：技能不可运行，先执行 Mode 1 生成 inventory
 
 ```python
 test_dir = test_dir
 inventory_path = f"{test_dir}/.ut-inventory.json"
-has_inventory = os.path.exists(inventory_path)
+if not os.path.exists(inventory_path):
+    raise FatalError("无 .ut-inventory.json，先执行 Mode 1")
 
-if has_inventory:
-    # 按方法分级检查覆盖率
-    inventory = json.load(open(inventory_path))
-    method_gates = {}
-    for m in inventory["methods"]:
-        if not m["testable"] or m["class_qn"] != target_class.qualified_name:
-            continue
+inventory = json.load(open(inventory_path))
+method_gates = {}
+for m in inventory["methods"]:
+    if not m["testable"] or m["class_qn"] != target_class.qualified_name:
+        continue
         level = m["level"]
         if level == "high":
             method_gates[m["name"]] = {"line": 90, "branch": 80, "function": 100}
@@ -84,9 +83,6 @@ if has_inventory:
             method_gates[m["name"]] = {}  # no hard gate
     # 按方法级 gate 逐方法检查行/分支/函数覆盖率
     # 详见 resources/references/coverage-tiers.md
-else:
-    # 向后兼容：单一门禁
-    threshold = coverage_threshold
 
 # 解析 lcov info 文件中目标类源文件的函数覆盖率
 func_coverage = parse_function_coverage_from_lcov(
@@ -94,10 +90,6 @@ func_coverage = parse_function_coverage_from_lcov(
     source_file=target_class.file_path
 )
 # 返回: { "function_coverage": 86.7, "functions_hit": 13, "functions_found": 15 }
-
-if not has_inventory:
-    pct = func_coverage["function_coverage"]
-    coverage_pass = pct >= threshold
 
 # 同时提取未被执行的函数名列表（lcov FNDA:0 行），供 incremental_updater 精准补全
 uncovered_functions = parse_uncovered_functions_from_lcov(
@@ -311,7 +303,6 @@ for method in all_methods:
   "function_coverage": 86.7,
   "self_check": {
     "coverage": "pass",
-    "coverage_threshold": 90,
     "coverage_mode": "tiered",
     "inventory_path": "autotests/.ut-inventory.json",
     "naming": "pass",
@@ -331,7 +322,6 @@ for method in all_methods:
   "function_coverage": 60.0,
   "self_check": {
     "coverage": "fail",
-    "coverage_threshold": 90,
     "coverage_gap": ["methodX", "methodY"],
     "uncovered_functions": ["methodZ", "methodW"],
     "naming": "pass",
@@ -351,7 +341,7 @@ for method in all_methods:
 - 不跳过 GUI 类豁免
 - `qualified_name` 必须从图谱返回值取，不自己拼
 - 不忽略覆盖率门禁：方法名差集为空但覆盖率 < 阈值时，仍必须流转至 `incremental_updater`
-- 覆盖率门禁规则：有 `.ut-inventory.json` 时按方法分级（详见 `resources/references/coverage-tiers.md`），无时从 `coverage_threshold`（默认 90）读取
+- 覆盖率门禁规则：必须有 `.ut-inventory.json`，按方法分级（详见 `resources/references/coverage-tiers.md`）；无 inventory 时技能不可运行
 - 不跳过断言强度自检：每用例（`TEST_F` 与 `TEST_P` 均需扫描）至少 2 个有效 `EXPECT_*`（NO_FATAL/NO_THROW/EXPECT_CALL 均不计入）
 - 不跳过环境隔离自检：硬编码绝对路径、`qputenv` 无对应 `qunsetenv`、未 mock 的真实外部资源（QProcess/网络/socket/真实时间）、stub 未 `clear()` 必须检出
 
