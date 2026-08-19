@@ -549,9 +549,14 @@ Agent 输出 Markdown 摘要 + review_queue，与用户交互：
 
   "scope_rules": [
     {"pattern": "3rdparty/**",    "testable": false, "reason": "第三方库"},
+    {"pattern": "3rd_party/**",   "testable": false, "reason": "第三方库"},
+    {"pattern": "third_party/**", "testable": false, "reason": "第三方库"},
+    {"pattern": "**/external/**",  "testable": false, "reason": "第三方库(external)"},
+    {"pattern": "**/vendor/**",    "testable": false, "reason": "第三方库(vendor)"},
     {"pattern": "**/moc_*.cpp",   "testable": false, "reason": "MOC 生成"},
     {"pattern": "**/ui_*.h",      "testable": false, "reason": "UI 生成"},
     {"pattern": "**/.pb.",        "testable": false, "reason": "Protobuf 生成"},
+    {"pattern": "**/generated/**", "testable": false, "reason": "生成代码"},
     {"pattern": "tests/**",      "testable": false, "reason": "测试代码本身"},
     {"pattern": "autotests/**",  "testable": false, "reason": "测试代码本身"}
   ],
@@ -640,12 +645,14 @@ Agent 输出 Markdown 摘要 + review_queue，与用户交互：
 | `file` | string | ✅ | 源文件路径 |
 | `class_qn` | string\|null | ✅ | 所属类 qn，自由函数为 null |
 | `testable` | bool | ✅ | scope_rules 判定 |
-| `level` | "high"\|"mid"\|"low"\|null | ✅ | testable=false 时为 null |
+| `level` | "high"\|"mid"\|"low"\|"exempt" | ✅ | testable=false 时为 exempt |
 | `factors` | string[] | ✅ | 命中因子列表，空=low |
 | `source` | "auto"\|"suggested"\|"manual" | ✅ | auto=全自动, suggested=自动建议待复核, manual=人工覆盖 |
 | `exempt_reason` | string\|null | testable=false时 | "scope:3rdparty/**" |
 | `review_status` | "pending"\|"confirmed"\|"rejected"\|null | suggested时 | null=不需要复核 |
 | `usecase_count` | int | ✅ | 已有用例数，0=未测试 |
+| `node_type` | "Method"\|"Function" | ✅ | Method=类方法, Function=自由函数 |
+| `auto_reason` | string\|null | 条件 | 自动评分原因（仅 suggested 时） |
 
 ## 评分因子表
 

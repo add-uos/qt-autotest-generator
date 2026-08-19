@@ -152,20 +152,28 @@ class MCPClient:
 # ── 数据采集步骤 ──
 
 def collect_methods(client, project, file_pattern=None, limit=2000):
-    """Step 1: Paginated search_graph to collect all Method nodes."""
+    """Step 1: Paginated search_graph to collect all Method + Function nodes.
+
+    Function nodes include free C/C++ functions (main, helpers, etc.).
+    Some Function entries are noise (macros, using-declarations, misclassified
+    constructors) — filtered later by scan_inventory.py.
+    """
     all_methods = []
+    all_functions = []
     offset = 0
     page = 0
     total = 0
 
-    args = {"project": project, "label": "Method", "limit": limit, "offset": 0}
+    args_base = {"project": project, "limit": limit, "offset": 0}
     if file_pattern:
-        args["file_pattern"] = file_pattern
+        args_base["file_pattern"] = file_pattern
 
-    print(f"\n📊 [1/5] Collecting Method nodes...")
+    print(f"\n📊 [1/5] Collecting Method + Function nodes...")
     if file_pattern:
         print(f"   file_pattern: {file_pattern}")
 
+    # 1A. Method nodes (class methods)
+    args = {**args_base, "label": "Method"}
     while True:
         page += 1
         args["offset"] = offset
@@ -175,15 +183,35 @@ def collect_methods(client, project, file_pattern=None, limit=2000):
         has_more = data.get("has_more", False)
 
         all_methods.extend(results)
-        print(f"   Page {page}: +{len(results)} (offset={offset}, "
-              f"total={total}, collected={len(all_methods)})")
+        if page == 1:
+            print(f"   Method: total={total}")
 
         if not has_more or not results:
             break
         offset += limit
 
-    print(f"   ✅ {len(all_methods)} methods collected")
-    return all_methods
+    # 1B. Function nodes (free functions)
+    offset = 0
+    page = 0
+    args = {**args_base, "label": "Function"}
+    while True:
+        page += 1
+        args["offset"] = offset
+        data = client.call_tool("search_graph", args)
+        results = data.get("results", [])
+        total = data.get("total", 0)
+        has_more = data.get("has_more", False)
+
+        all_functions.extend(results)
+        if page == 1:
+            print(f"   Function: total={total}")
+
+        if not has_more or not results:
+            break
+        offset += limit
+
+    print(f"   ✅ {len(all_methods)} methods + {len(all_functions)} functions collected")
+    return all_methods, all_functions
 
 
 def collect_inheritance(client, project):
@@ -408,13 +436,13 @@ def _extract_class_from_qn(qn):
 
 # ── 主流程 ──
 
-def build_mcp_dump(project, methods, dbus_adaptor, dbus_interface,
+def build_mcp_dump(project, methods, functions, dbus_adaptor, dbus_interface,
                    concurrent, dbus_slots, q_invokables, q_plugins, p75):
     """Assemble mcp_dump dict for scan_inventory.build_inventory()."""
     return {
         "project": project,
         "methods": methods,
-        "functions": [],
+        "functions": functions,     # free C/C++ functions (main, helpers, etc.)
         "classes": [],
         "dbus_classes": dbus_adaptor,       # server-side Adaptor (contract-level)
         "dbus_interface_classes": dbus_interface,  # client-side (not contract-level)
@@ -464,15 +492,15 @@ def main():
     print(f"📋 Project: {args.project}")
 
     # Step 1-5: 采集数据
-    methods = collect_methods(client, args.project, args.file_pattern, args.limit)
+    methods, functions = collect_methods(client, args.project, args.file_pattern, args.limit)
     dbus_adaptor, dbus_interface, concurrent = collect_inheritance(client, args.project)
     dbus_slots = collect_dbus_slots(client, args.project, dbus_adaptor)
     q_invokables, q_plugins = collect_qt_macros(client, args.project)
-    p75 = compute_p75_nonzero(methods)
+    p75 = compute_p75_nonzero(methods + functions)
 
     # 构建 mcp_dump
     mcp_dump = build_mcp_dump(
-        args.project, methods, dbus_adaptor, dbus_interface,
+        args.project, methods, functions, dbus_adaptor, dbus_interface,
         concurrent, dbus_slots, q_invokables, q_plugins, p75)
 
     if args.keep_dump:

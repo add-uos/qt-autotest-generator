@@ -33,6 +33,8 @@ SCOPE_RULES = [
     {"pattern": "3rdparty/**",   "testable": False, "reason": "第三方库"},
     {"pattern": "3rd_party/**",  "testable": False, "reason": "第三方库"},
     {"pattern": "third_party/**","testable": False, "reason": "第三方库"},
+    {"pattern": "**/external/**", "testable": False, "reason": "第三方库(external)"},
+    {"pattern": "**/vendor/**",   "testable": False, "reason": "第三方库(vendor)"},
     {"pattern": "**/moc_*.cpp",  "testable": False, "reason": "MOC 生成"},
     {"pattern": "**/moc_*.h",    "testable": False, "reason": "MOC 生成"},
     {"pattern": "**/ui_*.h",     "testable": False, "reason": "UI 生成"},
@@ -196,8 +198,40 @@ def build_inventory(mcp_data: dict, project_name: str, base_sha: str) -> dict:
         f["_node_type"] = "Function"
         all_callable.append(f)
 
-    # 过滤 is_test=true
-    filtered = [m for m in all_callable if not m.get("is_test", False)]
+    # 过滤 is_test=true + Function 噪音（宏/using 声明/误分类构造函数）
+    NOISE_PATTERNS = re.compile(
+        r'^(D[A-Z].*_USE_NAMESPACE|Q_[A-Z_]+|_[A-Z_]+|'
+        r'[A-Z][a-z]+[A-Z][A-Za-z]*$)',  # PascalCase 单词 = 可能是误分类的类名
+    )
+    def is_function_noise(f):
+        """Filter out Function nodes that are macros, using-declarations,
+        or misclassified constructors (PascalCase with no params)."""
+        name = f.get("name", "")
+        # 全大写 = 宏/using 声明 (DGUI_USE_NAMESPACE, DWIDGET_USE_NAMESPACE, etc.)
+        if name.isupper() or '_USE_NAMESPACE' in name or '_USE_WIDGET' in name:
+            return True
+        # Q_ 开头 = Qt 宏 (Q_DECLARE_METATYPE, Q_OBJECT, etc.)
+        if name.startswith('Q_') and name.isupper():
+            return True
+        # D 前缀 PascalCase + param_count=0 + complexity=0 = DTK using 声明
+        # (DArrowRectangle, DListView, DMainWindow, DWidget, etc.)
+        if (name.startswith('D') and re.match(r'^D[A-Z][a-z]+', name) and
+                f.get('param_count', -1) == 0 and f.get('complexity', 0) == 0):
+            return True
+        # Q 前缀 PascalCase + param_count=0 + complexity=0 = Qt using 声明
+        # (QListWidget, QStyledItemDelegate, QWidget, etc.)
+        if (name.startswith('Q') and re.match(r'^Q[A-Z][a-z]+', name) and
+                f.get('param_count', -1) == 0 and f.get('complexity', 0) == 0):
+            return True
+        # PascalCase + param_count=0 + complexity=0 = 可能是误分类的类名/构造函数
+        if (re.match(r'^[A-Z][a-z]+[A-Z]', name) and
+                f.get('param_count', -1) == 0 and f.get('complexity', 0) == 0):
+            return True
+        return False
+
+    filtered = [m for m in all_callable
+                if not m.get("is_test", False)
+                and not (m.get("_node_type") == "Function" and is_function_noise(m))]
 
     # 构建 class_qn → base_classes 映射
     class_bases = {}
@@ -374,7 +408,8 @@ def build_inventory(mcp_data: dict, project_name: str, base_sha: str) -> dict:
             "source": source,
             "exempt_reason": exempt_reason,
             "review_status": review_status,
-            "usecase_count": 0  # 模式一不扫描测试文件，默认 0
+            "usecase_count": 0,  # 模式一不扫描测试文件，默认 0
+            "node_type": method.get("_node_type", "Method"),  # Method or Function
         }
         if auto_reason:
             entry["auto_reason"] = auto_reason
