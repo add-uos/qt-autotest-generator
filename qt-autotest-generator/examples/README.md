@@ -11,7 +11,7 @@ sample-qt-project/
 │   └── calculator.h          # 示例 Qt 类（仅头文件，内联实现）
 ├── CMakeLists.txt             # 项目根 CMake（含 BUILD_TESTS 开关）
 └── autotests/                 # 技能生成的测试框架
-    ├── 3rdparty/stub/         # stub-ext（从 resources/stub/ 复制）
+    ├── 3rdparty/stub/         # stub-ext（从 templates/stub-ext/ 复制）
     ├── cmake/UnitTestUtils.cmake
     ├── run-ut.sh
     ├── CMakeLists.txt          # 测试根 CMake

@@ -368,7 +368,7 @@ EXPECT_EQ(obj->lastError(), ErrorCode::LoadFailed);
 - 全局函数：`qPrintable`、`::getenv`、`::open`
 - 第三方库函数
 
-适用：**第三方类、Qt 内置类、无虚函数接口、无法注入的依赖**。参见 `resources/templates/stub-patterns.cpp` 第 1-16 节。
+适用：**第三方类、Qt 内置类、无虚函数接口、无法注入的依赖**。参见 `templates/stub-patterns.cpp` 第 1-16 节。
 
 ### 7.3 gMock 适用场景
 
@@ -484,7 +484,7 @@ ON_CALL(storage, load(::testing::_))
 ```cpp
 #include <gmock/gmock.h>   // 仅在使用 gMock 时添加；纯 stub_ext 测试不引入
 ```
-gMock 模板示例见 `resources/templates/stub-patterns.cpp` 第 17-19 节。
+gMock 模板示例见 `templates/stub-patterns.cpp` 第 17-19 节。
 
 ---
 

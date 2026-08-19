@@ -32,7 +32,7 @@ cmake --build . -j$(nproc) --target test_<classname> 2>&1
 | `stub.set_lamda` 签名不匹配 | 用 MCP `get_code_snippet` 重新读方法签名，修正 stub |
 | `expected primary-expression` | 检查返回类型/参数类型，用 `static_cast` 修正重载 |
 | `CMake Error` | 修 CMakeLists.txt 语法 |
-| `undefined reference to stub_ext::freeWrapper` | 确认 `resources/stub/stub-shadow.cpp` 已编入 test target |
+| `undefined reference to stub_ext::freeWrapper` | 确认 `templates/stub-ext/stub-shadow.cpp` 已编入 test target |
 | `vtable for XXX` / `undefined type` | 检查 Q_OBJECT 宏、MOC 处理 |
 
 > **注意**：只修测试代码和测试 CMakeLists，不修项目源码。每次修复后重新编译，确认该错误消除。同一错误 3 次修不好 → 标记为疑似源码缺陷，停止该错误。

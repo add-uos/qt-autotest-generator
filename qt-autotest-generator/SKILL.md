@@ -124,7 +124,7 @@ Mode 2 的子步骤按需读取：
 2. **Google Test only** —— 不用 Qt Test / Catch2
 3. **函数覆盖率门禁** —— 有 `.ut-inventory.json` 时按方法分级：🌟high 行90%+分支80%+函数100%，⚖mid 行60%+函数100%，💤low 行60%+函数100%（同 mid）
 4. **强制编译+运行验证** —— 编译并跑通后才能报完成
-5. **内置 stub-ext** —— 从 `resources/stub/` 复制，不从网络下载
+5. **内置 stub-ext** —— 从 `templates/stub-ext/` 复制，不从网络下载
 6. **逐类闭环** —— 每个类独立走完 依赖追踪→生成→验证→自检；单类失败记录跳过，不阻塞其他类
 7. **不修源码** —— 疑似源码缺陷只标红交还用户
 8. **只 APPEND 不改已有** —— 不注释/删除/修改已有 CMake 代码
@@ -143,17 +143,44 @@ Mode 2 的子步骤按需读取：
 | 测试类名 | `MyClassTest` |
 | 用例命名 | `{Feature}_{Scenario}_{ExpectedResult}` |
 | MCP 工具 | `search_graph`, `get_code_snippet`, `trace_path`, `query_graph`, `index_status` |
-| Stub 模板 | `resources/templates/stub-patterns.cpp` |
-| CMake 模板 | `resources/templates/cmake-*.txt` |
+| Stub 模板 | `templates/stub-patterns.cpp` |
+| CMake 模板 | `templates/cmake-*.txt` |
 | 编译重试 | per-error 3 次，max 10 loops |
 | 函数覆盖率阈值 | 默认 90%，可由用户指定 |
 | MCP 提供方指南 | `resources/references/mcp-providers.md` |
 | MCP 使用指南 | `resources/references/codebase-memory-guide.md` |
 | 测试方法论 | `resources/references/test-types.md` |
 | 覆盖率分级 | `resources/references/coverage-tiers.md` |
-| 分级覆盖率采集 | `scripts/collect-coverage-report.py` | Mode 3：一条命令采集 gtest XML + lcov HTML + 分级覆盖率 + 汇总 JSON |
+| 分级覆盖率采集 | `scripts/collect-coverage-report.py`（Mode 3） |
 | Inventory Schema | `resources/references/inventory-schema.md` |
 | 对账逻辑 | `resources/references/reconcile-logic.md` |
+
+---
+
+## 模板文件（`templates/`）
+
+技能内置的两类资产合并存放于根级 `templates/` 目录：**代码生成模板**（带占位符，读取后替换）和 **stub-ext 库**（vendored 第三方库，整目录原样复制）。
+
+### 代码生成模板（平铺于 `templates/`）
+
+| 文件 | 用途 | 使用阶段 | 占位符 |
+|------|------|---------|--------|
+| `google-test-base.cpp` | GTest 测试夹具基类骨架：TEST_F 类结构、SetUp/TearDown、stub 声明、SPDX 头 | 测试代码生成（每类） | `{ClassName}` `{header_file}` `{SPDX_YEAR}` `{SetUpTestSuite}` `{TestCases}` 等 |
+| `stub-patterns.cpp` | 常用 stub 模式速查：UI 显示/尺寸、信号监听、虚函数、文件 IO、网络、定时器等 19 节模式 | 依赖追踪 + 测试代码生成（参考用，不直接复制） | 无（参考库） |
+| `cmake-autotests.txt` | 测试根 `CMakeLists.txt` 模板：GTest 依赖、覆盖率标志、子目录挂载 | 框架搭建 | `{TEST_DIR}` `{QT_VERSION}` `{THIRD_PARTY_PACKAGES}` `{ADD_SUBDIRECTORIES}` |
+| `cmake-submodule.txt` | 测试子模块 `CMakeLists.txt` 模板：可执行目标、stub-shadow 链接、Qt 版本、include 路径 | 测试代码生成（每模块） | `{QT_VERSION}` `{PROJECT_LIBRARIES}` `{QT_EXTRA_LIBS}` `{module_name}` `{test_dir}` `{source_module_path}` |
+
+### stub-ext 库（`templates/stub-ext/`）
+
+vendored [stub-ext](https://github.com/guyongling/stub-ext) 库源码，用于运行时函数 stub（替换虚函数/私有方法/系统调用）。框架搭建时**整目录原样复制**到项目 `{test_dir}/3rdparty/stub/`，不从网络下载。
+
+| 文件 | 说明 |
+|------|------|
+| `stubext.h` | 库主头文件，测试代码 `#include "stubext.h"` 入口 |
+| `stub.h` | Stub 核心实现（函数地址替换） |
+| `stub-shadow.h` / `stub-shadow.cpp` | Shadow 机制（堆栈上对象 stub），必须编入 test target |
+| `addr_any.h` / `addr_pri.h` | 内存地址工具（私有成员访问） |
+| `elfio.hpp` | ELF 解析（内联第三方头，用于符号定位） |
 
 ---
 

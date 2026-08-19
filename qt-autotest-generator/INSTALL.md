@@ -13,7 +13,7 @@ git clone <本仓库 URL> .opencode/skills/qt-autotest-generator
 
 或使用本地路径复制到 `.opencode/skills/qt-autotest-generator`。
 
-运行时环境通常会设置 **`SKILL_DIR`** 指向该技能目录；`SKILL.md` 中的 `${SKILL_DIR}/resources/...` 即解析到此路径。
+运行时环境通常会设置 **`SKILL_DIR`** 指向该技能目录；`SKILL.md` 中的 `${SKILL_DIR}/templates/...` 和 `${SKILL_DIR}/resources/...` 即解析到此路径。
 
 ## Claude Code
 

@@ -6,7 +6,7 @@
 
 ```
 autotests/
-├── 3rdparty/stub/       # stub-ext（从 resources/stub/ 复制）
+├── 3rdparty/stub/       # stub-ext（从 templates/stub-ext/ 复制）
 ├── cmake/               # CMake 工具脚本
 ├── core/                # 测试模块（按源码模块分组）
 │   ├── CMakeLists.txt

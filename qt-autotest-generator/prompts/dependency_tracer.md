@@ -96,7 +96,7 @@ stub 类型选择规则：
 - 虚函数 → `VADDR(Class, method)`
 - 重载函数 → `static_cast<Ret (Class::*)(Params)>(&Class::method)`
 - 普通函数 → `stub.set_lamda(...)`
-- 具体模式参考 `resources/templates/stub-patterns.cpp`
+- 具体模式参考 `templates/stub-patterns.cpp`
 
 **循环依赖处理**：若 trace_path 发现 callee 链形成环（A→B→C→A），记录环路但不无限递归。在 stub_list 中标记 `circular: true`，可选择跳过该类或标记 needs_manual。
 

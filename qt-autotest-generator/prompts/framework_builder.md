@@ -25,7 +25,7 @@ test_dir = test_dir  # "autotests" 或 "tests"
 # 创建目录结构
 ```
 {test_dir}/
-├── 3rdparty/stub/       # stub-ext（从 resources/stub/ 复制）
+├── 3rdparty/stub/       # stub-ext（从 templates/stub-ext/ 复制）
 ├── cmake/               # CMake 工具脚本
 ├── .gitignore            # 忽略构建产物和临时状态
 ├── run-ut.sh            # 测试运行脚本
@@ -34,9 +34,9 @@ test_dir = test_dir  # "autotests" 或 "tests"
 
 ### 3. 复制 stub-ext
 
-cp -r ${SKILL_DIR}/resources/stub/* ${PROJECT_PATH}/{test_dir}/3rdparty/stub/
+cp -r ${SKILL_DIR}/templates/stub-ext/* ${PROJECT_PATH}/{test_dir}/3rdparty/stub/
 
-> **注意**：禁止从网络下载 stub-ext，只从 `resources/stub/` 复制。
+> **注意**：禁止从网络下载 stub-ext，只从 `templates/stub-ext/` 复制。
 
 ### 4. 生成 CMake 工具脚本
 
@@ -62,7 +62,7 @@ TEST_DIR=tests bash ${SKILL_DIR}/scripts/generate-runner.sh
 
 ### 6. 生成 {test_dir}/CMakeLists.txt
 
-读模板：`resources/templates/cmake-autotests.txt`
+读模板：`templates/cmake-autotests.txt`
 
 替换占位符：
 - `{TEST_DIR}` → `test_dir` 值（如 `autotests` 或 `tests`）

@@ -53,13 +53,13 @@ snippet = codebase_memory_mcp.get_code_snippet(
 
 ```python
 # 测试文件骨架模板
-read("${SKILL_DIR}/resources/templates/google-test-base.cpp")
+read("${SKILL_DIR}/templates/google-test-base.cpp")
 
 # stub 模式参考
-read("${SKILL_DIR}/resources/templates/stub-patterns.cpp")
+read("${SKILL_DIR}/templates/stub-patterns.cpp")
 
 # CMake 子模块模板
-read("${SKILL_DIR}/resources/templates/cmake-submodule.txt")
+read("${SKILL_DIR}/templates/cmake-submodule.txt")
 ```
 
 ### 3. 生成测试文件
@@ -198,7 +198,7 @@ read("${SKILL_DIR}/resources/templates/cmake-submodule.txt")
 
 ### 5. 生成 CMakeLists.txt
 
-读 `resources/templates/cmake-submodule.txt`，替换：
+读 `templates/cmake-submodule.txt`，替换：
 - `{module_name}` → 模块名
 - `{ClassName}` → 类名
 - `{QT_VERSION}` → 内存变量中的 qt_version
@@ -235,7 +235,7 @@ read("${SKILL_DIR}/resources/templates/cmake-submodule.txt")
 - 不跳过 GUI 特殊处理（GUI 类用 `QCoreApplication`，不直接实例化）
 - 不修改已有 CMake 代码，只 APPEND `add_subdirectory`
 - 不修改项目源码
-- 不从网络下载模板，只读 `resources/templates/`
+- 不从网络下载模板，只读 `templates/`
 - 测试文件必须有 `SPDX-FileCopyrightText` 和 `SPDX-License-Identifier` 头
 - 不硬耦合测试机：所有路径、环境变量、文件系统、网络、子进程、时间、随机源访问必须 mock 或在 `SetUp()` 中隔离；禁止硬编码测试机绝对路径；禁止依赖测试机特定文件/用户/权限/时区/网络状态；用例必须可在任意干净 CI 环境复现
 - 不盲信 `stub_list`：必须先读待测方法源码识别其**隐式依赖**（路径、env、文件系统、子进程、时间、随机、单例/全局状态），按 4.0 补齐 mock
