@@ -151,7 +151,7 @@ write_json(inventory_path, inventory)
 gate = inventory["gate_thresholds"]
 # high: 行90% + 分支80% + 函数100%
 # mid:  行60% + 函数100%
-# low:  无硬性门禁
+# low:  行60% + 函数100%（同 mid）
 ```
 
 自检阶段按方法 level 应用对应门禁。详见 `prompts/self_checker.md` 和 `resources/references/coverage-tiers.md`。

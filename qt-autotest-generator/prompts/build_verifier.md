@@ -83,13 +83,37 @@ timeout 120 ./${test_dir}/<module>/test_<classname> --gtest_output=xml:${PROJECT
   "run_result": "pass",        // pass / fail / not_run
   "failure_reason": null,      // null / compile_error / runtime_crash / source_defect_*
   "build_log_excerpt": "...",  // 最小错误日志片段（失败时）
+  "coverage_snapshot": "...",  // 7c 产出的分级覆盖率 JSON 路径或内联对象（供 self_checker 复用）
+  "coverage_gap": [],          // 7b 方法名差集
   "status": "verified"         // verified / failed
 }
 ```
 
-### 7. 覆盖率信号（轻量）
+> `verified` 满足条件：`build_result=pass` + `run_result=pass` + 覆盖率快照已产出（7c，lcov 不可用时降级为仅 7b）。门禁达标判定在 `self_checker`。
 
-运行后从 gtest XML 输出提取已跑的 TEST_F 名，与 inventory 待测方法对比：
+### 7. 覆盖率信号（分级覆盖率统计）
+
+产出**三信号**：方法名差集（结构性）+ lcov 数据采集 + 分级覆盖率快照（函数级+行级）。前两项为轻量检查，第三项调用 `scripts/coverage_by_level.py` 产出按 high/mid/low 的真实覆盖率数字，作为 `verified` 的满足条件之一（覆盖率快照必须产出，门禁达标判定在 `self_checker`）。
+
+#### 7a. lcov 数据采集
+
+运行测试后立即采集覆盖率（`self_checker` 第 1b 步依赖此产物）：
+
+```bash
+test_dir=test_dir  # 内存变量
+build_dir=${PROJECT_PATH}/build-${test_dir}
+mkdir -p ${build_dir}/coverage
+# capture -> 只保留 src -> 剔除测试自身
+lcov -d ${build_dir} -c -o ${build_dir}/coverage/total.info
+lcov --extract ${build_dir}/coverage/total.info '*/src/*' -o ${build_dir}/coverage/filtered.info
+lcov --remove  ${build_dir}/coverage/filtered.info '*/${test_dir}/*' '*/tests/*' -o ${build_dir}/coverage/filtered.info
+```
+
+> **注意**：lcov 不可用时跳过 7c，仅做 7b 方法名差集，并在 `class_status` 记 `coverage_signal="missing"`。逐类闭环阶段 filtered.info 反映「当前类 + 已跑类」的累积覆盖，全量分级汇总以批次收尾或 `run-ut.sh` 全量跑为准。
+
+#### 7b. 方法名差集（结构性）
+
+从 gtest XML 输出提取已跑的 TEST_F 名，与 inventory 待测方法对比：
 
 ```python
 tested = {n.lower() for n in parse_test_names_from_xml(xml_output)}  # PascalCase → 小写归一化
@@ -98,18 +122,50 @@ planned = {m["name"].lower() for m in inventory["methods"]
 coverage_gap = planned - tested
 ```
 
-若 `coverage_gap` 非空 → 信号 B 触发 `incremental_updater`。
+若 `coverage_gap` 非空 → 触发 `incremental_updater`。
 
-> **注意**：此处只做方法名差集（结构性检查）。覆盖率百分比的完整门禁在 `self_checker` 中执行（按方法分级，必须有 inventory）——此处不解析 lcov 数据，避免与 self_checker 重复。
+#### 7c. 分级覆盖率统计（调用脚本，满足条件）
+
+调用 skill 内置脚本，产出当前类的分级覆盖率快照（per-class，逐类闭环口径）：
+
+```bash
+python3 ${SKILL_DIR}/scripts/coverage_by_level.py \
+    -i ${PROJECT_PATH}/${test_dir}/.ut-inventory.json \
+    -c ${build_dir}/coverage/filtered.info \
+    --class ${classname} --json -o ${build_dir}/coverage/${classname}_by_level.json
+```
+
+脚本输出（JSON）：
+
+```json
+{
+  "class": "IconButton",
+  "by_level": {
+    "high": {"methods": 1, "function_coverage": 100.0, "line_coverage": 61.9,
+             "gate": {"line": 90, "branch": 80, "function": 100}, "pass": false},
+    "mid":  {"methods": 4, "function_coverage": 100.0, "line_coverage": 74.7, "pass": true},
+    "low":  {"methods": 12, "function_coverage": 100.0, "line_coverage": 97.3, "pass": true}
+  },
+  "total": {"methods": 17, "function_coverage": 100.0, "line_coverage": 80.9, "pass": false},
+  "uncovered_functions": []
+}
+```
+
+- `by_level.<lv>.pass` = 函数覆盖率达 `gate.function` 且行覆盖率达 `gate.line`（阈值取自 inventory 的 `gate_thresholds`）
+- `uncovered_functions` = FNDA:0 的方法名列表，供 `incremental_updater` 精准补全
+- 脚本依赖 `c++filt`（binutils 自带）；解析 FN/FNDA/DA + demangle 关联 inventory 分级，补 `coverage_parser.py`（仅文件级）缺失的函数级+行级能力
+
+> **注意**：此处只产出覆盖率快照，**不做门禁达标判定**（不因 `pass:false` 阻塞 `verified`）。门禁达标在 `self_checker` 第 1b 步执行——`self_checker` 直接复用此 JSON，避免重复解析 lcov。
 
 ## 后续流程
 
-| build_result | run_result | coverage_gap | 下一阶段 |
-|-------------|-----------|-------------|--------|
-| pass | pass | 空 | `self_checker` |
-| pass | pass | 非空 | `self_checker`（自检后若通过 → `incremental_updater`） |
-| fail | - | - | `failure_repairer` |
-| pass | fail | - | `failure_repairer` |
+| build_result | run_result | coverage_gap | coverage_snapshot | 下一阶段 |
+|-------------|-----------|-------------|-------------------|--------|
+| pass | pass | 空 | 已产出 | `self_checker`（复用快照做门禁判定） |
+| pass | pass | 非空 | 已产出 | `self_checker`（自检后若通过 → `incremental_updater`） |
+| pass | pass | - | missing（lcov 不可用） | `self_checker`（降级为仅方法名差集） |
+| fail | - | - | - | `failure_repairer` |
+| pass | fail | - | - | `failure_repairer` |
 
 若 `failure_reason` 含 `source_defect` → 标记该类 `status=failed`，跳过，继续下一类。
 
@@ -119,5 +175,7 @@ coverage_gap = planned - tested
 - 编译失败时不报完成
 - 编译通过必须接着运行，不跳过运行验证
 - 不超过重试预算：per-error 3 次，总计 10 loops
-- 不忽略 gtest XML 输出：覆盖率信号从 XML 提取
+- 不忽略 gtest XML 输出：方法名差集从 XML 提取
+- 不跳过 lcov 采集：运行通过后必须采集 filtered.info（lcov 可用时），供 7c 与 self_checker 复用
+- 不自行判定门禁达标：7c 只产出覆盖率快照，`pass:false` 不阻塞 `verified`；达标判定在 `self_checker`
 - 不自行宣布"源码缺陷"而不读源码：必须用 `get_code_snippet` 读源码确认

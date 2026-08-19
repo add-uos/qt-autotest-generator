@@ -109,7 +109,7 @@ Mode 2 的子步骤按需读取：
 
 1. **知识图谱 MCP 硬门禁** —— 无图谱索引不执行
 2. **Google Test only** —— 不用 Qt Test / Catch2
-3. **函数覆盖率门禁** —— 有 `.ut-inventory.json` 时按方法分级：🌟high 行90%+分支80%+函数100%，⚖mid 行60%+函数100%，💤low 无硬性门禁
+3. **函数覆盖率门禁** —— 有 `.ut-inventory.json` 时按方法分级：🌟high 行90%+分支80%+函数100%，⚖mid 行60%+函数100%，💤low 行60%+函数100%（同 mid）
 4. **强制编译+运行验证** —— 编译并跑通后才能报完成
 5. **内置 stub-ext** —— 从 `resources/stub/` 复制，不从网络下载
 6. **逐类闭环** —— 每个类独立走完 依赖追踪→生成→验证→自检；单类失败记录跳过，不阻塞其他类
@@ -138,6 +138,7 @@ Mode 2 的子步骤按需读取：
 | MCP 使用指南 | `resources/references/codebase-memory-guide.md` |
 | 测试方法论 | `resources/references/test-types.md` |
 | 覆盖率分级 | `resources/references/coverage-tiers.md` |
+| 分级覆盖率统计 | `scripts/coverage_by_level.py`（函数级+行级，补 coverage_parser.py）|
 | Inventory Schema | `resources/references/inventory-schema.md` |
 | 对账逻辑 | `resources/references/reconcile-logic.md` |
 

@@ -58,9 +58,9 @@ coverage_gap = all_method_names - tested_names
 
 ##### 1b. lcov 函数覆盖率门禁（百分比）
 
-读取 lcov 生成的 `build-{test_dir}/coverage/filtered.info`（`test_dir` 从 `test_dir` 读取），计算该类源文件对应的函数覆盖率百分比：
+复用 `build_verifier` 第 7c 步产出的分级覆盖率快照（`${build_dir}/coverage/${classname}_by_level.json`），避免重复解析 lcov。快照不存在或 stale 时重新调用脚本：
 
-- **有 inventory 时**：按方法分级差异化门禁（详见 `resources/references/coverage-tiers.md`）
+- **有 inventory 时**：按方法分级差异化门禁（阈值取自 inventory 的 `gate_thresholds`，详见 `resources/references/coverage-tiers.md`）
 - **无 inventory**：技能不可运行，先执行 Mode 1 生成 inventory
 
 ```python
@@ -69,34 +69,24 @@ inventory_path = f"{test_dir}/.ut-inventory.json"
 if not os.path.exists(inventory_path):
     raise FatalError("无 .ut-inventory.json，先执行 Mode 1")
 
-inventory = json.load(open(inventory_path))
-method_gates = {}
-for m in inventory["methods"]:
-    if not m["testable"] or m["class_qn"] != target_class.qualified_name:
-        continue
-        level = m["level"]
-        if level == "high":
-            method_gates[m["name"]] = {"line": 90, "branch": 80, "function": 100}
-        elif level == "mid":
-            method_gates[m["name"]] = {"line": 60, "function": 100}
-        else:  # low or null
-            method_gates[m["name"]] = {}  # no hard gate
-    # 按方法级 gate 逐方法检查行/分支/函数覆盖率
-    # 详见 resources/references/coverage-tiers.md
+# 复用 build_verifier 7c 的快照；不存在则重新生成
+snapshot_path = f"build-{test_dir}/coverage/{target_class.name}_by_level.json"
+if not os.path.exists(snapshot_path):
+    subprocess.run([
+        "python3", f"{SKILL_DIR}/scripts/coverage_by_level.py",
+        "-i", inventory_path,
+        "-c", f"build-{test_dir}/coverage/filtered.info",
+        "--class", target_class.name, "--json", "-o", snapshot_path,
+    ], check=True)
 
-# 解析 lcov info 文件中目标类源文件的函数覆盖率
-func_coverage = parse_function_coverage_from_lcov(
-    info_file=f"build-{test_dir}/coverage/filtered.info",
-    source_file=target_class.file_path
-)
-# 返回: { "function_coverage": 86.7, "functions_hit": 13, "functions_found": 15 }
-
-# 同时提取未被执行的函数名列表（lcov FNDA:0 行），供 incremental_updater 精准补全
-uncovered_functions = parse_uncovered_functions_from_lcov(
-    info_file=f"build-{test_dir}/coverage/filtered.info",
-    source_file=target_class.file_path
-)
+snapshot = json.load(open(snapshot_path))
+# snapshot["by_level"][lv]["pass"] 已按 gate_thresholds 判定：函数覆盖率达 function 阈值 且 行覆盖率达 line 阈值
+# snapshot["uncovered_functions"] = FNDA:0 方法名列表，供 incremental_updater 精准补全
+gate_failed_levels = [lv for lv in ("high", "mid", "low") if not snapshot["by_level"][lv]["pass"]]
+uncovered_functions = snapshot["uncovered_functions"]
 ```
+
+> 脚本 `scripts/coverage_by_level.py` 解析 FN/FNDA/DA + `c++filt` demangle 关联 inventory 分级，补 `coverage_parser.py`（仅文件级 LF/LH/FNF/FNH）缺失的函数级+行级能力。门禁阈值取自 inventory 的 `gate_thresholds`，不在 self_checker 内 hardcode。
 
 **判定规则**：
 - `coverage_gap` 非空 → 流转至 `incremental_updater`（传入 `coverage_gap`）

@@ -14,4 +14,5 @@
 #
 # === 可选系统依赖 ===
 # - lcov + genhtml: 代码覆盖率报告 (run-ut.sh Step 5)
+# - c++filt (binutils 自带，gcc 安装即有): scripts/coverage_by_level.py 函数级 demangle
 # - ccache: 加速重复编译

@@ -49,7 +49,7 @@ SCOPE_RULES = [
 GATE_THRESHOLDS = {
     "high": {"line": 90, "branch": 80, "function": 100},
     "mid":  {"line": 60, "branch": None, "function": 100},
-    "low":  {"line": None, "branch": None, "function": None},
+    "low":  {"line": 60, "branch": None, "function": 100},
 }
 
 DESTRUCTIVE_PATTERN = re.compile(

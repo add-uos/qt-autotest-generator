@@ -52,7 +52,7 @@ python3 fetch_mcp_data.py --project <id> --output .ut-inventory.json
 |-------|--------|----------|----------|
 | 🌟 high | ≥90% | ≥80% | =100% |
 | ⚖ mid | ≥60% | — | =100% |
-| 💤 low | 无硬性要求 | — | — |
+| 💤 low | ≥60% | — | =100% |
 | 🚫 exempt | 豁免 | 豁免 | 豁免 |
 
 ## 技术栈
