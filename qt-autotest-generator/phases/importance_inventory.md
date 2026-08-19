@@ -361,7 +361,7 @@ OTHER_SCORES = {
     "concurrent_class": 1,
     "transitive_loop_depth": 3,  # tld ≥ 3
     "linear_scan_in_loop": 1,   # lsl ≥ 1
-    "in_degree_high": 2,       # ≥ P75(非零)
+    "in_degree_high": 1,       # ≥ P75(非零), mid-booster only
     "name_destructive": 0,     # suggested, 不加得分
     "destructor": -1,          # 降级
     "operator": -1,            # 降级
@@ -660,7 +660,7 @@ Agent 输出 Markdown 摘要 + review_queue，与用户交互：
 | complexity 5–9 | low (+1) | Pass 1B 图属性 | auto |
 | transitive_loop_depth ≥ 3 | high (+3) | Pass 1B 图属性 | auto |
 | linear_scan_in_loop ≥ 1 | mid (+1) | Pass 1B 图属性 | auto |
-| in_degree ≥ P75(非零) | mid (+2) | Pass 1C 百分位 | auto |
+| in_degree ≥ P75(非零) | mid (+1) | Pass 1C 百分位 | auto |
 | 构造函数 | 低优先级 | 名称=类名 | auto |
 | 析构函数(~) | low (-1) | 名称模式 | auto |
 | operator 重载 | low (-1) | 名称模式 | auto |
@@ -668,8 +668,9 @@ Agent 输出 Markdown 摘要 + review_queue，与用户交互：
 | 无以上因子命中 | low | 默认 | auto |
 
 > **评分规则**：各因子累加得分，score ≥ 3 → high，score ≥ 1 → mid，score < 1 → low。
-> 关键：`in_degree ≥ P75` 单独只 +2（mid），需叠加 complexity ≥ 5 (+1) 或其他 high 因子才能达到 high。
-> 这防止了"被调用多的简单 getter"误标为 high。
+> 关键：`in_degree ≥ P75` 单独只 +1（mid-booster），需叠加 complexity ≥ 10 (+2)
+> 或 linear_scan_in_loop (+1) + complexity ≥ 5 (+1) 才能达到 high。
+> 这防止了「complexity 5–9 + 高调用者」组合被误标为 high。
 
 > **suggested 条目**默认 level=mid，进入 review_queue 待人工确认。
 > 人工标注 source=manual，level 由用户指定，覆盖自动评分。
@@ -700,7 +701,7 @@ Agent 输出 Markdown 摘要 + review_queue，与用户交互：
 | 计算方式 | P75 | high_caller 数量 | 问题 |
 |----------|-----|-----------------|------|
 | 全值（含 0） | 1 | 426/607 (70%) | 几乎所有有调用者的方法都变成 high，分类失真 |
-| 仅非零值 | 2 | 101/607 (17%) | 分布合理，high 仅占可测试的 17% |
+| 仅非零值 | 2 | 101/607 (17%) | P75=2 合理，仅 17% 的方法达到 in_degree≥2 |
 
 **结论**：P75 必须基于 `in_degree > 0` 的方法计算，排除零调用者。
 
@@ -709,7 +710,21 @@ Agent 输出 Markdown 摘要 + review_queue，与用户交互：
 实测发现：许多构造函数、简单 getter 的 in_degree 很高（如 `IconButton` 构造函数 in_degree=86），
 但它们不需要复杂的测试。如果 `in_degree ≥ P75` 直接判 high，会导致大量低风险方法被误标。
 
-**解决方案**：`in_degree` 因子仅贡献 +2 分（mid），需叠加 `complexity ≥ 5` 或其他 high 因子才能达到 high。
+**解决方案**：`in_degree` 因子仅贡献 +1 分（mid-booster），需叠加 `complexity ≥ 10` (+2)
+或 `linear_scan_in_loop` (+1) + `complexity ≥ 5` (+1) 才能达到 high。
+跨项目验证（5 个项目）：`in_degree=+2` 导致 calculator 14.2% high（大量 cx_lo+in_deg 假阳性），
+`in_degree=+1` 降至 9.6%，其他项目保持 0.4%–3.6% 的合理分布。
+
+| 项目 | 方法总数 | 可测试 | high | mid | low | high% | high 主因 |
+|------|---------|--------|------|-----|-----|-------|----------|
+| deepin-calculator | 1091 | 607 | 58 | 239 | 310 | 9.6% | dbus, cx_mid+in_deg, cx_hi |
+| deepin-ocr | 261 | 101 | 1 | 11 | 89 | 1.0% | cx_hi |
+| deepin-camera | 1632 | 472 | 17 | 99 | 356 | 3.6% | dbus, cx_mid+lsl, cx_hi |
+| deepin-terminal | 2245 | 1136 | 9 | 196 | 931 | 0.8% | cx_mid+lsl, cx_hi |
+| dde-file-manager* | 2600 | 1042 | 4 | 192 | 846 | 0.4% | cx_mid+in_deg |
+| deepin-reader* | 2200 | 36 | 0 | 6 | 30 | 0.0% | (98% 3rdparty 被过滤) |
+
+> *部分收集，仅用于趋势分析。
 
 ### MCP 不支持 Cypher 查询
 

@@ -102,8 +102,11 @@ def glob_to_regex(pattern: str) -> str:
     return "^" + result + "$"
 
 
-def scope_match(file_path: str, scope_rules: list) -> tuple[bool, str | None]:
+def scope_match(file_path: str | None, scope_rules: list) -> tuple[bool, str | None]:
     """Check if file_path matches any scope rule. Returns (testable, exempt_reason)."""
+    if file_path is None:
+        # Methods without a file path are testable by default (no scope exclusion)
+        return (True, None)
     for rule in scope_rules:
         regex = glob_to_regex(rule["pattern"])
         if re.match(regex, file_path):
@@ -118,9 +121,9 @@ def score_method(name: str, factors: list[str]) -> tuple[str, str]:
     """Return (level, source) using weighted scoring.
     
     Score ≥ 3 → high, ≥ 1 → mid, < 1 → low.
-    Key: in_degree alone only contributes +2 (mid), needs complexity ≥ 5
-    or another high-factor to reach high. This prevents trivial getters
-    with high caller count from being misclassified as high.
+    Key: in_degree alone only contributes +1 (mid-booster), needs complexity ≥ 10
+    or linear_scan_in_loop to reach high. This prevents methods with moderate
+    complexity (5-9) and moderate caller count from being misclassified as high.
     """
     score = 0
     has_suggested = False
@@ -144,7 +147,7 @@ def score_method(name: str, factors: list[str]) -> tuple[str, str]:
         elif f.startswith("linear_scan_in_loop:"):
             score += 1
         elif f.startswith("in_degree:"):
-            score += 2  # in_degree alone = mid, not high
+            score += 1  # in_degree alone contributes to mid; needs cx≥10 or lsl to reach high
         elif f == "destructor": score -= 1
         elif f == "operator": score -= 1
 
@@ -244,27 +247,68 @@ def build_inventory(mcp_data: dict, project_name: str, base_sha: str) -> dict:
         factors = []
 
         if testable:
-            # DBus 契约槽
-            if class_qn and class_qn in dbus_slots_map:
-                if name in dbus_slots_map[class_qn]:
-                    factors.append("dbus_slot")
+            # DBus 契约槽 — 匹配时尝试短名和全限定名
+            matched_dbus_class = None
+            if dbus_slots_map:
+                if class_qn and class_qn in dbus_slots_map:
+                    matched_dbus_class = class_qn
+                elif parent_class and parent_class in dbus_slots_map:
+                    matched_dbus_class = parent_class
+                elif parent_class:
+                    # 后缀匹配：parent_class 以 dbus_slots_map 某个 key 结尾
+                    for dk in dbus_slots_map:
+                        if parent_class.endswith("." + dk.split(".")[-1]) or parent_class == dk.split(".")[-1]:
+                            matched_dbus_class = dk
+                            break
+            if matched_dbus_class and name in dbus_slots_map[matched_dbus_class]:
+                factors.append("dbus_slot")
 
-            # Q_INVOKABLE
-            if class_qn and class_qn in q_invokables_map:
-                if name in q_invokables_map[class_qn]:
-                    factors.append("q_invokable")
+            # Q_INVOKABLE — 同样用后缀匹配
+            matched_invokable_class = None
+            if q_invokables_map:
+                if class_qn and class_qn in q_invokables_map:
+                    matched_invokable_class = class_qn
+                elif parent_class and parent_class in q_invokables_map:
+                    matched_invokable_class = parent_class
+                elif parent_class:
+                    for ik in q_invokables_map:
+                        if parent_class.endswith("." + ik.split(".")[-1]) or parent_class == ik.split(".")[-1]:
+                            matched_invokable_class = ik
+                            break
+            if matched_invokable_class and name in q_invokables_map[matched_invokable_class]:
+                factors.append("q_invokable")
 
-            # 插件导出
-            if class_qn and class_qn in q_plugins_map:
+            # 插件导出 — 同样用后缀匹配
+            matched_plugin_class = None
+            if q_plugins_map:
+                if class_qn and class_qn in q_plugins_map:
+                    matched_plugin_class = class_qn
+                elif parent_class and parent_class in q_plugins_map:
+                    matched_plugin_class = parent_class
+            if matched_plugin_class:
                 factors.append("plugin_export")
 
             # 并发基类
             parent_qn_full = parent_class or ""
+            # 并发基类 — 也用后缀匹配
+            matched_concurrent = False
             if parent_qn_full in concurrent_class_qns:
+                matched_concurrent = True
+            elif parent_qn_full:
+                for cq in concurrent_class_qns:
+                    if parent_qn_full.endswith("." + cq.split(".")[-1]) or parent_qn_full == cq.split(".")[-1]:
+                        matched_concurrent = True
+                        break
+            if matched_concurrent:
                 factors.append("concurrent_class")
             # 也检查 base_classes 属性
-            if parent_qn_full in class_bases:
-                bases = class_bases[parent_qn_full]
+            bases = class_bases.get(parent_qn_full, [])
+            if not bases and parent_qn_full:
+                for bk in class_bases:
+                    if parent_qn_full.endswith("." + bk.split(".")[-1]) or parent_qn_full == bk.split(".")[-1]:
+                        bases = class_bases[bk]
+                        break
+            if bases:
                 for cb in CONCURRENT_BASE_CLASSES:
                     if cb in bases:
                         factors.append(f"concurrent_base:{cb}")
@@ -288,7 +332,7 @@ def build_inventory(mcp_data: dict, project_name: str, base_sha: str) -> dict:
             if lsl >= 1:
                 factors.append(f"linear_scan_in_loop:{lsl}")
 
-            # 调用热度（in_degree ≥ P75_非零，得分 +2，仅 mid）
+            # 调用热度（in_degree ≥ P75_非零，得分 +1，mid-booster）
             in_deg = method.get("in_degree", 0) or 0
             if in_deg >= in_degree_p75 and in_degree_p75 > 0:
                 factors.append(f"in_degree:{in_deg}")
