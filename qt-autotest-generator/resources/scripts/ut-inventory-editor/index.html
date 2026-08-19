@@ -14,8 +14,8 @@
 <style>
 :root{--bg:#0f172a;--bg-elev:#1e293b;--bg-elev2:#273449;--bg-hover:#334155;--border:#334155;--border-soft:#1e293b;--text:#f8fafc;--text-dim:#94a3b8;--text-muted:#475569;--accent:#22c55e;--accent-hover:#16a34a;--accent-soft:rgba(34,197,94,.14);--warn:#f59e0b;--danger:#ef4444;--info:#38bdf8;--high:#22c55e;--mid:#f59e0b;--low:#64748b;--exempt:#ef4444;--factor-pos3:#22c55e;--factor-pos:#38bdf8;--factor-suggest:#f59e0b;--factor-neg:#ef4444;--fs:14px;--fs-scale:1}
 :root[data-fs='small']{--fs:12px;--fs-scale:.857}
-:root[data-fs='medium']{--fs:14px;--fs-scale:1}
-:root[data-fs='large']{--fs:16px;--fs-scale:1.143}
+:root[data-fs='medium']{--fs:15px;--fs-scale:1.071}
+:root[data-fs='large']{--fs:17px;--fs-scale:1.214}
 :root[data-theme='light']{--bg:#f8fafc;--bg-elev:#fff;--bg-elev2:#f1f5f9;--bg-hover:#e2e8f0;--border:#cbd5e1;--border-soft:#e2e8f0;--text:#0f172a;--text-dim:#475569;--text-muted:#94a3b8;--accent:#16a34a;--accent-hover:#15803d;--accent-soft:rgba(22,163,74,.16);--warn:#d97706;--danger:#dc2626;--info:#0284c7;--high:#16a34a;--mid:#d97706;--low:#475569;--exempt:#dc2626;--factor-pos3:#16a34a;--factor-pos:#0284c7;--factor-suggest:#d97706;--factor-neg:#dc2626;color-scheme:light}
 :root[data-theme='dark']{color-scheme:dark}
 *{box-sizing:border-box;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
@@ -26,7 +26,7 @@ html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--text);
 .mono,code,kbd{font-family:'JetBrains Mono',ui-monospace,monospace;font-variant-ligatures:none}
 :focus-visible{outline:2px solid var(--accent);outline-offset:1px;border-radius:4px}
 button{font-family:inherit}
-.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg-elev);color:var(--text);cursor:pointer;transition:background .2s,border-color .2s;font-size:13px;white-space:nowrap}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg-elev);color:var(--text);cursor:pointer;transition:background .2s,border-color .2s;font-size:calc(var(--fs)*0.929);white-space:nowrap}
 .btn:hover{background:var(--bg-hover);border-color:var(--bg-hover)}
 .btn:active{background:var(--bg-elev2)}
 .btn-primary{background:var(--accent);border-color:var(--accent);color:#052e16;font-weight:600}
@@ -34,7 +34,7 @@ button{font-family:inherit}
 .btn-ghost{background:transparent;border-color:transparent}
 .btn-ghost:hover{background:var(--bg-elev);border-color:var(--border)}
 .btn:disabled{opacity:.5;cursor:not-allowed}
-.btn-sm{padding:4px 8px;font-size:12px;border-radius:6px}
+.btn-sm{padding:4px 8px;font-size:calc(var(--fs)*0.857);border-radius:6px}
 .icon{width:18px;height:18px;flex-shrink:0}
 .app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
 .app-header{flex-shrink:0;border-bottom:1px solid var(--border-soft);background:linear-gradient(180deg,var(--bg-elev),var(--bg))}
@@ -42,95 +42,100 @@ button{font-family:inherit}
 .panel{background:var(--bg);display:flex;flex-direction:column;min-height:0;overflow:hidden}
 .panel-header{padding:10px 12px;border-bottom:1px solid var(--border-soft);display:flex;align-items:center;gap:8px;flex-shrink:0}
 .panel-body{flex:1;overflow:auto;min-height:0}
-.search-input{width:100%;background:var(--bg-elev);border:1px solid var(--border);color:var(--text);padding:8px 10px 8px 34px;border-radius:8px;font-size:13px;transition:border-color .2s,box-shadow .2s}
+.search-input{width:100%;background:var(--bg-elev);border:1px solid var(--border);color:var(--text);padding:8px 10px 8px 34px;border-radius:8px;font-size:calc(var(--fs)*0.929);transition:border-color .2s,box-shadow .2s}
 .search-input::placeholder{color:var(--text-muted)}
 .search-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
 .search-wrap{position:relative}
 .search-wrap .icon.search-icon{position:absolute;left:9px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--text-muted)}
 .fs-btn{min-width:28px;justify-content:center;font-weight:600;transition:all .15s}
 .fs-btn.active{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
-.level-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid transparent;transition:all .15s;user-select:none}
+.detail-title{font-size:calc(var(--fs)*1.143)}
+.detail-heading{font-size:calc(var(--fs)*1.071)}
+.detail-body{font-size:calc(var(--fs)*.929)}
+.detail-text{font-size:calc(var(--fs)*.857)}
+.detail-small{font-size:calc(var(--fs)*.786)}
+.level-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:6px;font-size:calc(var(--fs)*0.786);font-weight:600;cursor:pointer;border:1px solid transparent;transition:all .15s;user-select:none}
 .level-badge:hover{filter:brightness(1.2)}
 .level-high{background:rgba(34,197,94,.18);color:var(--high);border-color:rgba(34,197,94,.3)}
 .level-mid{background:rgba(245,158,11,.18);color:var(--mid);border-color:rgba(245,158,11,.3)}
 .level-low{background:rgba(100,116,139,.18);color:var(--low);border-color:rgba(100,116,139,.3)}
 .level-exempt{background:rgba(239,68,68,.18);color:var(--exempt);border-color:rgba(239,68,68,.3)}
-.factor-pill{display:inline-flex;align-items:center;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600;letter-spacing:.02em;white-space:nowrap}
+.factor-pill{display:inline-flex;align-items:center;padding:1px 6px;border-radius:4px;font-size:calc(var(--fs)*0.714);font-weight:600;letter-spacing:.02em;white-space:nowrap}
 .factor-pos3{background:rgba(34,197,94,.16);color:var(--factor-pos3)}
 .factor-pos{background:rgba(56,189,248,.16);color:var(--factor-pos)}
 .factor-suggest{background:rgba(245,158,11,.16);color:var(--factor-suggest)}
 .factor-neg{background:rgba(239,68,68,.16);color:var(--factor-neg)}
-.type-badge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:18px;border-radius:4px;font-size:10px;font-weight:700}
+.type-badge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:18px;border-radius:4px;font-size:calc(var(--fs)*0.714);font-weight:700}
 .type-m{background:rgba(56,189,248,.16);color:var(--info)}
 .type-f{background:rgba(168,85,247,.16);color:#a855f7}
-.source-badge{font-size:10px;padding:1px 5px;border-radius:4px;font-weight:600}
+.source-badge{font-size:calc(var(--fs)*0.714);padding:1px 5px;border-radius:4px;font-weight:600}
 .source-auto{background:rgba(34,197,94,.12);color:var(--high)}
 .source-suggested{background:rgba(245,158,11,.12);color:var(--mid)}
 .source-manual{background:rgba(56,189,248,.12);color:var(--info)}
-.review-badge{font-size:10px;padding:1px 5px;border-radius:4px;font-weight:600}
+.review-badge{font-size:calc(var(--fs)*0.714);padding:1px 5px;border-radius:4px;font-weight:600}
 .review-pending{background:rgba(245,158,11,.16);color:var(--mid)}
 .review-auto{background:rgba(34,197,94,.12);color:var(--high)}
 .review-exempt{background:rgba(100,116,139,.12);color:var(--low)}
 .review-confirmed{background:rgba(56,189,248,.12);color:var(--info)}
-.method-row{display:grid;grid-template-columns:28px 68px 52px 180px 120px 160px 1fr 56px 56px 48px;align-items:center;gap:4px;padding:6px 10px;border-bottom:1px solid var(--border-soft);cursor:pointer;transition:background .12s;font-size:12.5px}
+.method-row{display:grid;grid-template-columns:28px 68px 52px 180px 120px 160px 1fr 56px 56px 48px;align-items:center;gap:4px;padding:6px 10px;border-bottom:1px solid var(--border-soft);cursor:pointer;transition:background .12s;font-size:calc(var(--fs)*0.893)}
 .method-row:hover{background:var(--bg-elev)}
 .method-row.active{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
 .method-row input[type='checkbox']{accent-color:var(--accent);cursor:pointer}
-.method-name{font-family:'JetBrains Mono',monospace;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.method-class{color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px}
-.method-file{color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+.method-name{font-family:'JetBrains Mono',monospace;font-size:calc(var(--fs)*0.857);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.method-class{color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:calc(var(--fs)*0.821)}
+.method-file{color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:calc(var(--fs)*0.786)}
 .method-factors{display:flex;gap:3px;flex-wrap:nowrap;overflow:hidden}
 .level-popup{position:fixed;z-index:60;background:var(--bg-elev);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.4);padding:4px;min-width:120px;display:none}
 .level-popup.show{display:block}
-.level-popup-item{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;transition:background .12s}
+.level-popup-item{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:calc(var(--fs)*0.857);transition:background .12s}
 .level-popup-item:hover{background:var(--bg-hover)}
 .detail-section{padding:10px 14px;border-bottom:1px solid var(--border-soft)}
-.detail-section h4{margin:0 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim);font-weight:600}
-.detail-field{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12.5px}
+.detail-section h4{margin:0 0 8px;font-size:calc(var(--fs)*0.786);text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim);font-weight:600}
+.detail-field{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:calc(var(--fs)*0.893)}
 .detail-field .label{color:var(--text-dim)}
-.factor-row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:12px;border-bottom:1px dashed var(--border-soft)}
+.factor-row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:calc(var(--fs)*0.857);border-bottom:1px dashed var(--border-soft)}
 .factor-row:last-child{border-bottom:none}
 .factor-row .score{font-weight:700;min-width:28px;text-align:right}
 .toggle-switch{position:relative;width:36px;height:20px;background:var(--bg-elev2);border-radius:10px;cursor:pointer;transition:background .2s;border:1px solid var(--border)}
 .toggle-switch.on{background:var(--accent);border-color:var(--accent)}
 .toggle-switch .knob{position:absolute;top:2px;left:2px;width:14px;height:14px;background:#fff;border-radius:50%;transition:transform .2s}
 .toggle-switch.on .knob{transform:translateX(16px)}
-.bulk-bar{position:sticky;top:0;z-index:30;background:var(--bg-elev2);border-bottom:1px solid var(--border);padding:8px 12px;display:flex;align-items:center;gap:8px;font-size:12px}
-.status-bar{flex-shrink:0;border-top:1px solid var(--border-soft);background:var(--bg-elev);padding:6px 14px;display:flex;align-items:center;gap:14px;font-size:12px;color:var(--text-dim)}
+.bulk-bar{position:sticky;top:0;z-index:30;background:var(--bg-elev2);border-bottom:1px solid var(--border);padding:8px 12px;display:flex;align-items:center;gap:8px;font-size:calc(var(--fs)*0.857)}
+.status-bar{flex-shrink:0;border-top:1px solid var(--border-soft);background:var(--bg-elev);padding:6px 14px;display:flex;align-items:center;gap:14px;font-size:calc(var(--fs)*0.857);color:var(--text-dim)}
 .toast-container{position:fixed;bottom:40px;right:18px;display:flex;flex-direction:column;gap:8px;z-index:100}
-.toast{background:var(--bg-elev2);border:1px solid var(--border);border-left:3px solid var(--accent);color:var(--text);padding:10px 14px;border-radius:8px;font-size:13px;box-shadow:0 6px 18px rgba(0,0,0,.5);animation:slideIn .2s ease;max-width:360px}
+.toast{background:var(--bg-elev2);border:1px solid var(--border);border-left:3px solid var(--accent);color:var(--text);padding:10px 14px;border-radius:8px;font-size:calc(var(--fs)*0.929);box-shadow:0 6px 18px rgba(0,0,0,.5);animation:slideIn .2s ease;max-width:360px}
 .toast.err{border-left-color:var(--danger)}
 .toast.warn{border-left-color:var(--warn)}
 @keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
-.drop-overlay{position:fixed;inset:0;background:rgba(34,197,94,.12);border:3px dashed var(--accent);z-index:200;display:none;align-items:center;justify-content:center;pointer-events:none;font-size:22px;color:var(--accent);font-weight:600}
+.drop-overlay{position:fixed;inset:0;background:rgba(34,197,94,.12);border:3px dashed var(--accent);z-index:200;display:none;align-items:center;justify-content:center;pointer-events:none;font-size:calc(var(--fs)*1.571);color:var(--accent);font-weight:600}
 .drop-overlay.show{display:flex}
 .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:48px 24px;color:var(--text-muted);text-align:center}
 .empty-state .icon{width:40px;height:40px;opacity:.4}
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:80;display:flex;align-items:center;justify-content:center}
 .modal{background:var(--bg-elev);border:1px solid var(--border);border-radius:12px;padding:20px;min-width:320px;max-width:480px;box-shadow:0 12px 40px rgba(0,0,0,.5)}
-.modal h3{margin:0 0 12px;font-size:15px;font-weight:600}
-.modal input[type='text']{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;font-size:13px;margin:8px 0 16px}
+.modal h3{margin:0 0 12px;font-size:calc(var(--fs)*1.071);font-weight:600}
+.modal input[type='text']{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;font-size:calc(var(--fs)*0.929);margin:8px 0 16px}
 .modal input[type='text']:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
 .modal-actions{display:flex;justify-content:flex-end;gap:8px}
 .review-progress{height:4px;background:var(--bg-elev2);border-radius:2px;overflow:hidden;margin-top:8px}
 .review-progress-bar{height:100%;background:var(--accent);border-radius:2px;transition:width .3s}
-.scope-rule-item{display:flex;align-items:center;gap:6px;padding:4px 12px;font-size:11.5px;color:var(--text-dim)}
+.scope-rule-item{display:flex;align-items:center;gap:6px;padding:4px 12px;font-size:calc(var(--fs)*0.821);color:var(--text-dim)}
 .scope-rule-item .pattern{font-family:'JetBrains Mono',monospace;color:var(--text-muted)}
 .scope-rule-item .arrow{color:var(--text-muted)}
-.scope-rule-item .reason{color:var(--exempt);font-size:10px}
-.filter-checkbox{display:flex;align-items:center;gap:6px;padding:4px 12px;font-size:12px;cursor:pointer;user-select:none;transition:background .12s;border-radius:4px}
+.scope-rule-item .reason{color:var(--exempt);font-size:calc(var(--fs)*0.714)}
+.filter-checkbox{display:flex;align-items:center;gap:6px;padding:4px 12px;font-size:calc(var(--fs)*0.857);cursor:pointer;user-select:none;transition:background .12s;border-radius:4px}
 .filter-checkbox:hover{background:var(--bg-elev)}
 .filter-checkbox input{accent-color:var(--accent);cursor:pointer}
-.filter-checkbox .count{font-size:10px;color:var(--text-muted);margin-left:auto}
+.filter-checkbox .count{font-size:calc(var(--fs)*0.714);color:var(--text-muted);margin-left:auto}
 .class-group{border-bottom:1px solid var(--border-soft)}
-.class-row{display:flex;align-items:center;gap:6px;padding:5px 12px;cursor:pointer;transition:background .12s;font-size:12px}
+.class-row{display:flex;align-items:center;gap:6px;padding:5px 12px;cursor:pointer;transition:background .12s;font-size:calc(var(--fs)*0.857)}
 .class-row:hover{background:var(--bg-elev)}
 .class-row.active{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
 .class-row .chevron{transition:transform .15s;color:var(--text-muted);flex-shrink:0}
 .class-row.expanded .chevron{transform:rotate(90deg)}
 .class-row .name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.class-row .badge{font-size:10px;background:var(--bg-elev2);color:var(--text-dim);border-radius:10px;padding:1px 6px;flex-shrink:0}
-.class-method{padding:4px 12px 4px 28px;font-size:11px;display:flex;align-items:center;gap:6px;cursor:pointer;transition:background .12s}
+.class-row .badge{font-size:calc(var(--fs)*0.714);background:var(--bg-elev2);color:var(--text-dim);border-radius:10px;padding:1px 6px;flex-shrink:0}
+.class-method{padding:4px 12px 4px 28px;font-size:calc(var(--fs)*.786);display:flex;align-items:center;gap:6px;cursor:pointer;transition:background .12s}
 .class-method:hover{background:var(--bg-elev)}
 .class-method .mname{font-family:'JetBrains Mono',monospace;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:1024px){.app-main{grid-template-columns:1fr;grid-template-rows:auto 1fr auto}.panel{max-height:45vh}}
@@ -144,27 +149,27 @@ button{font-family:inherit}
 <div class="flex items-center justify-between gap-3 px-4 py-2.5 flex-wrap">
 <div class="flex items-center gap-2.5">
 <i data-lucide="flask-conical" class="icon text-[22px]" style="color:var(--accent)"></i>
-<h1 class="text-[15px] font-bold tracking-tight">UT Inventory Editor</h1>
-<span id="project-name" class="text-[11px] text-[var(--text-muted)] hidden sm:inline"></span>
+<h1 class="detail-heading font-bold tracking-tight">UT Inventory Editor</h1>
+<span id="project-name" class="detail-small text-[var(--text-muted)] hidden sm:inline"></span>
 </div>
 <div class="flex items-center gap-2 flex-wrap">
 <span id="stat-high" class="level-badge level-high" style="cursor:default">🌟 0</span>
 <span id="stat-mid" class="level-badge level-mid" style="cursor:default">⚖ 0</span>
 <span id="stat-low" class="level-badge level-low" style="cursor:default">💤 0</span>
 <span id="stat-exempt" class="level-badge level-exempt" style="cursor:default">🚫 0</span>
-<span class="text-[11px] text-[var(--text-muted)]">|</span>
-<span id="stat-review" class="text-[11px] text-[var(--warn)]">待复核: 0</span>
-<span class="text-[11px] text-[var(--text-muted)]">|</span>
-<span id="stat-modified" class="text-[11px] text-[var(--info)] hidden">已修改: 0</span>
-<span id="stat-factor" class="text-[11px] text-[var(--info)] hidden cursor-pointer" title="点击清除因子筛选">因子: —</span>
+<span class="detail-small text-[var(--text-muted)]">|</span>
+<span id="stat-review" class="detail-small text-[var(--warn)]">待复核: 0</span>
+<span class="detail-small text-[var(--text-muted)]">|</span>
+<span id="stat-modified" class="detail-small text-[var(--info)] hidden">已修改: 0</span>
+<span id="stat-factor" class="detail-small text-[var(--info)] hidden cursor-pointer" title="点击清除因子筛选">因子: —</span>
 </div>
 <div class="flex items-center gap-2">
 <input id="file-input" type="file" accept=".json" class="hidden"/>
 <button id="btn-theme" class="btn btn-sm btn-ghost" title="切换主题"><i data-lucide="sun" class="icon theme-icon"></i></button>
 <div class="flex items-center gap-0.5" id="font-size-group" title="字体大小">
-<button class="btn btn-sm btn-ghost fs-btn" data-fs="small" style="padding:4px 6px;font-size:11px">S</button>
-<button class="btn btn-sm fs-btn" data-fs="medium" style="padding:4px 6px;font-size:11px">M</button>
-<button class="btn btn-sm btn-ghost fs-btn" data-fs="large" style="padding:4px 6px;font-size:11px">L</button>
+<button class="btn btn-sm btn-ghost fs-btn" data-fs="small" style="padding:4px 6px;font-size:calc(var(--fs)*0.786)">S</button>
+<button class="btn btn-sm fs-btn" data-fs="medium" style="padding:4px 6px;font-size:calc(var(--fs)*0.786)">M</button>
+<button class="btn btn-sm btn-ghost fs-btn" data-fs="large" style="padding:4px 6px;font-size:calc(var(--fs)*0.786)">L</button>
 </div>
 <button id="btn-open" class="btn btn-sm" title="打开"><i data-lucide="folder-open" class="icon"></i><span class="label-text">打开</span></button>
 <button id="btn-save" class="btn btn-sm btn-primary" title="保存" disabled><i data-lucide="save" class="icon"></i><span class="label-text">保存</span></button>
@@ -180,23 +185,23 @@ button{font-family:inherit}
 </div>
 <div class="panel-body" id="left-body">
 <div class="py-2 border-b border-[var(--border-soft)]">
-<div class="px-3 pb-1 text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">Level 筛选</div>
+<div class="px-3 pb-1 detail-small uppercase tracking-wider text-[var(--text-muted)] font-semibold">Level 筛选</div>
 <label class="filter-checkbox"><input type="checkbox" data-level="high" checked/> 🌟 high <span class="count" id="fc-high">0</span></label>
 <label class="filter-checkbox"><input type="checkbox" data-level="mid" checked/> ⚖ mid <span class="count" id="fc-mid">0</span></label>
 <label class="filter-checkbox"><input type="checkbox" data-level="low" checked/> 💤 low <span class="count" id="fc-low">0</span></label>
 <label class="filter-checkbox"><input type="checkbox" data-level="exempt"/> 🚫 exempt <span class="count" id="fc-exempt">0</span></label>
 </div>
 <div class="py-2 border-b border-[var(--border-soft)]">
-<div class="px-3 pb-1 text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">节点类型</div>
+<div class="px-3 pb-1 detail-small uppercase tracking-wider text-[var(--text-muted)] font-semibold">节点类型</div>
 <label class="filter-checkbox"><input type="checkbox" data-nodetype="Method" checked/> <span class="type-badge type-m">M</span> Method <span class="count" id="fc-method">0</span></label>
 <label class="filter-checkbox"><input type="checkbox" data-nodetype="Function" checked/> <span class="type-badge type-f">F</span> Function <span class="count" id="fc-function">0</span></label>
 </div>
 <div class="py-2 border-b border-[var(--border-soft)]">
-<div class="px-3 pb-1 text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">Class 树</div>
+<div class="px-3 pb-1 detail-small uppercase tracking-wider text-[var(--text-muted)] font-semibold">Class 树</div>
 <div id="class-tree"></div>
 </div>
 <div class="py-2">
-<div class="px-3 pb-1 text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold cursor-pointer flex items-center gap-1" id="scope-toggle">
+<div class="px-3 pb-1 detail-small uppercase tracking-wider text-[var(--text-muted)] font-semibold cursor-pointer flex items-center gap-1" id="scope-toggle">
 <i data-lucide="chevron-right" class="icon" style="width:14px;height:14px"></i> Scope Rules</div>
 <div id="scope-rules-list" class="hidden"></div>
 </div>
@@ -205,8 +210,8 @@ button{font-family:inherit}
 <section class="panel">
 <div class="panel-header">
 <i data-lucide="list" class="icon" style="color:var(--text-dim)"></i>
-<span class="text-[13px] font-semibold flex-1 truncate" id="table-title">方法列表</span>
-<span id="table-count" class="text-[11px] text-[var(--text-muted)]"></span>
+<span class="detail-body font-semibold flex-1 truncate" id="table-title">方法列表</span>
+<span id="table-count" class="detail-small text-[var(--text-muted)]"></span>
 </div>
 <div id="bulk-bar" class="bulk-bar hidden">
 <span id="bulk-count">已选 0 条</span>
@@ -218,7 +223,7 @@ button{font-family:inherit}
 <button class="btn btn-sm btn-ghost" data-bulk="clear">取消选择</button>
 </div>
 <div class="panel-body" id="method-table-body">
-<div class="method-row" style="cursor:default;font-size:11px;color:var(--text-muted);font-weight:600;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg-elev);z-index:10">
+<div class="method-row" style="cursor:default;font-size:calc(var(--fs)*0.786);color:var(--text-muted);font-weight:600;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg-elev);z-index:10">
 <span></span><span data-sort="level">Level</span><span>Type</span><span data-sort="name">Name</span><span data-sort="class_qn">Class</span><span data-sort="file">File</span><span>Factors</span><span>Source</span><span>Review</span><span>UC</span>
 </div>
 <div id="method-rows"></div>
@@ -228,8 +233,8 @@ button{font-family:inherit}
 <section class="panel" id="right-panel">
 <div class="panel-header">
 <i data-lucide="info" class="icon" style="color:var(--text-dim)"></i>
-<span class="text-[13px] font-semibold flex-1 truncate">详情</span>
-<button id="btn-review-mode" class="btn btn-sm hidden" title="Review Queue"><i data-lucide="clipboard-check" class="icon"></i><span class="label-text">复核</span> <span id="review-badge" class="text-[10px] bg-[var(--warn)] text-white rounded-full px-1.5">0</span></button>
+<span class="detail-body font-semibold flex-1 truncate">详情</span>
+<button id="btn-review-mode" class="btn btn-sm hidden" title="Review Queue"><i data-lucide="clipboard-check" class="icon"></i><span class="label-text">复核</span> <span id="review-badge" class="detail-small bg-[var(--warn)] text-white rounded-full px-1.5">0</span></button>
 </div>
 <div class="panel-body" id="detail-body">
 <div id="detail-empty" class="empty-state"><i data-lucide="mouse-pointer-click" class="icon"></i><span>选择方法查看详情</span></div>
@@ -253,7 +258,7 @@ button{font-family:inherit}
 </div>
 <div class="modal-overlay hidden" id="exempt-modal">
 <div class="modal"><h3>标记为不可测试</h3>
-<p class="text-[13px] text-[var(--text-dim)] mb-2">豁免原因：</p>
+<p class="detail-body text-[var(--text-dim)] mb-2">豁免原因：</p>
 <input type="text" id="exempt-reason-input" placeholder="手动豁免 - 不需要单测"/>
 <div class="modal-actions"><button class="btn btn-sm btn-ghost" id="exempt-cancel">取消</button><button class="btn btn-sm btn-primary" id="exempt-confirm">确认豁免</button></div>
 </div></div>
@@ -309,20 +314,20 @@ function getFiltered(){let l=S.methods;l=l.filter(m=>S.filters.levels.has(m.leve
 function updateAll(){updateStats();updateFilters();updateClassTree();updateScopeRules();updateTable();updateDetail();updateReviewBtn()}
 function updateStats(){const st=recalcStats();$('#stat-high').textContent='🌟 '+st.high;$('#stat-mid').textContent='⚖ '+st.mid;$('#stat-low').textContent='💤 '+st.low;$('#stat-exempt').textContent='🚫 '+st.exempt;$('#stat-review').textContent='待复核: '+st.review_pending;const mc=S.modified.size,el=$('#stat-modified');if(mc>0){el.textContent='已修改: '+mc;el.classList.remove('hidden')}else el.classList.add('hidden');$('#btn-save').disabled=mc===0;const fe=$('#stat-factor');if(S.filters.factor){fe.textContent='因子: '+S.filters.factor;fe.classList.remove('hidden')}else fe.classList.add('hidden')}
 function updateFilters(){const m=S.methods,c={high:0,mid:0,low:0,exempt:0,Method:0,Function:0};m.forEach(x=>{c[x.level]=(c[x.level]||0)+1;c[x.node_type||'Method']++});$('#fc-high').textContent=c.high;$('#fc-mid').textContent=c.mid;$('#fc-low').textContent=c.low;$('#fc-exempt').textContent=c.exempt;$('#fc-method').textContent=c.Method;$('#fc-function').textContent=c.Function}
-function updateClassTree(){const tree={};S.methods.forEach(m=>{const c=m.class_qn||'(free function)';if(!tree[c])tree[c]=[];tree[c].push(m)});const el=$('#class-tree');el.innerHTML='';Object.keys(tree).sort().forEach(cls=>{const methods=tree[cls],g=document.createElement('div');g.className='class-group';const row=document.createElement('div');row.className='class-row';row.innerHTML=`<i data-lucide="chevron-right" class="icon chevron" style="width:14px;height:14px"></i><span class="name">${shortClass(cls)}</span><span class="badge">${methods.length}</span>`;let exp=false;const sub=document.createElement('div');sub.className='hidden';methods.forEach(m=>{const mr=document.createElement('div');mr.className='class-method';mr.innerHTML=`<span class="level-badge level-${m.level}" style="padding:0 4px;font-size:9px">${levelEmoji(m.level)}</span><span class="mname">${m.name}</span>`;mr.onclick=e=>{e.stopPropagation();S.activeQn=m.qn;updateTable();updateDetail()};sub.appendChild(mr)});row.onclick=()=>{exp=!exp;row.classList.toggle('expanded',exp);sub.classList.toggle('hidden',!exp);S.filters.classQn=exp?cls:null;row.classList.toggle('active',exp);el.querySelectorAll('.class-row').forEach(r=>{if(r!==row){r.classList.remove('active','expanded');r.nextElementSibling?.classList.add('hidden')}});updateTable()};g.appendChild(row);g.appendChild(sub);el.appendChild(g)});lucide.createIcons()}
+function updateClassTree(){const tree={};S.methods.forEach(m=>{const c=m.class_qn||'(free function)';if(!tree[c])tree[c]=[];tree[c].push(m)});const el=$('#class-tree');el.innerHTML='';Object.keys(tree).sort().forEach(cls=>{const methods=tree[cls],g=document.createElement('div');g.className='class-group';const row=document.createElement('div');row.className='class-row';row.innerHTML=`<i data-lucide="chevron-right" class="icon chevron" style="width:14px;height:14px"></i><span class="name">${shortClass(cls)}</span><span class="badge">${methods.length}</span>`;let exp=false;const sub=document.createElement('div');sub.className='hidden';methods.forEach(m=>{const mr=document.createElement('div');mr.className='class-method';mr.innerHTML=`<span class="level-badge level-${m.level}" style="padding:0 4px;font-size:calc(var(--fs)*0.643)">${levelEmoji(m.level)}</span><span class="mname">${m.name}</span>`;mr.onclick=e=>{e.stopPropagation();S.activeQn=m.qn;updateTable();updateDetail()};sub.appendChild(mr)});row.onclick=()=>{exp=!exp;row.classList.toggle('expanded',exp);sub.classList.toggle('hidden',!exp);S.filters.classQn=exp?cls:null;row.classList.toggle('active',exp);el.querySelectorAll('.class-row').forEach(r=>{if(r!==row){r.classList.remove('active','expanded');r.nextElementSibling?.classList.add('hidden')}});updateTable()};g.appendChild(row);g.appendChild(sub);el.appendChild(g)});lucide.createIcons()}
 function updateScopeRules(){const rules=S.inventory?.scope_rules||[];const el=$('#scope-rules-list');el.innerHTML='';rules.forEach(r=>{const d=document.createElement('div');d.className='scope-rule-item';d.innerHTML=`<span class="pattern">${r.pattern}</span><span class="arrow">→</span><span class="reason">${r.reason}</span>`;el.appendChild(d)})}
 
 function updateTable(){const list=getFiltered(),container=$('#method-rows'),empty=$('#method-empty');container.innerHTML='';if(!list.length){empty.classList.remove('hidden');$('#table-count').textContent='0';return}empty.classList.add('hidden');$('#table-count').textContent=list.length+' 条';const BATCH=150;S.virtual.rendered=Math.min(BATCH,list.length);renderBatch(list,0,S.virtual.rendered,container);if(list.length>BATCH){const sentinel=document.createElement('div');sentinel.id='virtual-sentinel';sentinel.style.height='1px';container.appendChild(sentinel);setupVirtualObserver(list,container)}updateBulkBar()}
 
-function renderBatch(list,start,end,container){for(let i=start;i<end&&i<list.length;i++){const m=list[i];const row=document.createElement('div');row.className='method-row'+(m.qn===S.activeQn?' active':'');row.dataset.qn=m.qn;row.innerHTML=`<input type="checkbox" ${S.selected.has(m.qn)?'checked':''} data-select="${m.qn}"/><span class="level-badge level-${m.level}" data-level-click="${m.qn}">${levelEmoji(m.level)} ${m.level}</span><span class="type-badge ${m.node_type==='Function'?'type-f':'type-m'}">${m.node_type==='Function'?'F':'M'}</span><span class="method-name" title="${m.name}">${m.name}</span><span class="method-class" title="${m.class_qn||''}">${shortClass(m.class_qn)}</span><span class="method-file" title="${m.file}">${m.file}</span><span class="method-factors">${(m.factors||[]).map(f=>`<span class="factor-pill ${factorClass(f)}" data-factor-click="${f}" title="点击筛选含此因子的方法">${f}</span>`).join('')}</span><span class="source-badge source-${m.source||'auto'}">${m.source||'auto'}</span><span class="review-badge review-${m.review_status||'auto'}">${m.review_status||'auto'}</span><span style="font-size:11px;color:var(--text-muted)">${m.usecase_count??0}</span>`;row.addEventListener('click',e=>{if(e.target.tagName==='INPUT'||e.target.closest('.level-badge')||e.target.closest('.factor-pill'))return;S.activeQn=m.qn;updateTable();updateDetail()});container.appendChild(row)}}
+function renderBatch(list,start,end,container){for(let i=start;i<end&&i<list.length;i++){const m=list[i];const row=document.createElement('div');row.className='method-row'+(m.qn===S.activeQn?' active':'');row.dataset.qn=m.qn;row.innerHTML=`<input type="checkbox" ${S.selected.has(m.qn)?'checked':''} data-select="${m.qn}"/><span class="level-badge level-${m.level}" data-level-click="${m.qn}">${levelEmoji(m.level)} ${m.level}</span><span class="type-badge ${m.node_type==='Function'?'type-f':'type-m'}">${m.node_type==='Function'?'F':'M'}</span><span class="method-name" title="${m.name}">${m.name}</span><span class="method-class" title="${m.class_qn||''}">${shortClass(m.class_qn)}</span><span class="method-file" title="${m.file}">${m.file}</span><span class="method-factors">${(m.factors||[]).map(f=>`<span class="factor-pill ${factorClass(f)}" data-factor-click="${f}" title="点击筛选含此因子的方法">${f}</span>`).join('')}</span><span class="source-badge source-${m.source||'auto'}">${m.source||'auto'}</span><span class="review-badge review-${m.review_status||'auto'}">${m.review_status||'auto'}</span><span style="font-size:calc(var(--fs)*0.786);color:var(--text-muted)">${m.usecase_count??0}</span>`;row.addEventListener('click',e=>{if(e.target.tagName==='INPUT'||e.target.closest('.level-badge')||e.target.closest('.factor-pill'))return;S.activeQn=m.qn;updateTable();updateDetail()});container.appendChild(row)}}
 
 function setupVirtualObserver(list,container){if(S.virtual.observer)S.virtual.observer.disconnect();S.virtual.observer=new IntersectionObserver(entries=>{for(const e of entries){if(e.isIntersecting){const sentinel=e.target;S.virtual.observer.disconnect();const next=S.virtual.rendered+150;renderBatch(list,S.virtual.rendered,next,container);S.virtual.rendered=next;if(next<list.length){const ns=document.createElement('div');ns.id='virtual-sentinel';ns.style.height='1px';container.appendChild(ns);S.virtual.observer.observe(ns)}sentinel.remove()}}},{root:container.parentElement,rootMargin:'200px'});const sentinel=container.querySelector('#virtual-sentinel');if(sentinel)S.virtual.observer.observe(sentinel)}
 
 function updateBulkBar(){const bar=$('#bulk-bar');if(S.selected.size>0){bar.classList.remove('hidden');$('#bulk-count').textContent=`已选 ${S.selected.size} 条`}else bar.classList.add('hidden')}
 
-function updateDetail(){const empty=$('#detail-empty'),content=$('#detail-content');if(!S.activeQn){empty.classList.remove('hidden');content.classList.add('hidden');return}const m=S.methods.find(x=>x.qn===S.activeQn);if(!m){empty.classList.remove('hidden');content.classList.add('hidden');return}empty.classList.add('hidden');content.classList.remove('hidden');if(S.reviewMode){renderReviewDetail(m);return}let h='';h+=`<div class="detail-section"><div class="text-[16px] font-semibold mono">${m.name}</div><div class="text-[12px] text-[var(--text-dim)] mt-1">${m.class_qn||'<span class="text-[var(--text-muted)]">自由函数</span>'}</div></div>`;h+=`<div class="detail-section"><h4>级别 & 状态</h4><div class="detail-field"><span class="label">Level</span><span class="level-badge level-${m.level}" data-level-click="${m.qn}" style="cursor:pointer">${levelEmoji(m.level)} ${m.level}</span></div><div class="detail-field"><span class="label">可测试</span><div class="toggle-switch ${m.testable?'on':''}" data-toggle-testable="${m.qn}"><div class="knob"></div></div></div><div class="detail-field"><span class="label">Source</span><span class="source-badge source-${m.source||'auto'}">${m.source||'auto'}</span></div><div class="detail-field"><span class="label">Review</span><span class="review-badge review-${m.review_status||'auto'}">${m.review_status||'auto'}</span></div></div>`;h+=`<div class="detail-section"><h4>签名</h4><div class="mono text-[12px] text-[var(--text-dim)]" style="word-break:break-all">${m.signature||'—'}</div></div>`;h+=`<div class="detail-section"><h4>文件</h4><div class="mono text-[12px] text-[var(--text-dim)]">${m.file}</div></div>`;h+=`<div class="detail-section"><h4>评分因子</h4>`;let ts=0;for(const f of(m.factors||[])){const s=factorScore(f);ts+=s;h+=`<div class="factor-row"><span class="factor-pill ${factorClass(f)}">${f}</span><span class="score" style="color:${s>0?'var(--factor-pos3)':s<0?'var(--factor-neg)':'var(--text-muted)'}">${s>0?'+':''}${s}</span></div>`}if(!(m.factors||[]).length)h+=`<div class="text-[12px] text-[var(--text-muted)]">无因子</div>`;h+=`<div style="border-top:1px solid var(--border-soft);margin-top:6px;padding-top:6px;font-size:12px;font-weight:600">总分: ${ts} → ${computeLevel(m.factors||[])} ${levelEmoji(computeLevel(m.factors||[]))}</div></div>`;if(m.testable){const g=m.level==='high'?'行≥90% 分支≥80% 函数=100%':m.level==='mid'?'行≥60% 函数=100%':'无硬性要求';h+=`<div class="detail-section"><h4>覆盖率门禁</h4><div class="text-[12px] text-[var(--text-dim)]">${g}</div></div>`}if(!m.testable&&m.exempt_reason)h+=`<div class="detail-section"><h4>豁免原因</h4><div class="text-[12px] text-[var(--exempt)]">${m.exempt_reason}</div></div>`;if(m.auto_reason)h+=`<div class="detail-section"><h4>自动评分原因</h4><div class="text-[12px] text-[var(--text-dim)]">${m.auto_reason}</div></div>`;h+=`<div class="detail-section"><h4>已有测试用例</h4><div class="text-[12px]">${(m.usecase_count??0)===0?'<span style="color:var(--exempt)">0 个 (未测试)</span>':m.usecase_count+' 个'}</div></div>`;content.innerHTML=h}
+function updateDetail(){const empty=$('#detail-empty'),content=$('#detail-content');if(!S.activeQn){empty.classList.remove('hidden');content.classList.add('hidden');return}const m=S.methods.find(x=>x.qn===S.activeQn);if(!m){empty.classList.remove('hidden');content.classList.add('hidden');return}empty.classList.add('hidden');content.classList.remove('hidden');if(S.reviewMode){renderReviewDetail(m);return}let h='';h+=`<div class="detail-section"><div class="detail-title font-semibold mono">${m.name}</div><div class="detail-text text-[var(--text-dim)] mt-1">${m.class_qn||'<span class="text-[var(--text-muted)]">自由函数</span>'}</div></div>`;h+=`<div class="detail-section"><h4>级别 & 状态</h4><div class="detail-field"><span class="label">Level</span><span class="level-badge level-${m.level}" data-level-click="${m.qn}" style="cursor:pointer">${levelEmoji(m.level)} ${m.level}</span></div><div class="detail-field"><span class="label">可测试</span><div class="toggle-switch ${m.testable?'on':''}" data-toggle-testable="${m.qn}"><div class="knob"></div></div></div><div class="detail-field"><span class="label">Source</span><span class="source-badge source-${m.source||'auto'}">${m.source||'auto'}</span></div><div class="detail-field"><span class="label">Review</span><span class="review-badge review-${m.review_status||'auto'}">${m.review_status||'auto'}</span></div></div>`;h+=`<div class="detail-section"><h4>签名</h4><div class="mono detail-text text-[var(--text-dim)]" style="word-break:break-all">${m.signature||'—'}</div></div>`;h+=`<div class="detail-section"><h4>文件</h4><div class="mono detail-text text-[var(--text-dim)]">${m.file}</div></div>`;h+=`<div class="detail-section"><h4>评分因子</h4>`;let ts=0;for(const f of(m.factors||[])){const s=factorScore(f);ts+=s;h+=`<div class="factor-row"><span class="factor-pill ${factorClass(f)}">${f}</span><span class="score" style="color:${s>0?'var(--factor-pos3)':s<0?'var(--factor-neg)':'var(--text-muted)'}">${s>0?'+':''}${s}</span></div>`}if(!(m.factors||[]).length)h+=`<div class="detail-text text-[var(--text-muted)]">无因子</div>`;h+=`<div style="border-top:1px solid var(--border-soft);margin-top:6px;padding-top:6px;font-size:calc(var(--fs)*0.857);font-weight:600">总分: ${ts} → ${computeLevel(m.factors||[])} ${levelEmoji(computeLevel(m.factors||[]))}</div></div>`;if(m.testable){const g=m.level==='high'?'行≥90% 分支≥80% 函数=100%':m.level==='mid'?'行≥60% 函数=100%':'无硬性要求';h+=`<div class="detail-section"><h4>覆盖率门禁</h4><div class="detail-text text-[var(--text-dim)]">${g}</div></div>`}if(!m.testable&&m.exempt_reason)h+=`<div class="detail-section"><h4>豁免原因</h4><div class="detail-text text-[var(--exempt)]">${m.exempt_reason}</div></div>`;if(m.auto_reason)h+=`<div class="detail-section"><h4>自动评分原因</h4><div class="detail-text text-[var(--text-dim)]">${m.auto_reason}</div></div>`;h+=`<div class="detail-section"><h4>已有测试用例</h4><div class="detail-text">${(m.usecase_count??0)===0?'<span style="color:var(--exempt)">0 个 (未测试)</span>':m.usecase_count+' 个'}</div></div>`;content.innerHTML=h}
 
-function renderReviewDetail(m){const rq=S.inventory?.review_queue||[],pending=rq.filter(x=>x.status==='pending'),idx=pending.findIndex(x=>x.qn===m.qn),total=pending.length;let h=`<div class="detail-section"><div class="flex items-center justify-between"><span class="text-[13px] font-semibold">待复核 (${idx+1}/${total})</span><button class="btn btn-sm btn-ghost" id="btn-exit-review">退出复核</button></div><div class="review-progress"><div class="review-progress-bar" style="width:${((idx+1)/total*100).toFixed(0)}%"></div></div></div>`;h+=`<div class="detail-section"><div class="text-[16px] font-semibold mono">${m.name}</div><div class="text-[12px] text-[var(--text-dim)] mt-1">${m.class_qn||'自由函数'}</div></div>`;if(m.auto_reason)h+=`<div class="detail-section"><h4>自动建议</h4><div class="text-[13px]"><span class="level-badge level-mid">⚖ mid</span></div><div class="text-[12px] text-[var(--text-dim)] mt-1">原因: ${m.auto_reason}</div><div class="text-[12px] text-[var(--text-muted)]">suggested 条目默认 mid，请确认或调整</div></div>`;h+=`<div class="detail-section"><h4>你的决定</h4><div class="flex gap-2 mt-2"><button class="btn btn-sm" data-review-level="high" style="flex:1">🌟 high</button><button class="btn btn-sm btn-primary" data-review-level="mid" style="flex:1">⚖ mid</button><button class="btn btn-sm" data-review-level="low" style="flex:1">💤 low</button></div><div class="flex gap-2 mt-2"><button class="btn btn-sm btn-ghost" data-review-nav="prev">← 上一条</button><button class="btn btn-sm btn-ghost" data-review-nav="skip">跳过</button><button class="btn btn-sm btn-ghost" data-review-nav="next">下一条 →</button></div></div>`;h+=`<div class="detail-section"><h4>因子</h4>${(m.factors||[]).map(f=>`<div class="factor-row"><span class="factor-pill ${factorClass(f)}">${f}</span><span class="score">${factorScore(f)>0?'+':''}${factorScore(f)}</span></div>`).join('')}</div>`;$('#detail-content').innerHTML=h;setTimeout(()=>{const exitBtn=$('#btn-exit-review');if(exitBtn)exitBtn.onclick=()=>{S.reviewMode=false;updateDetail()};$$('[data-review-level]').forEach(btn=>{btn.onclick=()=>{setLevel(m.qn,btn.dataset.reviewLevel);m.review_status='confirmed';const rq=S.inventory?.review_queue||[];const it=rq.find(x=>x.qn===m.qn);if(it)it.status='confirmed';const p=rq.filter(x=>x.status==='pending');if(p.length>0){S.activeQn=p[0].qn;updateTable();updateDetail();updateStats();updateReviewBtn()}else{S.reviewMode=false;toast('所有待复核条目已处理完毕');updateDetail();updateReviewBtn()}}});$$('[data-review-nav]').forEach(btn=>{btn.onclick=()=>{const rq=S.inventory?.review_queue||[],p=rq.filter(x=>x.status==='pending');if(!p.length)return;const ci=p.findIndex(x=>x.qn===S.activeQn);let ni;if(btn.dataset.reviewNav==='prev')ni=Math.max(0,ci-1);else if(btn.dataset.reviewNav==='skip')ni=(ci+1)%p.length;else ni=Math.min(p.length-1,ci+1);S.activeQn=p[ni].qn;updateTable();updateDetail()}})},0)}
+function renderReviewDetail(m){const rq=S.inventory?.review_queue||[],pending=rq.filter(x=>x.status==='pending'),idx=pending.findIndex(x=>x.qn===m.qn),total=pending.length;let h=`<div class="detail-section"><div class="flex items-center justify-between"><span class="detail-body font-semibold">待复核 (${idx+1}/${total})</span><button class="btn btn-sm btn-ghost" id="btn-exit-review">退出复核</button></div><div class="review-progress"><div class="review-progress-bar" style="width:${((idx+1)/total*100).toFixed(0)}%"></div></div></div>`;h+=`<div class="detail-section"><div class="detail-title font-semibold mono">${m.name}</div><div class="detail-text text-[var(--text-dim)] mt-1">${m.class_qn||'自由函数'}</div></div>`;if(m.auto_reason)h+=`<div class="detail-section"><h4>自动建议</h4><div class="detail-body"><span class="level-badge level-mid">⚖ mid</span></div><div class="detail-text text-[var(--text-dim)] mt-1">原因: ${m.auto_reason}</div><div class="detail-text text-[var(--text-muted)]">suggested 条目默认 mid，请确认或调整</div></div>`;h+=`<div class="detail-section"><h4>你的决定</h4><div class="flex gap-2 mt-2"><button class="btn btn-sm" data-review-level="high" style="flex:1">🌟 high</button><button class="btn btn-sm btn-primary" data-review-level="mid" style="flex:1">⚖ mid</button><button class="btn btn-sm" data-review-level="low" style="flex:1">💤 low</button></div><div class="flex gap-2 mt-2"><button class="btn btn-sm btn-ghost" data-review-nav="prev">← 上一条</button><button class="btn btn-sm btn-ghost" data-review-nav="skip">跳过</button><button class="btn btn-sm btn-ghost" data-review-nav="next">下一条 →</button></div></div>`;h+=`<div class="detail-section"><h4>因子</h4>${(m.factors||[]).map(f=>`<div class="factor-row"><span class="factor-pill ${factorClass(f)}">${f}</span><span class="score">${factorScore(f)>0?'+':''}${factorScore(f)}</span></div>`).join('')}</div>`;$('#detail-content').innerHTML=h;setTimeout(()=>{const exitBtn=$('#btn-exit-review');if(exitBtn)exitBtn.onclick=()=>{S.reviewMode=false;updateDetail()};$$('[data-review-level]').forEach(btn=>{btn.onclick=()=>{setLevel(m.qn,btn.dataset.reviewLevel);m.review_status='confirmed';const rq=S.inventory?.review_queue||[];const it=rq.find(x=>x.qn===m.qn);if(it)it.status='confirmed';const p=rq.filter(x=>x.status==='pending');if(p.length>0){S.activeQn=p[0].qn;updateTable();updateDetail();updateStats();updateReviewBtn()}else{S.reviewMode=false;toast('所有待复核条目已处理完毕');updateDetail();updateReviewBtn()}}});$$('[data-review-nav]').forEach(btn=>{btn.onclick=()=>{const rq=S.inventory?.review_queue||[],p=rq.filter(x=>x.status==='pending');if(!p.length)return;const ci=p.findIndex(x=>x.qn===S.activeQn);let ni;if(btn.dataset.reviewNav==='prev')ni=Math.max(0,ci-1);else if(btn.dataset.reviewNav==='skip')ni=(ci+1)%p.length;else ni=Math.min(p.length-1,ci+1);S.activeQn=p[ni].qn;updateTable();updateDetail()}})},0)}
 
 function updateReviewBtn(){const p=(S.inventory?.review_queue||[]).filter(x=>x.status==='pending').length,btn=$('#btn-review-mode'),badge=$('#review-badge');if(p>0){btn.classList.remove('hidden');badge.textContent=p}else btn.classList.add('hidden')}
 
