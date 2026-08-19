@@ -35,7 +35,7 @@ fi
 
 **判定规则**：
 - `autotests/` 优先：若已存在，直接使用
-- `tests/` 沿用条件：目录存在 **且** 含 C++ 测试代码（检测到 `CMakeLists.txt` 或 `.cpp` 文件含 `#include <gtest` / `#include <QtTest`）
+- `tests/` 沿用条件：目录存在 **且** 含 GTest C++ 测试代码（检测到 `CMakeLists.txt` 或 `.cpp` 文件含 `#include <gtest`）；含 `#include <QtTest>` 或 Catch2 的目录不沿用，应创建 `autotests/` 代替
 - 空 `tests/` 目录（无测试代码）→ 仍用 `autotests/`
 - 目录选择只在本次探测确定，后续全流程从 `session.test_dir` 读取，不再重新判定
 
