@@ -401,7 +401,7 @@ function save() {
 ## 10. 文件结构
 
 ```
-resources/scripts/ut-inventory-editor/
+tools/ut-inventory-editor/
 ├── index.html      # 单文件应用（内联 CSS + JS）
 ├── README.md       # 使用说明
 └── (无其他依赖)
