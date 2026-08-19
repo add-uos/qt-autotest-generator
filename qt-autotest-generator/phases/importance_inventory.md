@@ -140,73 +140,46 @@ else:
 **1D. 继承链匹配（DBus / 并发基类）**
 
 > ⚠️ `search_graph(label="Class")` 不返回 `base_classes` 字段。
-> 必须通过 `get_code_snippet(qualified_name=class_qn)` 获取源码来检测继承关系。
-> 策略：先通过类名模式筛选候选类，再逐一调 `get_code_snippet` 确认。
+> 但 `query_graph` (Cypher) 可以返回 `base_classes`。
+> 推荐方案：用 `query_graph` 直接筛选 DBus/并发基类，比逐类调 `get_code_snippet` 更高效。
+> 备用方案：如 `query_graph` 不可用或超时，回退到候选类模式 + `get_code_snippet`。
 
 ```python
-# 步骤1：获取所有 Class 节点
-all_classes = []
-offset = 0
-while True:
-    batch = mcp.search_graph(
-        project=project_name,
-        label="Class",
-        limit=200,
-        offset=offset
-    )
-    all_classes.extend(batch.results)
-    if not batch.has_more:
-        break
-    offset += 200
-
-# 步骤2：按类名模式筛选候选类（避免对所有类调 get_code_snippet）
-CANDIDATE_CLASS_PATTERN = re.compile(
-    r'(Plugin|Adaptor|Adapter|Interface|Manager|Service|Handler|Controller)$'
+# 推荐方案：query_graph 直接筛选
+dbus_classes = mcp.query_graph(
+    project=project_name,
+    query="""
+        MATCH (c:Class)
+        WHERE ANY(b IN c.base_classes WHERE b IN ['QDBusAbstractAdaptor', 'QDBusAbstractInterface'])
+        RETURN c.name, c.qualified_name, c.file_path, c.base_classes
+    """
 )
-dbus_base_names = ['QDBusAbstractAdaptor', 'QDBusAbstractInterface']
-concurrent_base_names = ['QThread', 'QThreadPool', 'QMutex', 'QReadWriteLock',
-                         'QSemaphore', 'QAtomicInt']
 
-candidates = []
-for cls in all_classes:
-    name = cls.get("name", "")
-    qn = cls.get("qualified_name", "")
-    file_path = cls.get("file_path", "")
-    # 跳过 3rdparty/tests 中的类
-    if file_path.startswith(("3rdparty/", "tests/", "autotests/")):
-        continue
-    if CANDIDATE_CLASS_PATTERN.search(name):
-        candidates.append(cls)
+concurrent_classes = mcp.query_graph(
+    project=project_name,
+    query="""
+        MATCH (c:Class)
+        WHERE ANY(b IN c.base_classes WHERE b IN ['QThread', 'QThreadPool', 'QMutex', 'QReadWriteLock', 'QSemaphore', 'QAtomicInt'])
+        RETURN c.name, c.qualified_name, c.file_path, c.base_classes
+    """
+)
 
-# 步骤3：对候选类调 get_code_snippet 检查继承
-dbus_classes = []
-concurrent_classes = []
-for cls in candidates:
-    snippet = mcp.get_code_snippet(
-        project=project_name,
-        qualified_name=cls["qualified_name"]
-    )
-    source = snippet.get("source", "")
-    for db in dbus_base_names:
-        if db in source:
-            dbus_classes.append(cls)
-            break
-    for cb in concurrent_base_names:
-        if cb in source:
-            concurrent_classes.append(cls)
-            break
+# 备用方案：query_graph 不可用时
+# 步骤1：search_graph 获取所有 Class 节点
+# 步骤2：按类名模式筛选候选类（Plugin/Adaptor/Interface 等）
+# 步骤3：对候选类调 get_code_snippet 检查源码中的继承关系
 ```
 
 **1E. DBus 内省 XML**
 
 > ⚠️ 实测发现 XML 文件中的节点也被解析为 Class，
 > 但 `search_graph` 不支持按 `base_classes` 过滤。
-> 改为：在 Pass 2 中对已确认的 DBus 类调 `get_code_snippet` 解析 Q_SLOTS/Q_SIGNALS。
+> `query_graph` 可直接按 `base_classes` 筛选 DBus 类。
+> Q_SLOTS/Q_SIGNALS 解析仍需 `get_code_snippet`（Pass 2 中执行）。
 
 ```python
-# 已在 1D 中通过 get_code_snippet 确认了 DBus 类
-# 此处跳过额外的 XML 查询
-# 如果需要 DBus XML 中的方法列表，可在 Pass 2 解析类源码时同时提取
+# 已在 1D 中通过 query_graph 按继承筛选了 DBus 类
+# Pass 2 中对 DBus 类调 get_code_snippet 解析 Q_SLOTS/Q_SIGNALS
 ```
 
 **1F. exempt 文件模式候选**
@@ -741,8 +714,8 @@ Agent 输出 Markdown 摘要 + review_queue，与用户交互：
 ### MCP 不支持 Cypher 查询
 
 - `percentileCont()` 不可用，P75 必须客户端计算
-- `query_graph()` 不可用，不能通过 `base_classes` 字段筛选 DBus/并发类
-- `search_graph(label="Class")` 不返回 `base_classes` 字段
+- `query_graph` 可以返回 `base_classes`，用于 DBus/并发基类直接筛选（比 get_code_snippet 高效）
+- `search_graph(label="Class")` 不返回 `base_classes` 字段，需用 `query_graph` 替代
 - 继承检测必须通过 `get_code_snippet()` 读源码确认
 
 ### search_graph 分页

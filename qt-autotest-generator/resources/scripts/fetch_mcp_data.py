@@ -21,9 +21,9 @@ fetch_mcp_data.py — 采集知识图谱数据，保存为 JSON 供 scan_invento
 #    - 收集所有非测试方法的 in_degree
 #    - 排除 in_degree=0 后计算 P75
 #    - 写入 mcp_data.in_degree_p75_nonzero
-# 5. DBus/并发继承检测（search_graph 不返回 base_classes）:
-#    - 筛选类名含 Plugin/Adaptor/Interface 等的候选类
-#    - 对候选类调 get_code_snippet 检查继承
+# 5. DBus/并发继承检测（search_graph 不返回 base_classes，但 query_graph 可以）:
+#    - 方案 A：query_graph 直接筛选（推荐）
+#    - 方案 B：候选类名模式筛选 + get_code_snippet 确认（备用）
 #    - 写入 mcp_data.dbus_classes, mcp_data.concurrent_classes
 # 6. 对已确认的 DBus 类调 get_code_snippet → 解析 Q_SLOTS/Q_SIGNALS →
 #    写入 mcp_data.dbus_slots, mcp_data.q_invokables, mcp_data.q_plugins

@@ -25,7 +25,7 @@ compatibility:
 1. **知识图谱 MCP 硬门禁** —— 无图谱索引不执行，不降级到文件扫描/LSP；LSP 未集成，图谱是唯一代码分析来源。提供方在环境检查阶段一次性解析（**远端优先，本地兜底，互斥使用其一**），全流程通过 `session.mcp_provider` 调用，详见 `resources/references/mcp-providers.md`
 2. **测试目录** —— 优先 `autotests/`；若项目已有 `tests/` 且含 C++ 测试代码，则沿用 `tests/`，不强制迁移。目录在 environment_check 阶段一次性探测确定，写入 `session.test_dir`，全流程统一读取（下文以 `{test_dir}` 代指）
 3. **Google Test only** —— 固定框架，不用 Qt Test / Catch2
-4. **函数覆盖率门禁** —— lcov 函数覆盖率不低于阈值（默认 90%，可由用户指定）；每个公开/受保护方法至少 1 个用例；低于阈值触发增量补全。
+4. **函数覆盖率门禁** —— lcov 函数覆盖率不低于阈值（默认 90%，可由用户指定）；每个公开/受保护方法至少 1 个用例；低于阈值触发增量补全。有 `.ut-inventory.json` 时按方法分级：🌟high 行90%+分支80%+函数100%，⚖mid 行60%+函数100%，💤low 无硬性门禁（详见 `resources/references/coverage-tiers.md`）。
 5. **强制编译+运行验证** —— 编译并跑通后才能报完成
 6. **内置 stub-ext** —— 从 `resources/stub/` 复制，不从网络下载
 7. **不问用户确认** —— 直接执行
