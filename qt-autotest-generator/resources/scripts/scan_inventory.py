@@ -350,11 +350,10 @@ def build_inventory(mcp_data: dict, project_name: str, base_sha: str) -> dict:
             # 评分
             level, source = score_method(name, factors)
         else:
-            level = None
+            level = "exempt"   # 不可测试方法标记为 exempt 而非 null
             source = "auto"
 
-        # review_status
-        review_status = None
+        # review_status：pending 需人工复核，auto 表示自动分级无需复核
         if source == "suggested":
             review_status = "pending"
             review_queue.append({
@@ -365,6 +364,10 @@ def build_inventory(mcp_data: dict, project_name: str, base_sha: str) -> dict:
                 "default_level": "mid",
                 "status": "pending"
             })
+        elif not testable:
+            review_status = "exempt"     # 不可测试：豁免复核
+        else:
+            review_status = "auto"       # 自动分级，无需人工复核
 
         entry = {
             "qn": qn,
