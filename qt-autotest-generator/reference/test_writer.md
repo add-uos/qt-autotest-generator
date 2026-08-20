@@ -158,11 +158,11 @@ gate = inventory["gate_thresholds"]
 
 只 commit，不 push。
 
-### 9. 报告生成
+### 9. 收尾（Mode 2 边界）
 
-全类完成 → `Read reference/report_generator.md`
-
-产出覆盖率采集报告：gtest XML + lcov HTML + 分级覆盖率 + 汇总 JSON。
+全类提交完成即 Mode 2 结束。如需分级覆盖率采集报告
+（gtest XML + lcov HTML + 分级覆盖率 + 汇总 JSON），转 **Mode 3**
+（`Read reference/report_generator.md`），不在 Mode 2 内执行。
 
 ## MCP 查询策略
 

@@ -88,7 +88,8 @@ Mode 2 的子步骤按需读取：
 | 增量补全 | `reference/incremental_updater.md` | 覆盖率缺口时 |
 | 失败修复 | `reference/failure_repairer.md` | 编译/运行失败时 |
 | 代码提交 | `reference/code_committer.md` | 批次自检通过后 |
-| 报告生成 | `reference/report_generator.md` | Mode 3 覆盖率采集与汇总 |
+
+> 报告生成（`reference/report_generator.md`）属 **Mode 3**，不在 Mode 2 内执行；全类提交完成即 Mode 2 结束。
 
 ---
 
@@ -156,5 +157,5 @@ Mode 2 的子步骤按需读取：
 □ 每类编译通过后：已更新 .ut-inventory.json 的 usecase_count
 □ 批次提交：本批次自检通过后已执行代码提交（只 commit 不 push）
 □ 疑似源码缺陷：已标红，未自行修源码
-□ 全类完成 + 覆盖达标：已执行报告生成收尾（或 Mode 3 单独采集覆盖率）
+□ 全类完成 + 覆盖达标：已批次提交（Mode 2 结束）；覆盖率报告属 Mode 3，按需单独触发
 ```
