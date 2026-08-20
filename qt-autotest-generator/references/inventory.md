@@ -145,10 +145,17 @@ for cls in target_classes:
 | Q_INVOKABLE | +3 | Pass 2 source 解析 | auto |
 | 插件导出 | +3 | Pass 2 source 解析 | auto |
 | complexity ≥ 20 | +3 | Pass 1B 图属性 | auto |
-| complexity 10–19 | +2 | Pass 1B 图属性 | auto |
-| complexity 5–9 | +1 | Pass 1B 图属性 | auto |
+| complexity 8–19 | +2 | Pass 1B 图属性 | auto |
+| complexity 5–7 | +1 | Pass 1B 图属性 | auto |
 | transitive_loop_depth ≥ 3 | +3 | Pass 1B 图属性 | auto |
 | linear_scan_in_loop ≥ 1 | +1 | Pass 1B 图属性 | auto |
+| cognitive ≥ 30 | +2 | Pass 1B 图属性 | auto |
+| cognitive 15–29 | +1 | Pass 1B 图属性 | auto |
+| lines ≥ 150 | +1 | Pass 1B 图属性 | auto |
+| lines 50–149 | +1 | Pass 1B 图属性 | auto |
+| loop_count ≥ 5 | +1 | Pass 1B 图属性 | auto |
+| alloc_in_loop ≥ 1 | +1 | Pass 1B 图属性 | auto |
+| recursive | +1 | Pass 1B 图属性 | auto |
 | in_degree ≥ P75(非零) | +1 | Pass 1C 百分位 | auto |
 | 析构函数(~) | -1 | 名称模式 | auto |
 | operator 重载 | -1 | 名称模式 | auto |
@@ -156,9 +163,17 @@ for cls in target_classes:
 
 **评分规则**：score ≥ 3 → high，score ≥ 1 → mid，score < 1 → low。
 
-> `in_degree ≥ P75` 单独只 +1（mid-booster），需叠加 complexity ≥ 10 或 linear_scan_in_loop 才能达到 high。
-
-> **suggested 条目**默认 level=mid，进入 review_queue 待人工确认。
+> **复杂度因子体系（3 层）**：
+> - **主因子**：`complexity`（圈复杂度）— 与缺陷率最相关，McCabe 复杂度 ≥8 的函数 bug 率剧增
+> - **辅助因子**：`cognitive`（认知复杂度）+ `lines`（代码行数）— 补充圈复杂度无法捕获的嵌套深度和规模风险
+> - **风险因子**：`loop_count` / `alloc_in_loop` / `recursive` — 循环和递归是常见缺陷来源
+>
+> 核心原则：**辅助因子不能独立推到 high**。cognitive≥30 (+2) 或 lines≥50 (+1) 单独只能到 mid，
+> 需叠加 complexity≥5 才能到 high。这避免将大型但简单的函数（如纯数据组装）误判为 high。
+>
+> `in_degree ≥ P75` 单独只 +1（mid-booster），需叠加 complexity ≥ 8 或其他因子才达到 high。
+> **原因**：Qt 项目中 in_degree 仅衡量跨文件被引用数，信号槽/虚函数回调不产生 CALLS 边，
+> 导致核心业务函数 in_degree=0。in_degree 对工具/库函数有效，对 Qt 回调函数无效。
 
 **scope_rules 应用**：scope=exempt → `testable=false`，不论因子评分多高。
 
@@ -233,9 +248,9 @@ Agent 输出 Markdown 摘要 + review_queue，与用户交互：
 3. 回写 review_status
 ```
 
-## TODO
+## 已落地
 
-- **增量更新脚本**：增量更新 `.ut-inventory.json`，全量重建 + 同步旧 inventory 的人工标记（`source=manual` 的 level、`review_status=confirmed`、`usecase_count`）；方法删除直接清理（不留墓碑，不做改名软匹配）；`file_overrides` 整体保留。**已落地**于 `fetch-mcp-data.py --incremental --existing`，详见 `references/incremental-inventory.md`。
+- **增量更新脚本**：已实现于 `fetch-mcp-data.py --incremental --existing`。全量重建 + 同步旧 inventory 的人工标记（`source=manual` 的 level、`review_status=confirmed`、`usecase_count`）；方法删除直接清理（不留墓碑，不做改名软匹配）；`file_overrides` 整体保留。生成增量 diff 报告（新增/删除/签名变更/level 变化/人工标记保留与丢失）。详见 `references/incremental-inventory.md`。
 
 ## 关键约束
 
@@ -259,7 +274,23 @@ Agent 输出 Markdown 摘要 + review_queue，与用户交互：
 
 ### in_degree 单独不应判 high
 
-`in_degree` 因子仅贡献 +1 分（mid-booster），需叠加 `complexity ≥ 10` (+2) 或 `linear_scan_in_loop` (+1) + `complexity ≥ 5` (+1) 才能达到 high。
+`in_degree` 因子仅贡献 +1 分（mid-booster），需叠加 `complexity ≥ 8` (+2) 或其他因子才达到 high。
+
+**Qt 项目的 in_degree 失效问题**：当前知识图谱中 CALLS/USAGE 边只有 Module→Method（文件级），不存在 Method→Method（函数级）调用边。Qt 核心业务函数（信号槽回调 `handleKeypadButtonPress`、虚函数重写 `paintEvent`）不被其他模块显式调用，导致 in_degree=0。
+实际数据（deepin-calculator）：complexity=63~71 的核心处理函数 in_degree=0，而构造函数 in_degree=78~86（因多文件 #include 实例化）。**in_degree 仅对工具/库函数有参考价值，对 Qt 回调函数基本无效**。
+
+### cognitive 与 complexity 的互补性
+
+圈复杂度（complexity）和认知复杂度（cognitive）高度相关但互补：
+- complexity 计算分支数，对 switch-case 友好（每 case +1）
+- cognitive 计算理解难度，对深层嵌套和中断流更敏感
+- 示例：`enterEvent`（cx=14, cog=105）圈复杂度不高但认知复杂度极高 = 嵌套深、逻辑中断多
+- 新增 cognitive 因子后，此类函数不再被低估
+
+### lines 因子应保守
+
+代码行数是最直观的规模指标，但大型函数不一定复杂（如纯数据组装）。因此 lines 因子得分保守（+1/+1），
+需叠加 complexity 或 cognitive 才能推到 high。避免对长但简单的函数过度评分。
 
 ### MCP 不支持 Cypher 查询
 

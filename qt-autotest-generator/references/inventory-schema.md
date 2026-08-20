@@ -37,7 +37,7 @@
       "access": "public",
       "level": "high",
       "score": 5,
-      "factors": ["dbus_slot", "complexity_ge_10"],
+      "factors": ["dbus_slot", "complexity_ge_8"],
       "source": "auto",
       "testable": true,
       "usecase_count": 3
@@ -164,22 +164,35 @@
 
 ## 评分因子
 
-| 因子 | 得分 | source |
-|------|------|--------|
-| `dbus_slot` | +3 | auto |
-| `q_invokable` | +3 | auto |
-| `plugin_export` | +3 | auto |
-| `complexity_ge_20` | +3 | auto |
-| `complexity_ge_10` | +2 | auto |
-| `complexity_ge_5` | +1 | auto |
-| `transitive_loop_depth_ge_3` | +3 | auto |
-| `linear_scan_in_loop` | +1 | auto |
-| `in_degree_ge_p75` | +1 | auto |
-| `destructor` | -1 | auto |
-| `operator_overload` | -1 | auto |
-| `destructive_name` | suggested | suggested |
+| 因子 | 得分 | source | 说明 |
+|------|------|--------|------|
+| `dbus_slot` | +3 | auto | DBus 契约槽 |
+| `q_invokable` | +3 | auto | Q_INVOKABLE 标记 |
+| `plugin_export` | +3 | auto | 插件导出 |
+| `complexity:≥20` | +3 | auto | 圈复杂度（主因子，与缺陷率最相关） |
+| `complexity:8-19` | +2 | auto | 圈复杂度 |
+| `complexity:5-7` | +1 | auto | 圈复杂度 |
+| `cognitive:≥30` | +2 | auto | 认知复杂度（辅助因子，对嵌套和逻辑中断更敏感） |
+| `cognitive:15-29` | +1 | auto | 认知复杂度 |
+| `lines:≥150` | +1 | auto | 代码行数（保守加分，长函数不一定复杂） |
+| `lines:50-149` | +1 | auto | 代码行数 |
+| `transitive_loop_depth:≥3` | +3 | auto | 隐蔽 O(n²) |
+| `linear_scan_in_loop:≥1` | +1 | auto | 隐蔽 O(n²) 辅助 |
+| `loop_count:≥5` | +1 | auto | 循环数量风险 |
+| `alloc_in_loop:≥1` | +1 | auto | 循环内分配（性能缺陷强信号） |
+| `recursive` | +1 | auto | 递归函数（需额外测试） |
+| `in_degree:≥P75` | +1 | auto | 跨文件被引用数（mid-booster，仅对工具/库函数有效） |
+| `destructor` | -1 | auto | 析构函数降级 |
+| `operator` | -1 | auto | 运算符重载降级 |
+| `destructive_name` | suggested | suggested | 不可逆操作名 |
 
 **评分规则**：score ≥ 3 → high，score ≥ 1 → mid，score < 1 → low。
+
+> **因子体系设计原则**：
+> - 主因子（complexity）与缺陷率最相关，权重最高
+> - 辅助因子（cognitive / lines）不能独立推到 high——cognitive≥30 (+2) 或 lines≥50 (+1) 单独只能到 mid，需叠加 complexity≥5 才到 high
+> - in_degree 仅贡献 +1（mid-booster），因为 Qt 项目中信号槽/虚函数回调不产生 CALLS 边，导致核心业务函数 in_degree=0
+> - 风险因子（loop_count / alloc_in_loop / recursive）为缺陷提供独立信号
 
 ## 版本控制
 
