@@ -8,10 +8,10 @@
 
 ### 数据来源
 
-由 `fetch_mcp_data.py` + `scan_inventory.py` 生成：
+由 `fetch-mcp-data.py` + `scan-inventory.py` 生成：
 
 ```bash
-python3 fetch_mcp_data.py --project <id> --output .ut-inventory.json
+python3 fetch-mcp-data.py --project <id> --output .ut-inventory.json
 ```
 
 ## 功能

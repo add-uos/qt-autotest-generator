@@ -23,7 +23,7 @@ compatibility:
 | **Mode 1 · 函数重要性探测** | 项目初始化、扫描方法分级、生成 inventory | 下文 + `Read references/inventory.md` |
 | **Mode 2 · 单元测试编写** | 按 inventory 补全 GTest 用例 | 下文 + `Read references/test_writer.md` |
 | **Mode 3 · 覆盖率采集与汇总** | 只采集/统计覆盖率，不生成测试代码 | `Read references/report_generator.md` + `scripts/collect-coverage-report.py` |
-| **Mode 4 · 变异测试**（可选） | 验证已有测试能否拦住缺陷（变异得分） | `Read references/mutation_testing.md` + `scripts/mutation_score.py` |
+| **Mode 4 · 变异测试**（可选） | 验证已有测试能否拦住缺陷（变异得分） | `Read references/mutation_testing.md` + `scripts/mutation-score.py` |
 | **Mode 5 · 源码缺陷导出与统计** | 导出/统计单元测试发现的源码缺陷 | `Read references/defect_exporter.md` + `scripts/export-defects.py` |
 
 Mode 2 启动时若 `.ut-inventory.json` 不存在 → **自动触发 Mode 1**。
@@ -105,7 +105,7 @@ Mode 3 **不生成测试代码、不编译新测试、不修改项目**，只采
 ## Mode 4 · 变异测试（可选增强）
 
 1. **前置检查**：Mode 2 已产出可编译可运行的测试；`.ut-inventory.json` 存在；reconcile 通过
-2. **`Read`** `references/mutation_testing.md` → 调用 `scripts/mutation_score.py`
+2. **`Read`** `references/mutation_testing.md` → 调用 `scripts/mutation-score.py`
 3. 脚本对 high 级方法注入变异体 → 增量编译 → 跑 GTest → 计算变异得分 → 恢复源码
 4. 产出：`mutation_report.md`（存活变异体建议清单）+ `.ut-mutation.json`（与 `.ut-inventory.json` 命名对齐）
 
@@ -152,7 +152,7 @@ Mode 5 **不跑测试、不编译、不改测试代码、不改源码**（与 Mo
 | 函数覆盖率阈值 | 默认 90%，可由用户指定 |
 | 模板与 stub-ext | `templates/`，详见 `references/templates-guide.md` |
 | 分级覆盖率采集 | `scripts/collect-coverage-report.py`（Mode 3） |
-| 变异测试 | `scripts/mutation_score.py`（Mode 4，可选，阈值 85%） |
+| 变异测试 | `scripts/mutation-score.py`（Mode 4，可选，阈值 85%） |
 | 源码缺陷导出 | `scripts/export-defects.py`（Mode 5，可选，upsert/mark-fixed/export） |
 | 缺陷数据文件 | `.ut-defects.json`（本地，不入 git） |
 

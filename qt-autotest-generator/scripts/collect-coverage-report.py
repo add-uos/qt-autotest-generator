@@ -15,7 +15,7 @@ collect-coverage-report.py — Mode 3 覆盖率采集与汇总
   │   └── report_<target>.xml
   ├── html/                     # lcov genhtml
   │   └── cov_<target>.html
-  ├── coverage_by_level.json   # 分级覆盖率（来自 coverage_by_level.py）
+  ├── coverage_by_level.json   # 分级覆盖率（来自 coverage-by-level.py）
   └── ut-summary.json          # 汇总 JSON（测试结果 + 总覆盖率 + 分级覆盖率）
 
 用法:
@@ -139,10 +139,10 @@ def parse_lcov_summary(coverage_info):
 
 
 def run_coverage_by_level(inventory, coverage_info, output_json):
-    """Invoke coverage_by_level.py and return parsed JSON."""
-    script = SCRIPT_DIR / "coverage_by_level.py"
+    """Invoke coverage-by-level.py and return parsed JSON."""
+    script = SCRIPT_DIR / "coverage-by-level.py"
     if not script.exists():
-        print("Warning: coverage_by_level.py not found, skipping tiered coverage", file=sys.stderr)
+        print("Warning: coverage-by-level.py not found, skipping tiered coverage", file=sys.stderr)
         return None
     cmd = ["python3", str(script), "-i", inventory, "-c", coverage_info, "--json", "-o", output_json]
     run(cmd)
@@ -274,7 +274,7 @@ def main():
         "-o", str(coverage_info),
     ])
 
-    # Keep a filtered copy for coverage_by_level.py (which expects a .info)
+    # Keep a filtered copy for coverage-by-level.py (which expects a .info)
     (build_dir / "coverage").mkdir(parents=True, exist_ok=True)
     shutil.copy2(str(coverage_info), str(filtered_info))
 
@@ -328,7 +328,7 @@ def main():
     }
     summary.update(lcov_data)
 
-    # 6d. 合并分级覆盖率（来自 coverage_by_level.py）
+    # 6d. 合并分级覆盖率（来自 coverage-by-level.py）
     if tiered_data:
         summary["tiered_coverage"] = {
             "by_level": tiered_data.get("by_level", {}),

@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+# SPDX-FileCopyrightText: 2026 UnionTech Software Technology Co., Ltd.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """
-mutation_score.py — Mode 4: 变异测试 (Mutation Testing)
+mutation-score.py — Mode 4: 变异测试 (Mutation Testing)
 归属: qt-autotest-generator/scripts/
 
 用法 (直接模式 — 测试/单方法验证):
-    python3 mutation_score.py \\
+    python3 mutation-score.py \\
         --source src/utils.cpp \\
         --function Utils::stringIsDigit \\
         --build-dir build-test \\
@@ -12,7 +18,7 @@ mutation_score.py — Mode 4: 变异测试 (Mutation Testing)
         --gtest-filter '*stringIsDigit*'
 
 用法 (inventory 模式 — 生产 Mode 4):
-    python3 mutation_score.py \\
+    python3 mutation-score.py \\
         --inventory .ut-inventory.json \\
         --all-high \\
         --build-dir build-test \\

@@ -149,7 +149,7 @@
 | `node_type` | string | `"Method"` / `"Function"`（自由函数） |
 | `auto_reason` | string | suggested 条目的自动建议原因（仅 `source=suggested` 时存在） |
 
-> 以上扩展字段由 `scan_inventory.py` 产出，Mode 2 消费方可忽略；`assets/ut-inventory-editor`（人工辅助工具，agent 不调用）依赖它们做展示。
+> 以上扩展字段由 `scan-inventory.py` 产出，Mode 2 消费方可忽略；`assets/ut-inventory-editor`（人工辅助工具，agent 不调用）依赖它们做展示。
 
 ### review_queue 条目
 

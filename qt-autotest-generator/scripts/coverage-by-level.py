@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """
-coverage_by_level.py — 按 .ut-inventory.json 的 level(high/mid/low) 统计【函数覆盖率】与【行覆盖率】。
+coverage-by-level.py — 按 .ut-inventory.json 的 level(high/mid/low) 统计【函数覆盖率】与【行覆盖率】。
 
 按 inventory 分级统计【函数级 + 行级】覆盖率：
 解析 FN/FNDA/DA，c++filt demangle 后关联 inventory 分级，产出按 high/mid/low 的覆盖率。
@@ -24,18 +24,18 @@ coverage_by_level.py — 按 .ut-inventory.json 的 level(high/mid/low) 统计�
 
 用法:
   # 全量分级汇总（批次收尾 / 报告）
-  python3 scripts/coverage_by_level.py \\
+  python3 scripts/coverage-by-level.py \\
       -i autotests/.ut-inventory.json \\
       -c build-autotests/coverage/filtered.info
 
   # per-class 分级覆盖率（逐类闭环，build_verifier/self_checker 用）
-  python3 scripts/coverage_by_level.py \\
+  python3 scripts/coverage-by-level.py \\
       -i autotests/.ut-inventory.json \\
       -c build-autotests/coverage/filtered.info \\
       --class IconButton --json
 
   # 每函数明细（定位缺口）
-  python3 scripts/coverage_by_level.py -i ... -c ... --detail
+  python3 scripts/coverage-by-level.py -i ... -c ... --detail
 
 依赖: c++filt (binutils 自带，gcc 安装即有)
 """

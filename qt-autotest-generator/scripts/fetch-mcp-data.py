@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+# SPDX-FileCopyrightText: 2026 UnionTech Software Technology Co., Ltd.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """
-fetch_mcp_data.py — 端到端：MCP 知识图谱 → .ut-inventory.json
+fetch-mcp-data.py — 端到端：MCP 知识图谱 → .ut-inventory.json
 
 一条命令完成函数重要性探测的全流程数据采集与评分：
 
@@ -12,30 +18,30 @@ fetch_mcp_data.py — 端到端：MCP 知识图谱 → .ut-inventory.json
   6. 调用 scan_inventory.build_inventory() 生成 .ut-inventory.json
 
 用法:
-  python3 fetch_mcp_data.py \\
+  python3 fetch-mcp-data.py \\
     --project home-uos-service-codebase-repos-dde-file-manager \\
     --file-pattern "src/**" \\
     --output .ut-inventory.json
 
 示例:
   # dde-file-manager（排除 3rdparty）
-  python3 fetch_mcp_data.py \\
+  python3 fetch-mcp-data.py \\
     --project home-uos-service-codebase-repos-dde-file-manager \\
     --file-pattern "src/**" \\
     --output /tmp/dde-file-manager/.ut-inventory.json
 
   # deepin-reader（排除 pdfium 等 3rdparty）
-  python3 fetch_mcp_data.py \\
+  python3 fetch-mcp-data.py \\
     --project home-uos-service-codebase-repos-deepin-reader \\
     --file-pattern "reader/**" \\
     --output /tmp/deepin-reader/.ut-inventory.json
 
   # deepin-calculator（无 3rdparty，无需 file-pattern）
-  python3 fetch_mcp_data.py \\
+  python3 fetch-mcp-data.py \\
     --project home-uos-service-codebase-repos-deepin-calculator \\
     --output /tmp/deepin-calculator/.ut-inventory.json
 
-依赖: scan_inventory.py（同目录，提供 build_inventory() 评分逻辑）
+依赖: scan-inventory.py（同目录，提供 build_inventory() 评分逻辑）
 """
 
 import argparse
@@ -162,7 +168,7 @@ def collect_methods(client, project, file_pattern=None, limit=2000):
 
     Function nodes include free C/C++ functions (main, helpers, etc.).
     Some Function entries are noise (macros, using-declarations, misclassified
-    constructors) — filtered later by scan_inventory.py.
+    constructors) — filtered later by scan-inventory.py.
     """
     all_methods = []
     all_functions = []
@@ -496,15 +502,20 @@ def main():
                         help="保留中间 mcp_dump.json 文件")
     args = parser.parse_args()
 
-    # 确保能 import scan_inventory（同目录）
+    # 动态加载 scan-inventory.py（文件名含连字符，无法用 import 语句）
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    if script_dir not in sys.path:
-        sys.path.insert(0, script_dir)
+    scan_inv_path = os.path.join(script_dir, "scan-inventory.py")
+    if not os.path.isfile(scan_inv_path):
+        print(f"❌ 无法找到 scan-inventory.py: {scan_inv_path}", file=sys.stderr)
+        print(f"   请确保 scan-inventory.py 在同一目录: {script_dir}", file=sys.stderr)
+        sys.exit(1)
     try:
-        import scan_inventory
-    except ImportError as e:
-        print(f"❌ 无法导入 scan_inventory.py: {e}", file=sys.stderr)
-        print(f"   请确保 scan_inventory.py 在同一目录: {script_dir}", file=sys.stderr)
+        import importlib.util
+        _spec = importlib.util.spec_from_file_location("scan_inventory", scan_inv_path)
+        scan_inventory = importlib.util.module_from_spec(_spec)
+        _spec.loader.exec_module(scan_inventory)
+    except Exception as e:
+        print(f"❌ 无法加载 scan-inventory.py: {e}", file=sys.stderr)
         sys.exit(1)
 
     # 连接 MCP

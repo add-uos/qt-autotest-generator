@@ -59,5 +59,5 @@ class_tier = max(m.level for m in class_methods if m.testable)
 
 - 产出路径：`${test_dir}/.ut-inventory.json`
 - 格式详见：`references/inventory-schema.md`
-- 由 `scripts/scan_inventory.py` 从预采集的 MCP 图谱数据生成
-- MCP 数据采集格式见：`scripts/fetch_mcp_data.py`
+- 由 `scripts/scan-inventory.py` 从预采集的 MCP 图谱数据生成
+- MCP 数据采集格式见：`scripts/fetch-mcp-data.py`

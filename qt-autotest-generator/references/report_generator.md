@@ -74,7 +74,7 @@ lcov --remove ${BUILD_DIR}/coverage.info '*/tests/*' '*/autotests/*' '*/3rdparty
 
 ### 5. 分级覆盖率（需 inventory）
 
-调用 `scripts/coverage_by_level.py`，产出 `${REPORT_DIR}/coverage_by_level.json`。
+调用 `scripts/coverage-by-level.py`，产出 `${REPORT_DIR}/coverage_by_level.json`。
 
 无 `.ut-inventory.json` 时跳过此步。
 
@@ -154,7 +154,7 @@ ${REPORT_DIR}/
 | `test_suites` | gtest XML | 每个 suite 的用例数、失败数、耗时 |
 | `line_coverage` | `lcov --summary` | 行级覆盖率（总行数/已覆盖/未覆盖/百分比） |
 | `function_coverage` | `lcov --summary` | 函数级覆盖率 |
-| `tiered_coverage` | `coverage_by_level.py` | 按 high/mid/low 分级的覆盖率（需 inventory） |
+| `tiered_coverage` | `coverage-by-level.py` | 按 high/mid/low 分级的覆盖率（需 inventory） |
 | `tiered_coverage.by_level.<lv>.pass` | 脚本计算 | 函数覆盖率达 `gate.function` 且行覆盖率达 `gate.line` |
 
 无 `.ut-inventory.json` 时，`tiered_coverage` 字段不存在。
@@ -164,4 +164,4 @@ ${REPORT_DIR}/
 - **不生成测试代码**：只采集和统计，不编译新测试、不修改项目
 - **不修改项目源码**
 - **lcov 不可用时降级**：跳过 HTML + 分级覆盖率，只输出 gtest XML + 基础 JSON
-- **依赖**：cmake, make, lcov, genhtml, c++filt（用于 `coverage_by_level.py` demangle）
+- **依赖**：cmake, make, lcov, genhtml, c++filt（用于 `coverage-by-level.py` demangle）

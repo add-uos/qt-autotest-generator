@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+# SPDX-FileCopyrightText: 2026 UnionTech Software Technology Co., Ltd.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """
-scan_inventory.py — 模式一：函数重要性探测
+scan-inventory.py — 模式一：函数重要性探测
 
 用法:
-  python3 scan_inventory.py --project <project_name> --output <path> [--test-dir <dir>]
+  python3 scan-inventory.py --project <project_name> --output <path> [--test-dir <dir>]
 
 示例:
-  python3 scan_inventory.py \
+  python3 scan-inventory.py \
     --project home-uos-service-codebase-repos-deepin-calculator \
     --output /tmp/inventory-calculator.json
 
-  python3 scan_inventory.py \
+  python3 scan-inventory.py \
     --project home-uos-service-codebase-repos-dde-file-manager \
     --output /tmp/inventory-filemanager.json
 

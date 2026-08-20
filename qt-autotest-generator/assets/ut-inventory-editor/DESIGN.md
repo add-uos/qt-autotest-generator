@@ -432,7 +432,7 @@ scripts/ut-inventory-editor/
 ## 12. Function 节点支持
 
 知识图谱中 `Function` 标签包含自由 C/C++ 函数（`main`, `getThemeTypeSetting`,
-`Chinese2Pinyin` 等），之前完全缺失。新版 `fetch_mcp_data.py` 同时收集 Method + Function。
+`Chinese2Pinyin` 等），之前完全缺失。新版 `fetch-mcp-data.py` 同时收集 Method + Function。
 
 **噪音过滤**：Function 节点中混有大量非函数条目：
 - `DGUI_USE_NAMESPACE` / `DWIDGET_USE_NAMESPACE` → using 声明
@@ -440,7 +440,7 @@ scripts/ut-inventory-editor/
 - `QListWidget` / `QStyledItemDelegate` → Qt 类型别名
 - `Q_OBJECT` / `Q_DECLARE_METATYPE` → Qt 宏
 
-`scan_inventory.py` 的 `is_function_noise()` 过滤规则：
+`scan-inventory.py` 的 `is_function_noise()` 过滤规则：
 - 全大写名称 → 宏/using 声明
 - `D`/`Q` 前缀 PascalCase + param_count=0 + complexity=0 → 类型别名
 - PascalCase + param_count=0 + complexity=0 → 误分类的类名

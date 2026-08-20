@@ -51,12 +51,12 @@ if file_exists(inventory_path):
 # 否则 → 全量建表（Step 3）
 ```
 
-### 3. 运行 `fetch_mcp_data.py`（主路径）
+### 3. 运行 `fetch-mcp-data.py`（主路径）
 
 **首选方式**：一条命令完成 MCP 采集 → 评分 → 产出 `.ut-inventory.json`。
 
 ```bash
-python3 scripts/fetch_mcp_data.py \
+python3 scripts/fetch-mcp-data.py \
   --project <project_name> \
   --file-pattern "src/**" \
   --output ${test_dir}/.ut-inventory.json \
@@ -73,14 +73,14 @@ python3 scripts/fetch_mcp_data.py \
 脚本内部自动完成 5 步：`search_graph` 分页 → `query_graph` 继承检测 → DBus 槽 → Q_INVOKABLE/Q_PLUGIN → P75 计算 → `scan_inventory.build_inventory()` 评分。
 
 - HTTP 直连 MCP 服务器（JSON-RPC 2.0），~12000 方法端到端仅需 ~2 秒
-- `scan_inventory.py` 提供评分逻辑（`build_inventory()` + `generate_summary()`），被 `fetch_mcp_data.py` import 调用
+- `scan-inventory.py` 提供评分逻辑（`build_inventory()` + `generate_summary()`），被 `fetch-mcp-data.py` import 调用
 
-> ⚠️ **不要手动调 MCP 再跑 `scan_inventory.py --mcp-dump`**，直接用 `fetch_mcp_data.py` 即可。
+> ⚠️ **不要手动调 MCP 再跑 `scan-inventory.py --mcp-dump`**，直接用 `fetch-mcp-data.py` 即可。
 
 <details>
-<summary>📖 备选：手动 3-pass 流程（仅当 fetch_mcp_data.py 不可用时）</summary>
+<summary>📖 备选：手动 3-pass 流程（仅当 fetch-mcp-data.py 不可用时）</summary>
 
-若 `fetch_mcp_data.py` 不可用（如 MCP URL 变更、脚本损坏），Agent 可退回手动 3-pass 流程。
+若 `fetch-mcp-data.py` 不可用（如 MCP URL 变更、脚本损坏），Agent 可退回手动 3-pass 流程。
 
 #### Pass 1 — 批量图查询（~15 次 MCP 调用）
 
@@ -120,7 +120,7 @@ for cls in target_classes:
 
 #### Pass 3 — 评分与产出
 
-加权评分逻辑见下表，完整实现详见 `scripts/scan_inventory.py` 的 `score_method()` 函数。
+加权评分逻辑见下表，完整实现详见 `scripts/scan-inventory.py` 的 `score_method()` 函数。
 
 | 因子 | 得分 | 检测方式 | source |
 |------|------|---------|--------|
@@ -145,13 +145,13 @@ for cls in target_classes:
 
 **scope_rules 应用**：scope=exempt → `testable=false`，不论因子评分多高。
 
-手动流程完成后，需自行组装 mcp_dump JSON 并调 `scan_inventory.py --mcp-dump` 评分，或用 Agent 内置逻辑复现 `build_inventory()` 的评分逻辑。
+手动流程完成后，需自行组装 mcp_dump JSON 并调 `scan-inventory.py --mcp-dump` 评分，或用 Agent 内置逻辑复现 `build_inventory()` 的评分逻辑。
 
 </details>
 
 ### 4. 已有用例数统计 + 写表
 
-`fetch_mcp_data.py` 默认 `usecase_count=0`（不扫描已有测试）。若需统计已有用例，扫描 `${test_dir}/` 下所有 `test_*.cpp`：
+`fetch-mcp-data.py` 默认 `usecase_count=0`（不扫描已有测试）。若需统计已有用例，扫描 `${test_dir}/` 下所有 `test_*.cpp`：
 
 ```python
 usecase_map = {}  # "ClassQn.method_name" → count

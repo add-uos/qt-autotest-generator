@@ -73,7 +73,7 @@ if not os.path.exists(inventory_path):
 snapshot_path = f"build-{test_dir}/coverage/{target_class.name}_by_level.json"
 if not os.path.exists(snapshot_path):
     subprocess.run([
-        "python3", f"{SKILL_DIR}/scripts/coverage_by_level.py",
+        "python3", f"{SKILL_DIR}/scripts/coverage-by-level.py",
         "-i", inventory_path,
         "-c", f"build-{test_dir}/coverage/filtered.info",
         "--class", target_class.name, "--json", "-o", snapshot_path,
@@ -86,7 +86,7 @@ gate_failed_levels = [lv for lv in ("high", "mid", "low") if not snapshot["by_le
 uncovered_functions = snapshot["uncovered_functions"]
 ```
 
-> 脚本 `scripts/coverage_by_level.py` 解析 FN/FNDA/DA + `c++filt` demangle 关联 inventory 分级，产出函数级+行级覆盖率。门禁阈值取自 inventory 的 `gate_thresholds`，不在 self_checker 内 hardcode。
+> 脚本 `scripts/coverage-by-level.py` 解析 FN/FNDA/DA + `c++filt` demangle 关联 inventory 分级，产出函数级+行级覆盖率。门禁阈值取自 inventory 的 `gate_thresholds`，不在 self_checker 内 hardcode。
 
 **判定规则**：
 - `coverage_gap` 非空 → 流转至 `incremental_updater`（传入 `coverage_gap`）

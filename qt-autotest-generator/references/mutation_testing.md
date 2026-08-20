@@ -1,7 +1,7 @@
 # 变异测试（Mode 4）
 
 > 前置条件：Mode 2 已产出可编译可运行的测试（`build-${test_dir}/` 存在且 `test_<classname>` target 可编），`.ut-inventory.json` 存在。
-> 脚本：`scripts/mutation_score.py`。
+> 脚本：`scripts/mutation-score.py`。
 
 ## 概述
 
@@ -273,7 +273,7 @@ C++ 语法有大量复合符号，变异算子若不区分会生成无效代码�
 ### 直接模式（测试/单方法验证）
 
 ```bash
-python3 ${SKILL_DIR}/scripts/mutation_score.py \
+python3 ${SKILL_DIR}/scripts/mutation-score.py \
     --source src/utils.cpp \
     --function Utils::stringIsDigit,Utils::reformatSeparators \
     --build-dir build-test \
@@ -285,7 +285,7 @@ python3 ${SKILL_DIR}/scripts/mutation_score.py \
 ### inventory 模式（生产 Mode 4）
 
 ```bash
-python3 ${SKILL_DIR}/scripts/mutation_score.py \
+python3 ${SKILL_DIR}/scripts/mutation-score.py \
     --inventory .ut-inventory.json \
     --all-high \
     --build-dir build-mutation \
