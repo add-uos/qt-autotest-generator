@@ -302,12 +302,20 @@ python3 ${SKILL_DIR}/scripts/mutation_score.py \
 | `--all-high` | inventory 模式 | 对所有 high 级 testable 方法跑变异 |
 | `--build-dir` | ✅ | 构建目录（需已 cmake 配置） |
 | `--test-target` | ✅ | GTest 测试 target 名（如 `deepin-calculator-test`） |
-| `--gtest-filter` | — | GTest 过滤器（如 `*stringIsDigit*`），加速只跑相关用例 |
+| `--gtest-filter` | — | GTest 过滤器（如 `*stringIsDigit*`），加速只跑相关用例；多函数用 `:` 分隔 |
 | `--max-mutants` | — | 每函数最大变异体数（默认 20） |
 | `--project-dir` | — | 项目根目录（用于 git diff 校验，默认 `.`） |
 | `--threshold` | — | 变异得分阈值（默认 85） |
 
 > 需指定 `--source + --function`（直接模式）或 `--inventory + --all-high`（inventory 模式）之一。
+
+> **⚠️ `--gtest-filter` 范围影响得分准确性**
+>
+> gtest-filter 太窄会导致假“存活”——变异体改变了函数行为，但该行为由**其他函数的用例**验证（跨函数调用链），窄 filter 排除了这些用例，变异体误判为 survived。
+>
+> 实测案例：`reformatSeparators` 用窄 filter `*reformatSeparators*` 跑出 **55.6%**（8 个 survived）；用宽 filter `*stringIsDigit*:*reformatSeparators*:*formatThousandsSeparators*` 跑出 **100%**——窄 filter 漏掉了 `formatThousandsSeparators` 用例中对 `reformatSeparators` 的间接调用。
+>
+> **建议**：多函数跑时用 `:` 分隔的宽 filter 覆盖所有相关用例，或干脆不设 filter 跑全量（更准但更慢）。单函数验证时也应包含其调用者的用例。
 
 ---
 
@@ -420,7 +428,7 @@ python3 ${SKILL_DIR}/scripts/mutation_score.py \
 □ 已确认 Mode 2 测试可编译可运行（前置条件）
 □ 已用独立 build 目录或确认复用 Mode 2 build 无污染
 □ 变异目标为 high 级 testable 方法（或用户显式指定）
-□ `--gtest-filter` 已设置只跑相关用例（加速）
+□ `--gtest-filter` 已设置且范围足够宽（覆盖目标函数及其调用者的用例，避免假存活）
 □ 运行结束 `git diff --exit-code` 通过（源码安全四铁律 #4）
 □ 得分 < 阈值时，存活变异体清单已交付，建议用户回 Mode 2 补强
 □ Mode 4 不更新 usecase_count、不 commit、不改 Mode 2 产物
