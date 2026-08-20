@@ -57,6 +57,7 @@ git status --porcelain
 - `build-{test_dir}/` — 构建目录
 - `{test_dir}/.results/` — gtest XML 输出
 - `{test_dir}/.reports/` — 报告输出
+- `{test_dir}/.ut-defects.json` — **源码缺陷记录（Mode 5，本地存储，不入 git）**
 - `{test_dir}/.pytest_cache/` — pytest 缓存
 - `__pycache__/` — Python 缓存
 - 任何源码修改
@@ -186,7 +187,14 @@ git commit -m "<提交信息>"
 
 ### 9. 后续流程
 
-- **提交成功**（有新提交类）：直接进入下一批次或报告生成阶段
+- **提交成功**（有新提交类）：触发 **Mode 5** 缺陷导出到本地 `{report_dir}`（不跑测试，只读 `.ut-defects.json` 生成 `defects-summary.md`）；随后进入下一批次或报告生成阶段
+
+```bash
+python3 ${SKILL_DIR}/scripts/export-defects.py export \
+    --defects ${PROJECT_PATH}/${test_dir}/.ut-defects.json \
+    --report-dir ${PROJECT_PATH}/build-${test_dir} 2>/dev/null || true
+```
+
 - **无变更**（`no_changes`）：直接进入下一批次或报告生成阶段
 - **提交失败**：根据原因决定重试或转人工（如 git 冲突、无 git 仓库、staged 误含源码且无法自动取消）
 

@@ -158,6 +158,48 @@
       "input": "代码改了重新检查",
       "expected": true,
       "reason": "对账触发"
+    },
+    {
+      "id": "zh-mutation-test",
+      "input": "跑变异测试看测试有效性",
+      "expected": true,
+      "reason": "Mode 4 触发语"
+    },
+    {
+      "id": "en-mutation-score",
+      "input": "mutation score for high methods",
+      "expected": true,
+      "reason": "Mode 4 英文触发语"
+    },
+    {
+      "id": "zh-test-effectiveness",
+      "input": "这些测试真能拦住 bug 吗",
+      "expected": true,
+      "reason": "Mode 4 触发语"
+    },
+    {
+      "id": "zh-export-defects",
+      "input": "导出源码缺陷",
+      "expected": true,
+      "reason": "Mode 5 触发语"
+    },
+    {
+      "id": "zh-defect-report",
+      "input": "生成缺陷清单",
+      "expected": true,
+      "reason": "Mode 5 触发语"
+    },
+    {
+      "id": "en-defect-report",
+      "input": "defect report",
+      "expected": true,
+      "reason": "Mode 5 英文触发语"
+    },
+    {
+      "id": "zh-stats-defects",
+      "input": "统计单元测试发现的源码缺陷",
+      "expected": true,
+      "reason": "Mode 5 触发语"
     }
   ],
   "should_not_trigger": [

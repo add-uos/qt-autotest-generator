@@ -170,7 +170,7 @@ read("${SKILL_DIR}/templates/cmake-submodule.txt")
 **单例/工厂模式处理**（`special_handling=private_ctor`）：
 - 单例：通过 `Instance()` 获取实例，不直接 `new`；测试后需重置单例状态
 - 工厂：通过工厂方法创建实例，不绕过工厂直接构造
-- 若构造函数是 private/protected 且无工厂方法 → 标记 `needs_manual`
+- 若构造函数是 private/protected 且无工厂方法 → 标记 `needs_manual`，并调 `export-defects.py upsert` 落盘到 `.ut-defects.json`（`type=needs_manual, detected_at_stage=review`），归集进缺陷统计
 
 **PIMPL 模式处理**（`special_handling=pimpl`）：
 - 只测 public 接口，不直接访问 Private 类

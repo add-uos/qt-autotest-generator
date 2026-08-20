@@ -1,0 +1,12 @@
+# 测试构建产物（不提交）
+build-*/
+.results/
+.reports/
+.pytest_cache/
+__pycache__/
+
+# Mode 5 源码缺陷记录（本地存储，不入 git）
+.ut-defects.json
+
+# Mode 4 变异测试记录（本地存储，不入 git）
+.ut-mutation.json

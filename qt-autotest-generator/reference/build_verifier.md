@@ -73,6 +73,8 @@ timeout 120 ./${test_dir}/<module>/test_<classname> --gtest_output=xml:${PROJECT
 
 > **注意**：判定前必须用 `get_code_snippet` 读源码确认。尝试最小化复现：只构造对象、不调方法，看是否崩溃。若源码缺 `#include`、缺 `Q_OBJECT`、有空实现导致链接失败 → 源码缺陷。
 
+**编译期提前捕获**（Mode 5）：若在重试预算内识别到明确源码特征（如 `fatal error: xxx.h: No such file` 指向源码目录、`undefined reference to` 经 `trace_path` 确认非 stub 缺失、`vtable for XXX` 提示缺 `Q_OBJECT`），可**提前预记录**到 `.ut-defects.json`（`detected_at_stage=compile`），不必等 10 loops 耗尽。后续若发现是测试侧误会，再调 `export-defects.py mark-fixed` 清除。防误判：必须先排除 stub/include/CMake 测试侧问题再落盘。
+
 ### 6. 产出双信号
 
 编译+运行结束后，记录到内存变量 `class_status[classname]`：
@@ -90,6 +92,14 @@ timeout 120 ./${test_dir}/<module>/test_<classname> --gtest_output=xml:${PROJECT
 ```
 
 > `verified` 满足条件：`build_result=pass` + `run_result=pass` + 覆盖率快照已产出（7c，lcov 不可用时降级为仅 7b）。门禁达标判定在 `self_checker`。
+
+**缺陷闭环**（Mode 5）：类通过验证（`status=verified`）时，若 `{test_dir}/.ut-defects.json` 存在该类的 `open`/`reopened` 缺陷，调 `export-defects.py mark-fixed` 标记修复，形成「发现→修复」闭环：
+
+```bash
+python3 ${SKILL_DIR}/scripts/export-defects.py mark-fixed \
+    --defects ${PROJECT_PATH}/${test_dir}/.ut-defects.json \
+    --class ${classname} --fixed-in-sha "$(git rev-parse --short HEAD)"
+```
 
 ### 7. 覆盖率信号（分级覆盖率统计）
 

@@ -51,6 +51,7 @@ Qt 项目代码量大，**单测覆盖率上不去**？<br>
 <tr><td nowrap width="1%"><strong>覆盖率自检</strong></td><td>有 <code>.ut-inventory.json</code> 时按方法分级设差异化门禁（high 行90%+分支80%+函数100%，⚖mid 行60%+函数100%，💤low 行60%+函数100%）；无时回退单一门禁（默认 90%）。低于阈值触发自动补全</td></tr>
 <tr><td nowrap width="1%"><strong>增量对账</strong></td><td>源码变更后自动 diff，只补新增方法、只修签名变更、只清理已删方法引用</td></tr>
 <tr><td nowrap width="1%"><strong>源码缺陷标红</strong></td><td>疑似源码缺陷（编译不过/运行崩溃/逻辑矛盾）标红交还用户，不自行修源码</td></tr>
+<tr><td nowrap width="1%"><strong>Mode 5 · 源码缺陷导出</strong></td><td>用例级缺陷持久化到 <code>.ut-defects.json</code>（不入 git），编译期即捕获；按需导出 <code>defects-summary.md</code> 标红清单（md 内链接跳转源码行）+ <code>defects.json</code>（<code>scripts/export-defects.py</code>）</td></tr>
 <tr><td nowrap width="1%"><strong>Mode 3 · 覆盖率采集</strong></td><td>一条命令采集：gtest XML + lcov HTML + 分级覆盖率 + 汇总 JSON（<code>scripts/collect-coverage-report.py</code>）。不生成测试代码，只读采集。</td></tr>
 </tbody>
 </table>

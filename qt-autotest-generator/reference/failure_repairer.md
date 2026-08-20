@@ -115,10 +115,32 @@ per-error 3 次重试，总计 max 10 loops（与编译验证的预算独立）�
 }
 ```
 
+**标红即落盘**（Mode 5）：除写内存变量外，立即调用 `export-defects.py upsert` 把缺陷持久化到 `{test_dir}/.ut-defects.json`（不入 git，本地存储），颗粒度精确到**用例级**：
+
+```bash
+python3 ${SKILL_DIR}/scripts/export-defects.py upsert \
+    --defects ${PROJECT_PATH}/${test_dir}/.ut-defects.json \
+    --defect-id "${method_qn}#${TestFixture}.${TestCaseName}" \
+    --method-qn "${method_qn}" --method-name "${method_name}" \
+    --class-qn "${class_qn}" --class-name "${class_name}" --module "${module}" \
+    --file-path "${src_file}" --file-line ${src_line} \
+    --test-fixture "${TestFixture}" --test-case-name "${TestCaseName}" \
+    --test-file "${test_file}" \
+    --type "${failure_reason}" --type-category "${type_category}" \
+    --detected-at-stage "${stage}" \
+    --evidence "${defect_evidence}" --suggestion "${defect_suggestion}" \
+    --root-cause-snippet "${snippet}" \
+    --method-level "${method_level}" --batch ${batch_no} \
+    --project "${project_name}" --base-sha "${base_sha}" \
+    --repair-attempts ${repair_attempts} --iteration-count ${iteration_count}
+```
+
+> `defect_id` 主键 = `{method_qn}#{TestFixture}.{TestCaseName}`，同一用例跨会话去重。构造即崩无具体用例时用 `__class_init__` 兜底。`type_category` 映射：compile/runtime/logic/manual。`stage` 取 detected_at_stage（标红阶段一般为 manual，编译期提前捕获为 compile）。详见 `reference/defect-schema.md` 与 `reference/defect_exporter.md`。
+
 ### 7. 后续流程
 
 - **修复成功**（status=test_written）：回到编译验证阶段重新验证
-- **修复失败（标红）**（status=failed + failure_reason 含 source_defect/needs_manual）：跳过该类，继续下一类；标红的类会在报告生成阶段的「疑似源码缺陷清单」中列出
+- **修复失败（标红）**（status=failed + failure_reason 含 source_defect/needs_manual）：跳过该类，继续下一类；缺陷已写入 `{test_dir}/.ut-defects.json`，由 **Mode 5**（`reference/defect_exporter.md`）在收尾或按需时导出为 `defects-summary.md` 标红清单
 
 ## 关键约束
 
