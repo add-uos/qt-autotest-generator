@@ -84,10 +84,13 @@ per-error 3 次重试，总计 max 10 loops（与编译验证的预算独立）�
 
 ### 5. 方法删除的清理
 
+> **兜底防线**：正常流程中，reconcile 对账后由 `references/stale-test-cleanup.md` **主动清理**已删方法的测试用例（不等编译报错）。此处仅当 reconcile 未执行（如手动修改了测试文件未跑对账）且编译因引用已删方法失败时才触发。
+
 若失败原因是源码删除了方法（对账检出 `removed_methods`）：
 - 读测试文件，找到引用已删方法的 `TEST_F` 与 `TEST_P` 用例（搜索正则 `/TEST_[FP]\(/`）
 - 注释或删除这些用例（加注释 `// Removed: method deleted from source`）；`TEST_P` 清理时连带移除对应的 `INSTANTIATE_TEST_SUITE_P`，避免悬空参数化定义
 - 不视为源码缺陷（正常的代码演进）
+- 逻辑与 `stale-test-cleanup.md` 一致；此为**兜底**，stale-test-cleanup 为**主动**
 
 ### 6. 记录修复结果
 

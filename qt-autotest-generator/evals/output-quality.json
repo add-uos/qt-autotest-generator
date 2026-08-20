@@ -65,7 +65,7 @@
         "正确检测 base_sha 漂移",
         "新增方法走增量补全",
         "签名变更走测试生成（重新生成该类）",
-        "方法删除走失败修复（清理引用）",
+        "方法删除走 stale-test-cleanup 主动清理（不等编译报错）",
         "更新 inventory.base_sha"
       ],
       "failure_indicators": [

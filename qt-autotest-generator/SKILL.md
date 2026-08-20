@@ -1,6 +1,6 @@
 ---
 name: qt-autotest-generator
-description: "Qt CMake 项目单元测试：函数重要性探测（Mode 1，生成 .ut-inventory.json 分级表）、按分级补全 GTest 用例（Mode 2，编译验证+覆盖率门禁+更新 usecase_count）、覆盖率采集与汇总（Mode 3，一条命令出分级报告）、变异测试验证测试有效性（Mode 4，可选增强，注入变异体计算变异得分）、源码缺陷导出与统计（Mode 5，用例级缺陷持久化+导出标红清单）。触发于「扫描函数重要性/生成 inventory/探测分级/项目初始化单测分析」→ Mode 1；「生成单测/补全测试/add gtest/写测试/建测试框架/修测试/重新对账」→ Mode 2；「采集覆盖率/统计覆盖率/生成覆盖率报告/collect coverage/coverage report」→ Mode 3；「变异测试/mutation testing/mutation score/验证测试有效性/测试能不能发现问题/测试够不够好/变异得分/high 级方法有效性」→ Mode 4；「导出源码缺陷/统计源码缺陷/defect report/缺陷清单/导出缺陷数据」→ Mode 5。硬门禁：codebase-memory-mcp 知识图谱（远端优先，本地兜底）。不触发于：非 Qt 或非 CMake 项目、Qt Test/Catch2 框架、仅运行测试/配 CI 不生成测试代码。"
+description: "Qt CMake 项目单元测试：函数重要性探测（Mode 1，生成 .ut-inventory.json 分级表）、按分级补全 GTest 用例（Mode 2，编译验证+覆盖率门禁+更新 usecase_count）、覆盖率采集与汇总（Mode 3，一条命令出分级报告）、变异测试验证测试有效性（Mode 4，可选增强，注入变异体计算变异得分）、源码缺陷导出与统计（Mode 5，用例级缺陷持久化+导出标红清单）。触发于「扫描函数重要性/生成 inventory/探测分级/项目初始化单测分析/importance inventory/scan method importance」→ Mode 1；「生成单测/批量生成单测/补全测试/add gtest/写测试/建测试框架/修测试/重新对账/加测试/sync tests/coverage gap/fix test failures/improve coverage/函数覆盖率/清理无效测试/对账」→ Mode 2；「采集覆盖率/统计覆盖率/生成覆盖率报告/collect coverage/coverage report/coverage summary」→ Mode 3；「变异测试/mutation testing/mutation score/验证测试有效性/测试能不能发现问题/测试够不够好/变异得分/high 级方法有效性」→ Mode 4；「导出源码缺陷/统计源码缺陷/defect report/缺陷清单/导出缺陷数据/源码缺陷标红清单」→ Mode 5。硬门禁：codebase-memory-mcp 知识图谱（远端优先，本地兜底）。不触发于：非 Qt 或非 CMake 项目、Qt Test/Catch2 框架、仅运行测试/配 CI 不生成测试代码。"
 version: "3.3.0"
 user-invocable: true
 argument-hint: "[项目路径 / 模块路径 / 类名]"
@@ -41,7 +41,7 @@ Mode 5 为**可选增强**，在 Mode 2 闭环中实时持久化发现的源码�
 - **测试目录**：优先 `autotests/`；若项目已有 `tests/` 且含 C++ GTest 代码，则沿用 `tests/`。目录在 environment_check 阶段一次性探测确定。
 - **知识图谱 MCP 硬门禁**：无图谱索引不执行，不降级到文件扫描/LSP。远端优先，本地兜底，互斥使用其一。详见 `references/mcp-providers.md`。
 - **不修源码**：疑似源码缺陷只标红交还用户。
-- **只 APPEND 不改已有**：修改根 CMakeLists.txt 和测试 CMake 时只追加新行。
+- **只 APPEND 不改已有**：修改根 CMakeLists.txt 和测试 CMake 时只追加新行（测试用例源码的注释/清理不受此约束）。
 - **不问用户确认**：直接执行。
 
 ## 触发条件
@@ -72,8 +72,8 @@ Mode 1 **不生成测试代码、不编译、不运行**，只建表。
 1. **对账（reconcile）**：`Read` `references/reconcile-logic.md` → 若 inventory 不存在走首次运行（步骤 3 会触发 Mode 1）；若 `base_sha` 已漂移按差异路由（新增/签名变更/删除/分支切换）后再进入下方主流程
 2. **过时测试清理**：若 diff 报告含 `removed` 方法 → `Read` `references/stale-test-cleanup.md` → 主动注释/删除引用已删方法的用例 + 连带清理 INSTANTIATE_TEST_SUITE_P + 更新 usecase_count（**不等编译报错**）
 3. **`Read`** `references/environment-check.md` → MCP 门禁
-3. 检查 `{test_dir}/.ut-inventory.json` → 不存在则先执行 Mode 1
-4. **`Read`** `references/test-writer.md` → 逐类闭环 → 编译验证 → 更新 `usecase_count`
+4. 检查 `{test_dir}/.ut-inventory.json` → 不存在则先执行 Mode 1
+5. **`Read`** `references/test-writer.md` → 逐类闭环 → 编译验证 → 更新 `usecase_count`
 
 Mode 2 的子步骤按需读取：
 
@@ -81,12 +81,12 @@ Mode 2 的子步骤按需读取：
 |--------|------|--------|
 | 过时测试清理 | `references/stale-test-cleanup.md` | diff 报告含 removed 方法时 |
 | 框架搭建 | `references/framework-builder.md` | `{test_dir}/` 不存在时 |
-| 类准备 | `references/inventory.md` | 方法分级入表，`test_writer` §4 从中提取待测类 |
-| 依赖追踪 | `references/dependency-tracer.md` | 读 inventory 的 is_gui、MCP trace_path 出向、stub 决策、CMake 目录 |
+| 类准备 | `references/inventory.md` | 方法分级入表，`test_writer` §4 从中提取待测类（schema 见 `references/inventory-schema.md`） |
+| 依赖追踪 | `references/dependency-tracer.md` | 读 inventory 的 is_gui、MCP trace_path 出向、stub 决策、CMake 目录（MCP 详见 `references/codebase-memory-guide.md`） |
 | 测试代码生成 | `references/test-code-gen.md` | 逐类闭环第 2 步 |
 | 编译验证 | `references/build-verifier.md` | 逐类闭环第 3 步 |
 | 自检 | `references/self-checker.md` | 逐类闭环第 4 步 |
-| 增量补全 | `references/incremental-updater.md` | 覆盖率缺口时 |
+| 增量补全 | `references/incremental-updater.md` | 覆盖率缺口时（增量逻辑见 `references/incremental-inventory.md`） |
 | 失败修复 | `references/failure-repairer.md` | 编译/运行失败时 |
 | 代码提交 | `references/code-committer.md` | 批次自检通过后 |
 
@@ -134,7 +134,7 @@ Mode 5 **不跑测试、不编译、不改测试代码、不改源码**（与 Mo
 5. **内置 stub-ext** —— 从 `templates/stub-ext/` 复制，不从网络下载
 6. **逐类闭环** —— 每个类独立走完 依赖追踪→生成→验证→自检；单类失败记录跳过，不阻塞其他类
 7. **不修源码** —— 疑似源码缺陷只标红交还用户；标红即落盘到 `.ut-defects.json`（Mode 5）供导出（Mode 4 例外：受源码安全四铁律约束，退出 `git diff` 必为空，详见 `references/mutation-testing.md`）
-8. **只 APPEND 不改已有** —— 不注释/删除/修改已有 CMake 代码
+8. **只 APPEND 不改已有** —— 不注释/删除/修改已有项目构建 CMake 代码（Iron Law #8 不约束测试用例源码；stale-test-cleanup 注释已删方法的测试用例属于正当清理）
 9. **批次提交** —— 只 commit，不 push
 10. **全局闭环迭代上限** —— 同一类最多循环 3 轮；3 轮后仍未通过，标记 `failed` + `max_iterations_exceeded` 并跳过
 11. **usecase_count 实时更新** —— 每类编译通过后立即更新 `.ut-inventory.json` 的 `usecase_count` 字段
