@@ -30,26 +30,26 @@ from datetime import datetime, timezone
 # ── 配置 ──
 
 SCOPE_RULES = [
-    {"pattern": "3rdparty/**",   "testable": False, "reason": "第三方库"},
-    {"pattern": "3rd_party/**",  "testable": False, "reason": "第三方库"},
-    {"pattern": "third_party/**","testable": False, "reason": "第三方库"},
-    {"pattern": "**/external/**", "testable": False, "reason": "第三方库(external)"},
-    {"pattern": "**/vendor/**",   "testable": False, "reason": "第三方库(vendor)"},
-    {"pattern": "**/moc_*.cpp",  "testable": False, "reason": "MOC 生成"},
-    {"pattern": "**/moc_*.h",    "testable": False, "reason": "MOC 生成"},
-    {"pattern": "**/ui_*.h",     "testable": False, "reason": "UI 生成"},
-    {"pattern": "**/ui_*.cpp",   "testable": False, "reason": "UI 生成"},
-    {"pattern": "**/.pb.",       "testable": False, "reason": "Protobuf 生成"},
-    {"pattern": "**/generated/**","testable": False, "reason": "生成代码"},
-    {"pattern": "tests/**",      "testable": False, "reason": "测试代码本身"},
-    {"pattern": "autotests/**",  "testable": False, "reason": "测试代码本身"},
-    {"pattern": "test/**",       "testable": False, "reason": "测试代码本身"},
+    {"pattern": "3rdparty/**",    "scope": "exempt", "reason": "第三方库"},
+    {"pattern": "3rd_party/**",   "scope": "exempt", "reason": "第三方库"},
+    {"pattern": "third_party/**", "scope": "exempt", "reason": "第三方库"},
+    {"pattern": "**/external/**", "scope": "exempt", "reason": "第三方库(external)"},
+    {"pattern": "**/vendor/**",   "scope": "exempt", "reason": "第三方库(vendor)"},
+    {"pattern": "**/moc_*.cpp",   "scope": "exempt", "reason": "MOC 生成"},
+    {"pattern": "**/moc_*.h",     "scope": "exempt", "reason": "MOC 生成"},
+    {"pattern": "**/ui_*.h",      "scope": "exempt", "reason": "UI 生成"},
+    {"pattern": "**/ui_*.cpp",    "scope": "exempt", "reason": "UI 生成"},
+    {"pattern": "**/.pb.",        "scope": "exempt", "reason": "Protobuf 生成"},
+    {"pattern": "**/generated/**","scope": "exempt", "reason": "生成代码"},
+    {"pattern": "tests/**",       "scope": "exempt", "reason": "测试代码本身"},
+    {"pattern": "autotests/**",   "scope": "exempt", "reason": "测试代码本身"},
+    {"pattern": "test/**",        "scope": "exempt", "reason": "测试代码本身"},
 ]
 
 GATE_THRESHOLDS = {
     "high": {"line": 90, "branch": 80, "function": 100},
-    "mid":  {"line": 60, "branch": None, "function": 100},
-    "low":  {"line": 60, "branch": None, "function": 100},
+    "mid":  {"line": 60, "branch": 0, "function": 100},
+    "low":  {"line": 60, "branch": 0, "function": 100},
 }
 
 DESTRUCTIVE_PATTERN = re.compile(
@@ -112,15 +112,15 @@ def scope_match(file_path: str | None, scope_rules: list) -> tuple[bool, str | N
     for rule in scope_rules:
         regex = glob_to_regex(rule["pattern"])
         if re.match(regex, file_path):
-            if not rule.get("testable", True):
+            if rule.get("scope") == "exempt":
                 return (False, f"scope:{rule['pattern']}")
     return (True, None)
 
 
 # ── 评分 ──
 
-def score_method(name: str, factors: list[str]) -> tuple[str, str]:
-    """Return (level, source) using weighted scoring.
+def score_method(name: str, factors: list[str]) -> tuple[str, str, int]:
+    """Return (level, source, score) using weighted scoring.
     
     Score ≥ 3 → high, ≥ 1 → mid, < 1 → low.
     Key: in_degree alone only contributes +1 (mid-booster), needs complexity ≥ 10
@@ -154,11 +154,11 @@ def score_method(name: str, factors: list[str]) -> tuple[str, str]:
         elif f == "operator": score -= 1
 
     if score >= 3:
-        return ("high", "auto")
+        return ("high", "auto", score)
     elif score >= 1 or has_suggested:
-        return ("mid", "suggested" if has_suggested and score < 1 else "auto")
+        return ("mid", "suggested" if has_suggested and score < 1 else "auto", score)
     else:
-        return ("low", "auto")
+        return ("low", "auto", score)
 
 
 # ── MCP 数据载入（从 stdin 读取 JSON dump） ──
@@ -383,10 +383,11 @@ def build_inventory(mcp_data: dict, project_name: str, base_sha: str) -> dict:
                 factors.append(f"name_pattern:{name}")
 
             # 评分
-            level, source = score_method(name, factors)
+            level, source, score = score_method(name, factors)
         else:
-            level = "exempt"   # 不可测试方法标记为 exempt 而非 null
+            level = None        # 不可测试：level 为 null（由 testable=false 表达豁免）
             source = "auto"
+            score = 0
 
         # review_status：pending 需人工复核，auto 表示自动分级无需复核
         review_status = "auto"
@@ -398,18 +399,22 @@ def build_inventory(mcp_data: dict, project_name: str, base_sha: str) -> dict:
             review_status = "exempt"     # 不可测试：豁免复核
 
         entry = {
-            "qn": qn,
+            # schema 必需字段（与 inventory-schema.md 对齐）
+            "qualified_name": qn,
             "name": name,
-            "signature": signature[:200] if signature else "",
-            "file": file_path,
             "class_qn": class_qn,
-            "testable": testable,
+            "file_path": file_path,
+            "access": method.get("access", "public"),
             "level": level,
+            "score": score,
             "factors": factors,
             "source": source,
+            "testable": testable,
+            "usecase_count": 0,  # 模式一不扫描测试文件，默认 0
+            # 实现扩展字段（schema 未定义，供编辑器/调试用，见 schema "扩展字段" 小节）
+            "signature": signature[:200] if signature else "",
             "exempt_reason": exempt_reason,
             "review_status": review_status,
-            "usecase_count": 0,  # 模式一不扫描测试文件，默认 0
             "node_type": method.get("_node_type", "Method"),  # Method or Function
         }
         if auto_reason:
@@ -417,7 +422,14 @@ def build_inventory(mcp_data: dict, project_name: str, base_sha: str) -> dict:
         inventory_methods.append(entry)
 
         if review_status == "pending":
-            review_queue.append({**entry, "status": "pending"})
+            review_queue.append({
+                "qualified_name": qn,
+                "name": name,
+                "class_qn": class_qn,
+                "suggested_level": "mid",
+                "reason": auto_reason or f"方法名含 {name}",
+                "review_status": "pending",
+            })
 
         # 统计
         if testable:
@@ -469,7 +481,7 @@ def generate_summary(inventory: dict) -> str:
             continue
         cls = m["class_qn"] or "(free functions)"
         if cls not in class_stats:
-            class_stats[cls] = {"high": 0, "mid": 0, "low": 0, "total": 0, "file": m["file"]}
+            class_stats[cls] = {"high": 0, "mid": 0, "low": 0, "total": 0, "file": m["file_path"]}
         level = m["level"] or "low"
         class_stats[cls][level] += 1
         class_stats[cls]["total"] += 1
@@ -520,8 +532,8 @@ def generate_summary(inventory: dict) -> str:
         lines.append(f"## 待复核条目 ({len(rq)})")
         lines.append(f"")
         for item in rq[:30]:
-            lines.append(f"- `{item['name']}` ({item['class_qn'] or '-'}, {item['file'] or '-'}): "
-                         f"{item.get('auto_reason', '')} → 建议 high，默认 mid")
+            lines.append(f"- `{item['name']}` ({item['class_qn'] or '-'}): "
+                         f"{item.get('reason', '')} → 建议 high，默认 mid")
 
     return "\n".join(lines)
 

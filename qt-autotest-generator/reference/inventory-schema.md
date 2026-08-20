@@ -15,7 +15,7 @@
     "low": { "line": 60, "branch": 0, "function": 100 }
   },
   "scope_rules": [
-    { "pattern": "3rdparty/**", "scope": "exempt" },
+    { "pattern": "3rdparty/**", "scope": "exempt", "reason": "第三方库" },
     { "pattern": "moc_*", "scope": "exempt" },
     { "pattern": "ui_*", "scope": "exempt" },
     { "pattern": "*.pb.*", "scope": "exempt" }
@@ -92,7 +92,7 @@
 | `project` | string | 图谱中的项目标识 |
 | `base_sha` | string | 生成时的 Git base SHA（对账用） |
 | `gate_thresholds` | object | 三级覆盖率门禁阈值 |
-| `scope_rules` | array | 文件模式规则（exempt/core/normal） |
+| `scope_rules` | array | 文件模式规则，每条 `{pattern, scope, reason?}`：`scope` 为 `"exempt"`/`"normal"`；`reason` 可选，供人读 |
 | `classes` | array | 类级画像：**只列 GUI 类**（`is_gui=true`），不在列表中的类隐含 `is_gui=false` |
 | `methods` | array | 全量方法列表 |
 | `review_queue` | array | 待人工复核条目 |
@@ -138,6 +138,18 @@
 | `source` | string | `"auto"` / `"suggested"` / `"manual"` |
 | `testable` | bool | 是否可测试（scope=exempt 时为 false） |
 | `usecase_count` | int | 已有测试用例数（Mode 1 初始为 0，Mode 2 编译通过后更新） |
+
+#### 扩展字段（实现产出，非 schema 强制；供编辑器/调试用）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `signature` | string | 方法签名（截断 200 字符） |
+| `exempt_reason` | string \| null | 豁免原因（如 `scope:3rdparty/**`） |
+| `review_status` | string | `"auto"` / `"pending"` / `"confirmed"` / `"exempt"`；方法级复核状态（与 review_queue 条目互补） |
+| `node_type` | string | `"Method"` / `"Function"`（自由函数） |
+| `auto_reason` | string | suggested 条目的自动建议原因（仅 `source=suggested` 时存在） |
+
+> 以上扩展字段由 `scan_inventory.py` 产出，Mode 2 消费方可忽略；`ut-inventory-editor` 依赖它们做展示。
 
 ### review_queue 条目
 
