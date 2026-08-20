@@ -140,6 +140,12 @@ button{font-family:inherit}
 .class-method .mname{font-family:'JetBrains Mono',monospace;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:1024px){.app-main{grid-template-columns:1fr;grid-template-rows:auto 1fr auto}.panel{max-height:45vh}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+.export-menu-wrap{position:relative;display:inline-flex}
+.export-dropdown{position:absolute;top:100%;right:0;margin-top:4px;background:var(--bg-elev);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.4);padding:4px;min-width:160px;z-index:50;display:none}
+.export-dropdown.show{display:block}
+.export-dropdown-item{display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:6px;cursor:pointer;font-size:calc(var(--fs)*0.857);transition:background .12s;white-space:nowrap}
+.export-dropdown-item:hover{background:var(--bg-hover)}
+.export-dropdown-item svg{width:16px;height:16px;flex-shrink:0}
 .hidden{display:none!important}
 </style>
 </head>
@@ -172,8 +178,14 @@ button{font-family:inherit}
 <button class="btn btn-sm btn-ghost fs-btn" data-fs="large" style="padding:4px 6px;font-size:calc(var(--fs)*0.786)">L</button>
 </div>
 <button id="btn-open" class="btn btn-sm" title="打开"><i data-lucide="folder-open" class="icon"></i><span class="label-text">打开</span></button>
-<button id="btn-save" class="btn btn-sm btn-primary" title="保存" disabled><i data-lucide="save" class="icon"></i><span class="label-text">保存</span></button>
-<button id="btn-export" class="btn btn-sm" title="导出CSV"><i data-lucide="download" class="icon"></i><span class="label-text">CSV</span></button>
+<button id="btn-save" class="btn btn-sm btn-primary" title="保存 (Ctrl+S)" disabled><i data-lucide="save" class="icon"></i><span class="label-text">保存</span></button>
+<div class="export-menu-wrap">
+<button id="btn-export-menu" class="btn btn-sm" title="导出"><i data-lucide="download" class="icon"></i><span class="label-text">导出</span><i data-lucide="chevron-down" class="icon" style="width:14px;height:14px"></i></button>
+<div class="export-dropdown" id="export-dropdown">
+<div class="export-dropdown-item" data-export="csv"><i data-lucide="file-spreadsheet" style="width:16px;height:16px"></i> 导出 CSV</div>
+<div class="export-dropdown-item" data-export="json"><i data-lucide="braces" style="width:16px;height:16px"></i> 导出 JSON</div>
+</div>
+</div>
 </div>
 </div>
 </header>
@@ -295,7 +307,7 @@ const SAMPLE_DATA={project:"deepin-calculator",base_sha:"abc1234",scan_stats:{to
 ]};
 
 // ── State ──
-const S={inventory:null,methods:[],modified:new Map(),undoStack:[],filters:{levels:new Set(['high','mid','low']),nodeTypes:new Set(['Method','Function']),classQn:null,search:'',factor:null},sort:{col:'level',dir:'desc'},selected:new Set(),activeQn:null,reviewMode:false,levelPopupQn:null,virtual:{rendered:0,sentinel:null,observer:null}};
+const S={inventory:null,methods:[],modified:new Map(),undoStack:[],fileHandle:null,fileName:null,filters:{levels:new Set(['high','mid','low']),nodeTypes:new Set(['Method','Function']),classQn:null,search:'',factor:null},sort:{col:'level',dir:'desc'},selected:new Set(),activeQn:null,reviewMode:false,levelPopupQn:null,virtual:{rendered:0,sentinel:null,observer:null}};
 
 // ── Factor scoring ──
 function factorScore(f){if(f==='dbus_slot'||f==='q_invokable'||f==='plugin_export')return 3;if(f.startsWith('complexity:')){const v=+f.split(':')[1];return v>=20?3:v>=10?2:v>=5?1:0}if(f.startsWith('linear_scan'))return 1;if(f.startsWith('in_degree'))return 1;if(f==='concurrent_class')return 1;if(f==='destructor'||f==='operator')return -1;if(f.startsWith('name_pattern'))return 0;return 0}
@@ -309,7 +321,7 @@ const $=s=>document.querySelector(s),$$=s=>document.querySelectorAll(s);
 function toast(msg,type=''){const c=$('#toast-container'),t=document.createElement('div');t.className='toast '+type;t.textContent=msg;c.appendChild(t);setTimeout(()=>{t.style.opacity='0';t.style.transition='opacity .3s';setTimeout(()=>t.remove(),300)},3000)}
 
 // ── Data ──
-function loadInventory(data){S.inventory=JSON.parse(JSON.stringify(data));S.methods=(data.methods||[]).map(m=>({...m,qn:m.qualified_name||m.qn,file:m.file_path||m.file,level:m.level||'exempt'}));if(S.inventory.review_queue)S.inventory.review_queue=S.inventory.review_queue.map(r=>({...r,qn:r.qualified_name||r.qn,status:r.review_status||r.status}));S.modified.clear();S.undoStack=[];S.selected.clear();S.activeQn=null;S.reviewMode=false;S.filters.levels=new Set(['high','mid','low']);S.filters.classQn=null;S.filters.search='';S.filters.nodeTypes=new Set(['Method','Function']);updateAll();$('#project-name').textContent=data.project||'';$('#status-text').textContent=`已加载 ${S.methods.length} 个方法`;$('#btn-save').disabled=true}
+function loadInventory(data){S.inventory=JSON.parse(JSON.stringify(data));S.methods=(data.methods||[]).map(m=>({...m,qn:m.qualified_name||m.qn,file:m.file_path||m.file,level:m.level||'exempt'}));if(S.inventory.review_queue)S.inventory.review_queue=S.inventory.review_queue.map(r=>({...r,qn:r.qualified_name||r.qn,status:r.review_status||r.status}));S.modified.clear();S.undoStack=[];S.selected.clear();S.activeQn=null;S.reviewMode=false;S.filters.levels=new Set(['high','mid','low']);S.filters.classQn=null;S.filters.search='';S.filters.nodeTypes=new Set(['Method','Function']);updateAll();$('#project-name').textContent=data.project||'';$('#status-text').textContent=S.fileName?`${S.fileName} — ${S.methods.length} 个方法`:`已加载 ${S.methods.length} 个方法`;$('#btn-save').disabled=true}
 function recalcStats(){const m=S.methods;const st={total:m.length,testable:m.filter(x=>x.testable).length,high:m.filter(x=>x.level==='high').length,mid:m.filter(x=>x.level==='mid').length,low:m.filter(x=>x.level==='low').length,exempt:m.filter(x=>x.level==='exempt').length,review_pending:m.filter(x=>x.review_status==='pending').length};if(S.inventory)S.inventory.scan_stats=st;return st}
 
 // ── Filtering & Sorting ──
@@ -355,17 +367,25 @@ function showExemptModal(qn,bulk=false){exemptModalQn=qn;bulkExempt=bulk;$('#exe
 function hideExemptModal(){exemptModalQn=null;bulkExempt=false;$('#exempt-modal').classList.add('hidden')}
 
 // ── Save / Export ──
-function saveInventory(){if(!S.inventory)return;S.inventory.methods=S.methods.map(({qn,file,level,...rest})=>({...rest,qualified_name:qn,file_path:file,level:level==='exempt'?null:level}));S.inventory.review_queue=(S.inventory.review_queue||[]).map(({qn,status,...rest})=>({...rest,qualified_name:qn,review_status:status}));recalcStats();const j=JSON.stringify(S.inventory,null,2),b=new Blob([j],{type:'application/json'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=(S.inventory.project||'inventory')+'.ut-inventory.json';a.click();URL.revokeObjectURL(u);S.modified.clear();S.undoStack=[];updateStats();toast('已保存 '+S.methods.length+' 个方法')}
+async function openFile(){if(window.showOpenFilePicker){try{const[handle]=await window.showOpenFilePicker({types:[{description:'UT Inventory JSON',accept:{'application/json':['.json']}}],multiple:false});S.fileHandle=handle;S.fileName=handle.name;const file=await handle.getFile();const text=await file.text();try{loadInventory(JSON.parse(text));toast('已加载 '+S.methods.length+' 个方法')}catch(err){toast('加载失败: '+err.message,'err');S.fileHandle=null;S.fileName=null}}catch(err){if(err.name!=='AbortError')toast('打开失败: '+err.message,'err')}return}$('#file-input').click()}
+
+function syncInventoryData(){if(!S.inventory)return'';S.inventory.methods=S.methods.map(({qn,file,level,...rest})=>({...rest,qualified_name:qn,file_path:file,level:level==='exempt'?null:level}));S.inventory.review_queue=(S.inventory.review_queue||[]).map(({qn,status,...rest})=>({...rest,qualified_name:qn,review_status:status}));recalcStats();return JSON.stringify(S.inventory,null,2)}
+
+async function saveInventory(){if(!S.inventory)return;const j=syncInventoryData();if(!j)return;if(S.fileHandle){try{const w=await S.fileHandle.createWritable();await w.write(j);await w.close();S.modified.clear();S.undoStack=[];updateStats();toast('✅ 已保存到 '+S.fileName+' ('+S.methods.length+' 个方法)');return}catch(err){toast('保存失败: '+err.message,'err');return}}if(window.showSaveFilePicker){try{const handle=await window.showSaveFilePicker({suggestedName:(S.inventory.project||'inventory')+'.ut-inventory.json',types:[{description:'UT Inventory JSON',accept:{'application/json':['.json']}}]});S.fileHandle=handle;S.fileName=handle.name;const w=await handle.createWritable();await w.write(j);await w.close();S.modified.clear();S.undoStack=[];updateStats();toast('✅ 已保存到 '+S.fileName+' ('+S.methods.length+' 个方法)');return}catch(err){if(err.name==='AbortError')return}}const b=new Blob([j],{type:'application/json'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=(S.inventory.project||'inventory')+'.ut-inventory.json';a.click();URL.revokeObjectURL(u);S.modified.clear();S.undoStack=[];updateStats();toast('已下载 '+S.methods.length+' 个方法')}
+
+function exportJSON(){if(!S.inventory)return;const j=syncInventoryData();if(!j)return;const b=new Blob([j],{type:'application/json'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=(S.inventory.project||'inventory')+'.ut-inventory.json';a.click();URL.revokeObjectURL(u);toast('已导出 JSON ('+S.methods.length+' 个方法)')}
+
 function exportCSV(){const l=getFiltered(),h='qualified_name,name,level,testable,class_qn,file_path,factors,source,review_status,usecase_count,node_type\n',r=l.map(m=>`"${m.qn}","${m.name}","${m.level}",${m.testable},"${m.class_qn||''}","${m.file}","${(m.factors||[]).join(';')}","${m.source}","${m.review_status}",${m.usecase_count??0},"${m.node_type||'Method'}"`).join('\n'),b=new Blob([h+r],{type:'text/csv'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=(S.inventory?.project||'inventory')+'_export.csv';a.click();URL.revokeObjectURL(u);toast('已导出 '+l.length+' 条')}
 
 // ── Events ──
 function initEvents(){
 $('#btn-theme').onclick=()=>{const c=document.documentElement.getAttribute('data-theme'),n=c==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',n);localStorage.setItem('utie-theme',n)};
 $$('.fs-btn').forEach(btn=>{btn.onclick=()=>{const fs=btn.dataset.fs;document.documentElement.setAttribute('data-fs',fs);localStorage.setItem('utie-fs',fs);$$('.fs-btn').forEach(b=>{b.classList.toggle('active',b.dataset.fs===fs);b.classList.toggle('btn-ghost',b.dataset.fs!==fs)});toast('字体: '+{small:'小',medium:'中',large:'大'}[fs])}});
-$('#btn-open').onclick=()=>$('#file-input').click();
-$('#file-input').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{loadInventory(JSON.parse(ev.target.result));toast('已加载 '+S.methods.length+' 个方法')}catch(err){toast('加载失败: '+err.message,'err')}};r.readAsText(f);e.target.value=''};
+$('#btn-open').onclick=openFile;
+$('#file-input').onchange=e=>{const f=e.target.files[0];if(!f)return;S.fileHandle=null;S.fileName=f.name;const r=new FileReader();r.onload=ev=>{try{loadInventory(JSON.parse(ev.target.result));toast('已加载 '+S.methods.length+' 个方法')}catch(err){toast('加载失败: '+err.message,'err')}};r.readAsText(f);e.target.value=''};
 $('#btn-save').onclick=saveInventory;
-$('#btn-export').onclick=exportCSV;
+$('#btn-export-menu').onclick=e=>{e.stopPropagation();$('#export-dropdown').classList.toggle('show')};
+$$('[data-export]').forEach(item=>{item.onclick=e=>{e.stopPropagation();$('#export-dropdown').classList.remove('show');if(item.dataset.export==='csv')exportCSV();else if(item.dataset.export==='json')exportJSON()}});
 let st;$('#search-input').oninput=e=>{clearTimeout(st);st=setTimeout(()=>{S.filters.search=e.target.value.trim();updateTable()},120)};
 $$('[data-level]').forEach(cb=>{cb.onchange=()=>{cb.checked?S.filters.levels.add(cb.dataset.level):S.filters.levels.delete(cb.dataset.level);updateTable()}});
 $$('[data-nodetype]').forEach(cb=>{cb.onchange=()=>{cb.checked?S.filters.nodeTypes.add(cb.dataset.nodetype):S.filters.nodeTypes.delete(cb.dataset.nodetype);updateTable()}});
@@ -383,9 +403,9 @@ $('#stat-factor').onclick=()=>{S.filters.factor=null;updateTable();toast('已清
 // Keyboard shortcuts
 document.addEventListener('keydown',e=>{if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;if(e.ctrlKey&&e.key==='z'){e.preventDefault();undo();return}if(e.ctrlKey&&e.key==='s'){e.preventDefault();saveInventory();return}if(!S.activeQn)return;const m=S.methods.find(x=>x.qn===S.activeQn);if(!m)return;if(e.key==='1')setLevel(S.activeQn,'high');else if(e.key==='2')setLevel(S.activeQn,'mid');else if(e.key==='3')setLevel(S.activeQn,'low');else if(e.key==='4')showExemptModal(S.activeQn)});
 // Close popup on outside click
-document.addEventListener('click',e=>{if(!e.target.closest('.level-popup')&&!e.target.closest('[data-level-click]'))hideLevelPopup()});
+document.addEventListener('click',e=>{if(!e.target.closest('.level-popup')&&!e.target.closest('[data-level-click]'))hideLevelPopup();if(!e.target.closest('.export-menu-wrap'))$('#export-dropdown').classList.remove('show')});
 // Drag & drop
-const body=document.body;let dragCount=0;body.addEventListener('dragenter',e=>{e.preventDefault();dragCount++;$('#drop-overlay').classList.add('show')});body.addEventListener('dragleave',e=>{e.preventDefault();dragCount--;if(dragCount<=0){dragCount=0;$('#drop-overlay').classList.remove('show')}});body.addEventListener('dragover',e=>e.preventDefault());body.addEventListener('drop',e=>{e.preventDefault();dragCount=0;$('#drop-overlay').classList.remove('show');const f=e.dataTransfer.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{loadInventory(JSON.parse(ev.target.result));toast('已加载 '+S.methods.length+' 个方法')}catch(err){toast('加载失败: '+err.message,'err')}};r.readAsText(f)});
+const body=document.body;let dragCount=0;body.addEventListener('dragenter',e=>{e.preventDefault();dragCount++;$('#drop-overlay').classList.add('show')});body.addEventListener('dragleave',e=>{e.preventDefault();dragCount--;if(dragCount<=0){dragCount=0;$('#drop-overlay').classList.remove('show')}});body.addEventListener('dragover',e=>e.preventDefault());body.addEventListener('drop',e=>{e.preventDefault();dragCount=0;$('#drop-overlay').classList.remove('show');const f=e.dataTransfer.files[0];if(!f)return;S.fileHandle=null;S.fileName=f.name;const r=new FileReader();r.onload=ev=>{try{loadInventory(JSON.parse(ev.target.result));toast('已加载 '+S.methods.length+' 个方法')}catch(err){toast('加载失败: '+err.message,'err')}};r.readAsText(f)});
 // beforeunload
 window.addEventListener('beforeunload',e=>{if(S.modified.size>0){e.preventDefault();e.returnValue=''}});
 }
