@@ -41,6 +41,14 @@ fetch-mcp-data.py — 端到端：MCP 知识图谱 → .ut-inventory.json
     --project home-uos-service-codebase-repos-deepin-calculator \\
     --output /tmp/deepin-calculator/.ut-inventory.json
 
+  # 多目录项目（源码 + 插件，分别指定或逗号分隔，结果自动去重合并）
+  python3 fetch-mcp-data.py \\
+    --project home-uos-service-codebase-repos-xxx \\
+    --file-pattern "src/**" --file-pattern "plugins/**" \\
+    --output /tmp/xxx/.ut-inventory.json
+  # 等价写法：
+  #   --file-pattern "src/**,plugins/**"
+
 依赖: scan-inventory.py（同目录，提供 build_inventory() 评分逻辑）
 """
 
@@ -164,64 +172,95 @@ class MCPClient:
 
 # ── 数据采集步骤 ──
 
-def collect_methods(client, project, file_pattern=None, limit=2000):
+def collect_methods(client, project, file_patterns=None, limit=2000):
     """Step 1: Paginated search_graph to collect all Method + Function nodes.
 
+    file_patterns 支持多个目录（项目含多个源码目录 / 插件目录时使用）：
+      - 传入 list 时，逐个 pattern 分页拉取后按 qualified_name 去重合并
+      - None / 空 list 时全量查询（不过滤）
     Function nodes include free C/C++ functions (main, helpers, etc.).
     Some Function entries are noise (macros, using-declarations, misclassified
     constructors) — filtered later by scan-inventory.py.
     """
+    # 兼容单个字符串传入
+    if isinstance(file_patterns, str):
+        file_patterns = [file_patterns]
+    # None / 空 → 单轮全量查询
+    patterns = file_patterns or [None]
+
     all_methods = []
     all_functions = []
-    offset = 0
-    page = 0
-    total = 0
-
-    args_base = {"project": project, "limit": limit, "offset": 0}
-    if file_pattern:
-        args_base["file_pattern"] = file_pattern
+    seen_method_qns = set()
+    seen_function_qns = set()
 
     print(f"\n📊 [1/5] Collecting Method + Function nodes...")
-    if file_pattern:
-        print(f"   file_pattern: {file_pattern}")
+    if any(patterns):
+        print(f"   file_patterns: {[p for p in patterns if p]}")
 
-    # 1A. Method nodes (class methods)
-    args = {**args_base, "label": "Method"}
-    while True:
-        page += 1
-        args["offset"] = offset
-        data = client.call_tool("search_graph", args)
-        results = data.get("results", [])
-        total = data.get("total", 0)
-        has_more = data.get("has_more", False)
+    for pattern in patterns:
+        args_base = {"project": project, "limit": limit, "offset": 0}
+        if pattern:
+            args_base["file_pattern"] = pattern
+            print(f"   ── pattern: {pattern}")
 
-        all_methods.extend(results)
-        if page == 1:
-            print(f"   Method: total={total}")
+        # 1A. Method nodes (class methods)
+        offset = 0
+        page = 0
+        args = {**args_base, "label": "Method"}
+        while True:
+            page += 1
+            args["offset"] = offset
+            data = client.call_tool("search_graph", args)
+            results = data.get("results", [])
+            total = data.get("total", 0)
+            has_more = data.get("has_more", False)
 
-        if not has_more or not results:
-            break
-        offset += limit
+            new = 0
+            for r in results:
+                qn = r.get("qualified_name")
+                # 无 qn 的噪声节点直接保留；有 qn 的按 qn 去重
+                if qn and qn in seen_method_qns:
+                    continue
+                if qn:
+                    seen_method_qns.add(qn)
+                all_methods.append(r)
+                new += 1
 
-    # 1B. Function nodes (free functions)
-    offset = 0
-    page = 0
-    args = {**args_base, "label": "Function"}
-    while True:
-        page += 1
-        args["offset"] = offset
-        data = client.call_tool("search_graph", args)
-        results = data.get("results", [])
-        total = data.get("total", 0)
-        has_more = data.get("has_more", False)
+            if page == 1:
+                print(f"   Method: total={total}, +{new} new")
 
-        all_functions.extend(results)
-        if page == 1:
-            print(f"   Function: total={total}")
+            if not has_more or not results:
+                break
+            offset += limit
 
-        if not has_more or not results:
-            break
-        offset += limit
+        # 1B. Function nodes (free functions)
+        offset = 0
+        page = 0
+        args = {**args_base, "label": "Function"}
+        while True:
+            page += 1
+            args["offset"] = offset
+            data = client.call_tool("search_graph", args)
+            results = data.get("results", [])
+            total = data.get("total", 0)
+            has_more = data.get("has_more", False)
+
+            new = 0
+            for r in results:
+                qn = r.get("qualified_name")
+                if qn and qn in seen_function_qns:
+                    continue
+                if qn:
+                    seen_function_qns.add(qn)
+                all_functions.append(r)
+                new += 1
+
+            if page == 1:
+                print(f"   Function: total={total}, +{new} new")
+
+            if not has_more or not results:
+                break
+            offset += limit
 
     print(f"   ✅ {len(all_methods)} methods + {len(all_functions)} functions collected")
     return all_methods, all_functions
@@ -463,6 +502,28 @@ def _extract_class_from_qn(qn):
     return parts[-1] if parts else None
 
 
+def resolve_base_sha(client, project, explicit=None):
+    """解析 base_sha：显式传入优先，否则从图谱 index_status 取 git.head_sha。
+
+    base_sha 语义为「本次 inventory 数据所基于的图谱版本」，应与图谱索引时
+    记录的 git HEAD 一致，而非本地工作区 HEAD（后者可能比图谱更新）。
+    用图谱版本才能让 reconcile 正确检测「图谱落后于代码」的情形。
+    """
+    if explicit:
+        return explicit
+    try:
+        data = client.call_tool("index_status", {"project": project})
+        git = data.get("git", {}) if isinstance(data, dict) else {}
+        sha = git.get("head_sha") or git.get("base_sha")
+        if sha:
+            print(f"   base_sha (from graph): {sha}")
+            return sha
+        print(f"   ⚠️  index_status 未返回 git.head_sha，base_sha 回退 unknown")
+    except Exception as e:
+        print(f"   ⚠️  获取 index_status 失败，base_sha 回退 unknown: {e}")
+    return "unknown"
+
+
 # ── 主流程 ──
 
 def build_mcp_dump(project, methods, functions, dbus_adaptor, dbus_interface,
@@ -691,14 +752,18 @@ def main():
     parser = argparse.ArgumentParser(
         description="端到端 MCP → .ut-inventory.json 函数重要性探测")
     parser.add_argument("--project", required=True, help="MCP 项目名")
-    parser.add_argument("--file-pattern", default=None,
-                        help="Glob 过滤源码目录 (e.g. 'src/**', 'reader/**')")
+    parser.add_argument("--file-pattern", action="append", default=None,
+                        help="Glob 过滤源码目录，可多次指定或用逗号分隔 "
+                             "(e.g. --file-pattern 'src/**' --file-pattern 'plugins/**', "
+                             "或 --file-pattern 'src/**,plugins/**')")
     parser.add_argument("--output", "-o", required=True,
                         help="输出 .ut-inventory.json 路径")
     parser.add_argument("--mcp-url", default=MCP_URL, help="MCP HTTP 端点")
     parser.add_argument("--limit", type=int, default=2000,
                         help="search_graph 分页大小 (default: 2000)")
-    parser.add_argument("--base-sha", default="unknown", help="Git base SHA")
+    parser.add_argument("--base-sha", default=None,
+                        help="Git base SHA；未指定时自动从图谱 index_status 的 "
+                             "git.head_sha 获取（推荐，与图谱版本一致）")
     parser.add_argument("--summary", action="store_true",
                         help="同时输出 Markdown 摘要")
     parser.add_argument("--keep-dump", action="store_true",
@@ -745,8 +810,21 @@ def main():
     print(f"✅ Session: {client.session_id[:12]}...")
     print(f"📋 Project: {args.project}")
 
+    # 解析 base_sha：显式传入优先，否则从图谱 index_status 取 git.head_sha
+    base_sha = resolve_base_sha(client, args.project, args.base_sha)
+
+    # 规整 --file-pattern：action="append" 产出 list，再拆逗号分隔、去空、去重
+    file_patterns = None
+    if args.file_pattern:
+        file_patterns = []
+        for fp in args.file_pattern:
+            for p in fp.split(","):
+                p = p.strip()
+                if p and p not in file_patterns:
+                    file_patterns.append(p)
+
     # Step 1-5: 采集数据
-    methods, functions = collect_methods(client, args.project, args.file_pattern, args.limit)
+    methods, functions = collect_methods(client, args.project, file_patterns, args.limit)
     dbus_adaptor, dbus_interface, concurrent, gui = collect_inheritance(client, args.project)
     dbus_slots = collect_dbus_slots(client, args.project, dbus_adaptor)
     q_invokables, q_plugins = collect_qt_macros(client, args.project)
@@ -756,6 +834,9 @@ def main():
     mcp_dump = build_mcp_dump(
         args.project, methods, functions, dbus_adaptor, dbus_interface,
         concurrent, gui, dbus_slots, q_invokables, q_plugins, p75)
+
+    # 提前创建输出目录，避免 --keep-dump / summary / diff 写入时目录不存在
+    os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
 
     if args.keep_dump:
         dump_path = os.path.join(
@@ -767,7 +848,7 @@ def main():
 
     # 调用 scan_inventory 评分
     print(f"\n🔧 Scoring methods via scan_inventory.build_inventory()...")
-    inventory = scan_inventory.build_inventory(mcp_dump, args.project, args.base_sha)
+    inventory = scan_inventory.build_inventory(mcp_dump, args.project, base_sha)
 
     # ── 增量模式：同步旧 inventory 的人工标记 ──
     old_sha_for_report = "unknown"
@@ -823,9 +904,6 @@ def main():
         # 计算 diff 供报告
         diff = compute_diff(old_inventory, inventory, applied, lost)
 
-    # 写 .ut-inventory.json
-    os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
-
     # 增量覆盖原文件时自动备份（inventory 纳入 git，.bak 不入）
     if args.incremental and os.path.isfile(args.output) \
             and os.path.abspath(args.output) == os.path.abspath(args.existing):
@@ -849,13 +927,14 @@ def main():
         report_path = args.output.replace(".json", "-diff.md")
         with open(report_path, "w", encoding="utf-8") as f:
             f.write(render_diff_report(diff, args.project,
-                                       old_sha_for_report, args.base_sha))
+                                       old_sha_for_report, base_sha))
         print(f"✅ 写入增量报告 {report_path}")
 
     # 打印概要
     stats = inventory["scan_stats"]
     print(f"\n{'=' * 60}")
     print(f"项目: {args.project}")
+    print(f"base_sha: {base_sha}")
     print(f"可测试: {stats['testable']}  不可测试: {stats['non_testable']}")
     print(f"high: {stats['high']}  mid: {stats['mid']}  low: {stats['low']}")
     print(f"待复核: {stats['review_pending']}")
