@@ -32,7 +32,7 @@ Mode 3 为**只读采集**，不生成/修改测试代码，适合「跑一下�
 
 Mode 4 为**可选增强**，在 Mode 2 产出的测试上注入变异体验证有效性，不改变 Mode 2 产物状态。
 
-Mode 5 为**可选增强**，在 Mode 2 闭环中实时持久化发现的源码缺陷（`.ut-defects.json`，不入 git），按需导出为标红清单。与 Mode 4 数据模型/脚本各自独立。
+Mode 5 为**可选增强**，在 Mode 2 闭环中实时持久化发现的源码缺陷（`.ut-defects.json`，不入 git），最终退出前导出为标红清单。与 Mode 4 数据模型/脚本各自独立。
 
 ## 环境与约定
 
@@ -88,7 +88,7 @@ Mode 2 的子步骤按需读取：
 | 失败修复 | `references/failure_repairer.md` | 编译/运行失败时 |
 | 代码提交 | `references/code_committer.md` | 批次自检通过后 |
 
-> 报告生成（`references/report_generator.md`）属 **Mode 3**，不在 Mode 2 内执行；全类提交完成即 Mode 2 结束。
+> 报告（Mode 3 覆盖率 + Mode 5 缺陷导出）在**全部批次提交完成、最终退出前**统一生成一次，不在每笔批次提交后触发（提交可能多笔）；详见 `references/test_writer.md` §9。Mode 3 / Mode 5 也可被用户单独触发。
 
 ---
 
@@ -116,7 +116,7 @@ Mode 4 **临时修改源码**（注入变异体），受"源码安全四铁律"�
 ## Mode 5 · 源码缺陷导出与统计（可选增强）
 
 1. **持久化**（Mode 2 闭环中实时发生）：`failure_repairer` 标红时调 `export-defects.py upsert` 落盘到 `{test_dir}/.ut-defects.json`；`build_verifier` 编译期确认源码缺陷提前预记录；通过验证时调 `mark-fixed` 闭环
-2. **按需导出**：`Read` `references/defect_exporter.md` → 调用 `scripts/export-defects.py export`
+2. **导出**：Mode 2 全部批次提交完成后，最终退出前统一导出（或用户单独触发）：`Read` `references/defect_exporter.md` → 调用 `scripts/export-defects.py export`
 3. 产出：`defects.json`（机读）+ `defects-summary.md`（人读标红清单，md 内链接跳转源码行）
 
 Mode 5 **不跑测试、不编译、不改测试代码、不改源码**（与 Mode 3 同构，纯导出统计）。`.ut-defects.json` 不入 git（本地存储，加 `.gitignore`）。颗粒度精确到**用例级**（`defect_id = {method_qn}#{Fixture}.{Case}`）。与 Mode 4 数据模型/脚本各自独立。详见 `references/defect-schema.md`。
@@ -190,7 +190,7 @@ Mode 5 **不跑测试、不编译、不改测试代码、不改源码**（与 Mo
 □ 每类编译通过后：已更新 .ut-inventory.json 的 usecase_count
 □ 批次提交：本批次自检通过后已执行代码提交（只 commit 不 push）
 □ 疑似源码缺陷：已标红，未自行修源码；已调 export-defects.py upsert 落盘到 .ut-defects.json
-□ 全类完成 + 覆盖达标：已批次提交（Mode 2 结束）；覆盖率报告属 Mode 3，按需单独触发
+□ 全部批次提交完成（Mode 2 结束）：最终退出前已统一生成一次 Mode 3 覆盖率报告 + Mode 5 缺陷导出（不在每笔提交后触发）
 □ Mode 4（可选）：已 Read references/mutation_testing.md；变异后 git diff --exit-code 通过；存活变异体清单已交付（回 Mode 2 补强）
 □ Mode 5（可选）：缺陷已落盘 .ut-defects.json（不入 git）；导出 defects-summary.md 标红清单
 ```

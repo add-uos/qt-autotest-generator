@@ -187,16 +187,12 @@ git commit -m "<提交信息>"
 
 ### 9. 后续流程
 
-- **提交成功**（有新提交类）：触发 **Mode 5** 缺陷导出到本地 `{report_dir}`（不跑测试，只读 `.ut-defects.json` 生成 `defects-summary.md`）；随后进入下一批次或报告生成阶段
-
-```bash
-python3 ${SKILL_DIR}/scripts/export-defects.py export \
-    --defects ${PROJECT_PATH}/${test_dir}/.ut-defects.json \
-    --report-dir ${PROJECT_PATH}/build-${test_dir} 2>/dev/null || true
-```
-
-- **无变更**（`no_changes`）：直接进入下一批次或报告生成阶段
+- **仍有下一批次**：返回 `test_writer` §5 逐类闭环处理下一批次；**不在此处生成报告**
+- **全部批次提交完成**（无下一批次）：进入**最终退出前报告阶段**（见 `test_writer` §9），统一生成一次 Mode 3 覆盖率报告 + Mode 5 缺陷导出
+- **无变更**（`no_changes`）：同上，无下一批次则进入最终退出前报告阶段
 - **提交失败**：根据原因决定重试或转人工（如 git 冲突、无 git 仓库、staged 误含源码且无法自动取消）
+
+> ⚠️ **不在每笔提交后触发报告**：整个 Mode 2 可能有多笔批次提交，覆盖率报告与缺陷导出统一在最终退出前执行一次，反映所有类、所有缺陷、累计覆盖率的完整状态。
 
 ## 关键约束
 
@@ -208,4 +204,4 @@ python3 ${SKILL_DIR}/scripts/export-defects.py export \
 - 不提交根 CMakeLists.txt 中的已有代码：只提交框架搭建阶段 APPEND 的 `BUILD_TESTS` 开关行
 - 提交信息含基线 commit、类列表、覆盖率摘要、累计统计
 - 提交信息格式沿用 `git-commit-workflow` 技能规范，不再单独维护正则校验
-- 报告生成阶段之后不再触发：测试代码已在各批次提交中入库
+- 报告统一在最终退出前生成一次：不在每笔批次提交后触发报告（提交可能多笔）
