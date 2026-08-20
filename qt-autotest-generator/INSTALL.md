@@ -13,7 +13,7 @@ git clone <本仓库 URL> .opencode/skills/qt-autotest-generator
 
 或使用本地路径复制到 `.opencode/skills/qt-autotest-generator`。
 
-运行时环境通常会设置 **`SKILL_DIR`** 指向该技能目录；`SKILL.md` 中的 `${SKILL_DIR}/templates/...` 和 `${SKILL_DIR}/reference/...` 即解析到此路径。
+运行时环境通常会设置 **`SKILL_DIR`** 指向该技能目录；`SKILL.md` 中的 `${SKILL_DIR}/templates/...` 和 `${SKILL_DIR}/references/...` 即解析到此路径。
 
 ## Claude Code
 
@@ -81,7 +81,7 @@ sudo apt install lcov
 | `codebase-memory-mcp` | 本地 MCP。远端不可用或项目未在远端索引时，自动安装并为本机项目建立索引 |
 
 提供方解析在 `environment_check` 阶段完成，结果记录为内存变量 `mcp_provider`，详见
-`reference/mcp-providers.md`。
+`references/mcp-providers.md`。
 
 若已接入远端实例（如 `remote-codebase-memory-mcp`）且目标项目已在远端索引，则**跳过本地安装**。
 否则 `environment_check` 会强制提醒用户并安装本地 `codebase-memory-mcp`：

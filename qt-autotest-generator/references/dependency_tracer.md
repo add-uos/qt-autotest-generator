@@ -2,7 +2,7 @@
 
 > 前置条件：知识图谱已就绪（`environment_check` 通过），`.ut-inventory.json` 存在，目标类已从 inventory 提取（`testable_classes`（内存变量）），图谱 ready。
 
-> 通过 mcp_provider 调用知识图谱工具（详见 reference/mcp-providers.md）
+> 通过 mcp_provider 调用知识图谱工具（详见 references/mcp-providers.md）
 
 ## 概述
 

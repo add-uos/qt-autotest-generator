@@ -179,7 +179,7 @@ for m in inventory_methods:
 
 ## 产出文件结构
 
-完整 JSON Schema 详见 `reference/inventory-schema.md`。
+完整 JSON Schema 详见 `references/inventory-schema.md`。
 
 关键字段速查：
 
@@ -211,7 +211,7 @@ Agent 输出 Markdown 摘要 + review_queue，与用户交互：
 2. Agent 问: "逐条确认还是全部用默认值？"
    - "全部跳过" → review_queue 所有 pending → confirmed, level=mid
    - "看看" → 逐条展示，用户回复 high/mid/low
-   - 用户也可直接编辑 JSON 文件，或用可视化编辑器 `scripts/ut-inventory-editor/index.html`
+   - 用户也可直接编辑 JSON 文件，或用可视化编辑器 `assets/ut-inventory-editor/index.html`（人工辅助工具，agent 不调用）
 
 3. 回写 review_status
 ```

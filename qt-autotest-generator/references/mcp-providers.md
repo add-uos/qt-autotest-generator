@@ -146,6 +146,6 @@ project_name_in_graph = "home-demo-utest-skills"
 并在 MCP 客户端配置中接入该远端实例。
 ```
 
-## 7. 不可降级
+## 8. 深入参考
 
-无论使用哪种提供方，**绝不降级到 LSP**。图谱不可用即硬终止，不退化为 LSP 逐文件分析。
+本文档是提供方解析的唯一权威来源。如需了解 codebase-memory-mcp 各工具的完整语义、参数与调用样例（search_graph / query_graph / trace_path / get_code_snippet / index_repository 等），`Read references/codebase-memory-guide.md`。

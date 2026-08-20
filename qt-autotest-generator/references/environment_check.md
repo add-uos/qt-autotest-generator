@@ -2,7 +2,7 @@
 
 > 前置条件：目标项目绝对路径（`project_path`）已就绪。
 
-> 通过 mcp_provider 调用知识图谱工具（详见 reference/mcp-providers.md）
+> 通过 mcp_provider 调用知识图谱工具（详见 references/mcp-providers.md）
 
 ## 概述
 
@@ -43,7 +43,7 @@ fi
 
 ### 1. MCP 提供方解析（远端优先，本地兜底）
 
-**完整解析算法（候选优先级、`probe_available` 探测、远端项目已索引判定、4 种强制提醒规则）见 [`reference/mcp-providers.md`](mcp-providers.md)，该文档为单一权威来源。** 本步骤只列执行要点：
+**完整解析算法（候选优先级、`probe_available` 探测、远端项目已索引判定、4 种强制提醒规则）见 [`references/mcp-providers.md`](mcp-providers.md)，该文档为单一权威来源。** 本步骤只列执行要点：
 
 候选提供方（优先级降序）：
 

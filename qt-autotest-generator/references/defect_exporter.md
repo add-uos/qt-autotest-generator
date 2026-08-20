@@ -87,7 +87,7 @@ Mode 2 闭环中，各子 Agent 在发现或确认缺陷时，通过 `export-def
 | `build_verifier` 用例通过 | `mark-fixed` | build_verifier |
 | `reconcile` base_sha 漂移 | `_archive_on_sha_change`（脚本内部） | reconcile |
 
-> `.ut-defects.json` 是**本地真相源**，不入 git。Schema 详见 `reference/defect-schema.md`。
+> `.ut-defects.json` 是**本地真相源**，不入 git。Schema 详见 `references/defect-schema.md`。
 
 ## 产出目录结构
 
@@ -103,7 +103,7 @@ Mode 2 闭环中，各子 Agent 在发现或确认缺陷时，通过 `export-def
 
 - 定位：本地真相源，记录 Mode 2 闭环中所有发现的源码缺陷
 - 不入版本控制（加 `.gitignore`）
-- 完整 Schema 详见 `reference/defect-schema.md`
+- 完整 Schema 详见 `references/defect-schema.md`
 
 ### `defects.json`（导出产物）
 

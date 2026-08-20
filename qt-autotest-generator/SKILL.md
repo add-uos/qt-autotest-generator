@@ -16,15 +16,15 @@ compatibility:
 
 # Qt Autotest Generator
 
-基于 **codebase-memory-mcp 知识图谱** 的 Qt CMake 项目单元测试技能。支持五种模式（Mode 4 变异测试、Mode 5 缺陷导出为可选增强）；分步指令在 **`reference/`**，执行前须 **`Read`** 对应文件。
+基于 **codebase-memory-mcp 知识图谱** 的 Qt CMake 项目单元测试技能。支持五种模式（Mode 4 变异测试、Mode 5 缺陷导出为可选增强）；分步指令在 **`references/`**，执行前须 **`Read`** 对应文件。
 
 | 模式 | 何时用 | 主入口 |
 |------|--------|--------|
-| **Mode 1 · 函数重要性探测** | 项目初始化、扫描方法分级、生成 inventory | 下文 + `Read reference/inventory.md` |
-| **Mode 2 · 单元测试编写** | 按 inventory 补全 GTest 用例 | 下文 + `Read reference/test_writer.md` |
-| **Mode 3 · 覆盖率采集与汇总** | 只采集/统计覆盖率，不生成测试代码 | `Read reference/report_generator.md` + `scripts/collect-coverage-report.py` |
-| **Mode 4 · 变异测试**（可选） | 验证已有测试能否拦住缺陷（变异得分） | `Read reference/mutation_testing.md` + `scripts/mutation_score.py` |
-| **Mode 5 · 源码缺陷导出与统计** | 导出/统计单元测试发现的源码缺陷 | `Read reference/defect_exporter.md` + `scripts/export-defects.py` |
+| **Mode 1 · 函数重要性探测** | 项目初始化、扫描方法分级、生成 inventory | 下文 + `Read references/inventory.md` |
+| **Mode 2 · 单元测试编写** | 按 inventory 补全 GTest 用例 | 下文 + `Read references/test_writer.md` |
+| **Mode 3 · 覆盖率采集与汇总** | 只采集/统计覆盖率，不生成测试代码 | `Read references/report_generator.md` + `scripts/collect-coverage-report.py` |
+| **Mode 4 · 变异测试**（可选） | 验证已有测试能否拦住缺陷（变异得分） | `Read references/mutation_testing.md` + `scripts/mutation_score.py` |
+| **Mode 5 · 源码缺陷导出与统计** | 导出/统计单元测试发现的源码缺陷 | `Read references/defect_exporter.md` + `scripts/export-defects.py` |
 
 Mode 2 启动时若 `.ut-inventory.json` 不存在 → **自动触发 Mode 1**。
 
@@ -39,7 +39,7 @@ Mode 5 为**可选增强**，在 Mode 2 闭环中实时持久化发现的源码�
 - **语言**：默认与用户语种一致；技术术语用行业常用表述。
 - **测试框架**：Google Test only，不用 Qt Test / Catch2。
 - **测试目录**：优先 `autotests/`；若项目已有 `tests/` 且含 C++ GTest 代码，则沿用 `tests/`。目录在 environment_check 阶段一次性探测确定。
-- **知识图谱 MCP 硬门禁**：无图谱索引不执行，不降级到文件扫描/LSP。远端优先，本地兜底，互斥使用其一。详见 `reference/mcp-providers.md`。
+- **知识图谱 MCP 硬门禁**：无图谱索引不执行，不降级到文件扫描/LSP。远端优先，本地兜底，互斥使用其一。详见 `references/mcp-providers.md`。
 - **不修源码**：疑似源码缺陷只标红交还用户。
 - **只 APPEND 不改已有**：修改根 CMakeLists.txt 和测试 CMake 时只追加新行。
 - **不问用户确认**：直接执行。
@@ -58,9 +58,9 @@ Mode 5 为**可选增强**，在 Mode 2 闭环中实时持久化发现的源码�
 
 ## Mode 1 · 函数重要性探测
 
-1. **对账（reconcile）**：`Read` `reference/reconcile-logic.md` → 首次运行（无 inventory）直接进入步骤 2；inventory 已存在且 `base_sha` 漂移时按差异路由后再决定是否全量重扫
-2. **`Read`** `reference/environment_check.md` → MCP 门禁
-3. **`Read`** `reference/inventory.md` → 全量扫描 → 评分 → 产出 `.ut-inventory.json` + `inventory-summary.md`
+1. **对账（reconcile）**：`Read` `references/reconcile-logic.md` → 首次运行（无 inventory）直接进入步骤 2；inventory 已存在且 `base_sha` 漂移时按差异路由后再决定是否全量重扫
+2. **`Read`** `references/environment_check.md` → MCP 门禁
+3. **`Read`** `references/inventory.md` → 全量扫描 → 评分 → 产出 `.ut-inventory.json` + `inventory-summary.md`
 
 Mode 1 **不生成测试代码、不编译、不运行**，只建表。
 
@@ -69,32 +69,32 @@ Mode 1 **不生成测试代码、不编译、不运行**，只建表。
 
 ## Mode 2 · 单元测试编写
 
-1. **对账（reconcile）**：`Read` `reference/reconcile-logic.md` → 若 inventory 不存在走首次运行（步骤 3 会触发 Mode 1）；若 `base_sha` 已漂移按差异路由（新增/签名变更/删除/分支切换）后再进入下方主流程
-2. **`Read`** `reference/environment_check.md` → MCP 门禁
+1. **对账（reconcile）**：`Read` `references/reconcile-logic.md` → 若 inventory 不存在走首次运行（步骤 3 会触发 Mode 1）；若 `base_sha` 已漂移按差异路由（新增/签名变更/删除/分支切换）后再进入下方主流程
+2. **`Read`** `references/environment_check.md` → MCP 门禁
 3. 检查 `{test_dir}/.ut-inventory.json` → 不存在则先执行 Mode 1
-4. **`Read`** `reference/test_writer.md` → 逐类闭环 → 编译验证 → 更新 `usecase_count`
+4. **`Read`** `references/test_writer.md` → 逐类闭环 → 编译验证 → 更新 `usecase_count`
 
 Mode 2 的子步骤按需读取：
 
 | 子步骤 | 文件 | 何时读 |
 |--------|------|--------|
-| 框架搭建 | `reference/framework_builder.md` | `{test_dir}/` 不存在时 |
-| 类准备 | `reference/inventory.md` | 方法分级入表，`test_writer` §4 从中提取待测类 |
-| 依赖追踪 | `reference/dependency_tracer.md` | 读 inventory 的 is_gui、MCP trace_path 出向、stub 决策、CMake 目录 |
-| 测试代码生成 | `reference/test_code_gen.md` | 逐类闭环第 2 步 |
-| 编译验证 | `reference/build_verifier.md` | 逐类闭环第 3 步 |
-| 自检 | `reference/self_checker.md` | 逐类闭环第 4 步 |
-| 增量补全 | `reference/incremental_updater.md` | 覆盖率缺口时 |
-| 失败修复 | `reference/failure_repairer.md` | 编译/运行失败时 |
-| 代码提交 | `reference/code_committer.md` | 批次自检通过后 |
+| 框架搭建 | `references/framework_builder.md` | `{test_dir}/` 不存在时 |
+| 类准备 | `references/inventory.md` | 方法分级入表，`test_writer` §4 从中提取待测类 |
+| 依赖追踪 | `references/dependency_tracer.md` | 读 inventory 的 is_gui、MCP trace_path 出向、stub 决策、CMake 目录 |
+| 测试代码生成 | `references/test_code_gen.md` | 逐类闭环第 2 步 |
+| 编译验证 | `references/build_verifier.md` | 逐类闭环第 3 步 |
+| 自检 | `references/self_checker.md` | 逐类闭环第 4 步 |
+| 增量补全 | `references/incremental_updater.md` | 覆盖率缺口时 |
+| 失败修复 | `references/failure_repairer.md` | 编译/运行失败时 |
+| 代码提交 | `references/code_committer.md` | 批次自检通过后 |
 
-> 报告生成（`reference/report_generator.md`）属 **Mode 3**，不在 Mode 2 内执行；全类提交完成即 Mode 2 结束。
+> 报告生成（`references/report_generator.md`）属 **Mode 3**，不在 Mode 2 内执行；全类提交完成即 Mode 2 结束。
 
 ---
 
 ## Mode 3 · 覆盖率采集与汇总
 
-1. **`Read`** `reference/report_generator.md` → 调用 `scripts/collect-coverage-report.py`
+1. **`Read`** `references/report_generator.md` → 调用 `scripts/collect-coverage-report.py`
 2. 脚本一条命令完成：运行测试 → lcov 采集 → genhtml → 分级覆盖率 → 汇总 JSON
 3. 产出：`report/`（gtest XML）+ `html/`（lcov HTML）+ `coverage_by_level.json`（分级详情）+ `ut-summary.json`（三合一汇总）
 
@@ -105,7 +105,7 @@ Mode 3 **不生成测试代码、不编译新测试、不修改项目**，只采
 ## Mode 4 · 变异测试（可选增强）
 
 1. **前置检查**：Mode 2 已产出可编译可运行的测试；`.ut-inventory.json` 存在；reconcile 通过
-2. **`Read`** `reference/mutation_testing.md` → 调用 `scripts/mutation_score.py`
+2. **`Read`** `references/mutation_testing.md` → 调用 `scripts/mutation_score.py`
 3. 脚本对 high 级方法注入变异体 → 增量编译 → 跑 GTest → 计算变异得分 → 恢复源码
 4. 产出：`mutation_report.md`（存活变异体建议清单）+ `.ut-mutation.json`（与 `.ut-inventory.json` 命名对齐）
 
@@ -116,10 +116,10 @@ Mode 4 **临时修改源码**（注入变异体），受"源码安全四铁律"�
 ## Mode 5 · 源码缺陷导出与统计（可选增强）
 
 1. **持久化**（Mode 2 闭环中实时发生）：`failure_repairer` 标红时调 `export-defects.py upsert` 落盘到 `{test_dir}/.ut-defects.json`；`build_verifier` 编译期确认源码缺陷提前预记录；通过验证时调 `mark-fixed` 闭环
-2. **按需导出**：`Read` `reference/defect_exporter.md` → 调用 `scripts/export-defects.py export`
+2. **按需导出**：`Read` `references/defect_exporter.md` → 调用 `scripts/export-defects.py export`
 3. 产出：`defects.json`（机读）+ `defects-summary.md`（人读标红清单，md 内链接跳转源码行）
 
-Mode 5 **不跑测试、不编译、不改测试代码、不改源码**（与 Mode 3 同构，纯导出统计）。`.ut-defects.json` 不入 git（本地存储，加 `.gitignore`）。颗粒度精确到**用例级**（`defect_id = {method_qn}#{Fixture}.{Case}`）。与 Mode 4 数据模型/脚本各自独立。详见 `reference/defect-schema.md`。
+Mode 5 **不跑测试、不编译、不改测试代码、不改源码**（与 Mode 3 同构，纯导出统计）。`.ut-defects.json` 不入 git（本地存储，加 `.gitignore`）。颗粒度精确到**用例级**（`defect_id = {method_qn}#{Fixture}.{Case}`）。与 Mode 4 数据模型/脚本各自独立。详见 `references/defect-schema.md`。
 
 ---
 
@@ -131,7 +131,7 @@ Mode 5 **不跑测试、不编译、不改测试代码、不改源码**（与 Mo
 4. **强制编译+运行验证** —— 编译并跑通后才能报完成
 5. **内置 stub-ext** —— 从 `templates/stub-ext/` 复制，不从网络下载
 6. **逐类闭环** —— 每个类独立走完 依赖追踪→生成→验证→自检；单类失败记录跳过，不阻塞其他类
-7. **不修源码** —— 疑似源码缺陷只标红交还用户；标红即落盘到 `.ut-defects.json`（Mode 5）供导出（Mode 4 例外：受源码安全四铁律约束，退出 `git diff` 必为空，详见 `reference/mutation_testing.md`）
+7. **不修源码** —— 疑似源码缺陷只标红交还用户；标红即落盘到 `.ut-defects.json`（Mode 5）供导出（Mode 4 例外：受源码安全四铁律约束，退出 `git diff` 必为空，详见 `references/mutation_testing.md`）
 8. **只 APPEND 不改已有** —— 不注释/删除/修改已有 CMake 代码
 9. **批次提交** —— 只 commit，不 push
 10. **全局闭环迭代上限** —— 同一类最多循环 3 轮；3 轮后仍未通过，标记 `failed` + `max_iterations_exceeded` 并跳过
@@ -150,7 +150,7 @@ Mode 5 **不跑测试、不编译、不改测试代码、不改源码**（与 Mo
 | MCP 工具 | `search_graph`, `get_code_snippet`, `trace_path`, `query_graph`, `index_status` |
 | 编译重试 | per-error 3 次，max 10 loops |
 | 函数覆盖率阈值 | 默认 90%，可由用户指定 |
-| 模板与 stub-ext | `templates/`，详见 `reference/templates-guide.md` |
+| 模板与 stub-ext | `templates/`，详见 `references/templates-guide.md` |
 | 分级覆盖率采集 | `scripts/collect-coverage-report.py`（Mode 3） |
 | 变异测试 | `scripts/mutation_score.py`（Mode 4，可选，阈值 85%） |
 | 源码缺陷导出 | `scripts/export-defects.py`（Mode 5，可选，upsert/mark-fixed/export） |
@@ -160,7 +160,7 @@ Mode 5 **不跑测试、不编译、不改测试代码、不改源码**（与 Mo
 
 ## 模板文件
 
-`templates/` 含代码生成模板（带占位符）和 vendored stub-ext 库，详见 `reference/templates-guide.md`。
+`templates/` 含代码生成模板（带占位符）和 vendored stub-ext 库，详见 `references/templates-guide.md`。
 
 ---
 
@@ -181,8 +181,8 @@ Mode 5 **不跑测试、不编译、不改测试代码、不改源码**（与 Mo
 ```
 □ 已区分 Mode 1（分析）/ Mode 2（编写）/ Mode 3（采集）/ Mode 4（变异，可选）/ Mode 5（缺陷导出，可选），未混跑
 □ 已执行 reconcile（比对 git HEAD 与 inventory.base_sha，按差异路由；首次运行无 inventory 直接进入环境检查）
-□ Mode 1：已 Read reference/environment_check.md + reference/inventory.md；产出 .ut-inventory.json
-□ Mode 2：已 Read reference/environment_check.md；.ut-inventory.json 存在（不存在则先执行 Mode 1）
+□ Mode 1：已 Read references/environment_check.md + references/inventory.md；产出 .ut-inventory.json
+□ Mode 2：已 Read references/environment_check.md；.ut-inventory.json 存在（不存在则先执行 Mode 1）
 □ Mode 2：已按步骤 Read 对应 reference 子步骤文件
 □ MCP 提供方已解析（远端优先，本地兜底），互斥使用
 □ 逐类闭环：每类走 依赖追踪 → 测试生成 → 编译验证 → 自检（类列表与 level 来自 inventory）
@@ -191,6 +191,6 @@ Mode 5 **不跑测试、不编译、不改测试代码、不改源码**（与 Mo
 □ 批次提交：本批次自检通过后已执行代码提交（只 commit 不 push）
 □ 疑似源码缺陷：已标红，未自行修源码；已调 export-defects.py upsert 落盘到 .ut-defects.json
 □ 全类完成 + 覆盖达标：已批次提交（Mode 2 结束）；覆盖率报告属 Mode 3，按需单独触发
-□ Mode 4（可选）：已 Read reference/mutation_testing.md；变异后 git diff --exit-code 通过；存活变异体清单已交付（回 Mode 2 补强）
+□ Mode 4（可选）：已 Read references/mutation_testing.md；变异后 git diff --exit-code 通过；存活变异体清单已交付（回 Mode 2 补强）
 □ Mode 5（可选）：缺陷已落盘 .ut-defects.json（不入 git）；导出 defects-summary.md 标红清单
 ```

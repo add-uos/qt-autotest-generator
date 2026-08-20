@@ -2,7 +2,7 @@
 
 > 前置条件：`.ut-inventory.json` 存在（方法分级 + `factors`），`dependency_tracer` 已完成目标类追踪（有 `is_gui` + `stub_list` + `source_dirs`（内存变量）），图谱 ready。
 
-> 通过 mcp_provider 调用知识图谱工具（详见 reference/mcp-providers.md）
+> 通过 mcp_provider 调用知识图谱工具（详见 references/mcp-providers.md）
 
 ## 概述
 
@@ -10,7 +10,7 @@
 
 ## 测试方法论引用（必读）
 
-生成用例前必须先读 `${SKILL_DIR}/reference/test-types.md`，按其方法论建模输入空间与组织用例。本节列出**必须遵守的最小清单**，详细方法以 test-types.md 为准。
+生成用例前必须先读 `${SKILL_DIR}/references/test-types.md`，按其方法论建模输入空间与组织用例。本节列出**必须遵守的最小清单**，详细方法以 test-types.md 为准。
 
 ### 最小清单（在测试文件顶部注释中输出完成情况，未完成不得提交编译验证）
 
@@ -84,7 +84,7 @@ read("${SKILL_DIR}/templates/cmake-submodule.txt")
 - 测试文件路径 = `{test_dir}/{module_path_flattened}/test_{classname}.cpp`
 - 例：`{test_dir}/a/test_manager.cpp` 和 `{test_dir}/b/test_manager.cpp`
 - CMake 子目录按模块路径拆分，每个路径独立 `add_subdirectory`
-- 依赖追踪（`reference/dependency_tracer.md`）需在 `source_dirs` 中区分同名类的模块路径
+- 依赖追踪（`references/dependency_tracer.md`）需在 `source_dirs` 中区分同名类的模块路径
 
 ### 4. 生成测试用例
 

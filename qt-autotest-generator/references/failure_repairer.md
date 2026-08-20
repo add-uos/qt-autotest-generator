@@ -2,7 +2,7 @@
 
 > 前置条件：目标类 `build_result=fail` 或 `run_result=fail`（`class_status[classname].status=failed`（内存变量））；或源码变更后方法删除导致测试引用失效。
 
-> 通过 mcp_provider 调用知识图谱工具（详见 reference/mcp-providers.md）
+> 通过 mcp_provider 调用知识图谱工具（详见 references/mcp-providers.md）
 
 ## 概述
 
@@ -135,12 +135,12 @@ python3 ${SKILL_DIR}/scripts/export-defects.py upsert \
     --repair-attempts ${repair_attempts} --iteration-count ${iteration_count}
 ```
 
-> `defect_id` 主键 = `{method_qn}#{TestFixture}.{TestCaseName}`，同一用例跨会话去重。构造即崩无具体用例时用 `__class_init__` 兜底。`type_category` 映射：compile/runtime/logic/manual。`stage` 取 detected_at_stage（标红阶段一般为 manual，编译期提前捕获为 compile）。详见 `reference/defect-schema.md` 与 `reference/defect_exporter.md`。
+> `defect_id` 主键 = `{method_qn}#{TestFixture}.{TestCaseName}`，同一用例跨会话去重。构造即崩无具体用例时用 `__class_init__` 兜底。`type_category` 映射：compile/runtime/logic/manual。`stage` 取 detected_at_stage（标红阶段一般为 manual，编译期提前捕获为 compile）。详见 `references/defect-schema.md` 与 `references/defect_exporter.md`。
 
 ### 7. 后续流程
 
 - **修复成功**（status=test_written）：回到编译验证阶段重新验证
-- **修复失败（标红）**（status=failed + failure_reason 含 source_defect/needs_manual）：跳过该类，继续下一类；缺陷已写入 `{test_dir}/.ut-defects.json`，由 **Mode 5**（`reference/defect_exporter.md`）在收尾或按需时导出为 `defects-summary.md` 标红清单
+- **修复失败（标红）**（status=failed + failure_reason 含 source_defect/needs_manual）：跳过该类，继续下一类；缺陷已写入 `{test_dir}/.ut-defects.json`，由 **Mode 5**（`references/defect_exporter.md`）在收尾或按需时导出为 `defects-summary.md` 标红清单
 
 ## 关键约束
 

@@ -2,7 +2,7 @@
 
 > 前置条件：`test_writer` 已完成目标类（`class_status[classname].status=test_written`（内存变量）），`{test_dir}/<module>/test_<classname>.cpp` 存在。
 
-> 通过 mcp_provider 调用知识图谱工具（详见 reference/mcp-providers.md）
+> 通过 mcp_provider 调用知识图谱工具（详见 references/mcp-providers.md）
 
 ## 概述
 

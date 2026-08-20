@@ -2,7 +2,7 @@
 
 > 前置条件：`build_verifier` 已通过目标类（session 中 `status=verified`，`build_result=pass`，`run_result=pass`）。
 
-> 通过 mcp_provider 调用知识图谱工具（详见 reference/mcp-providers.md）
+> 通过 mcp_provider 调用知识图谱工具（详见 references/mcp-providers.md）
 
 ## 概述
 
@@ -60,7 +60,7 @@ coverage_gap = all_method_names - tested_names
 
 复用 `build_verifier` 第 7c 步产出的分级覆盖率快照（`${build_dir}/coverage/${classname}_by_level.json`），避免重复解析 lcov。快照不存在或 stale 时重新调用脚本：
 
-- **有 inventory 时**：按方法分级差异化门禁（阈值取自 inventory 的 `gate_thresholds`，详见 `reference/coverage-tiers.md`）
+- **有 inventory 时**：按方法分级差异化门禁（阈值取自 inventory 的 `gate_thresholds`，详见 `references/coverage-tiers.md`）
 - **无 inventory**：技能不可运行，先执行 Mode 1 生成 inventory
 
 ```python
@@ -331,6 +331,6 @@ for method in all_methods:
 - 不跳过 GUI 类豁免
 - `qualified_name` 必须从图谱返回值取，不自己拼
 - 不忽略覆盖率门禁：方法名差集为空但覆盖率 < 阈值时，仍必须流转至 `incremental_updater`
-- 覆盖率门禁规则：必须有 `.ut-inventory.json`，按方法分级（详见 `reference/coverage-tiers.md`）；无 inventory 时技能不可运行
+- 覆盖率门禁规则：必须有 `.ut-inventory.json`，按方法分级（详见 `references/coverage-tiers.md`）；无 inventory 时技能不可运行
 - 不跳过断言强度自检：每用例（`TEST_F` 与 `TEST_P` 均需扫描）至少 2 个有效 `EXPECT_*`（NO_FATAL/NO_THROW/EXPECT_CALL 均不计入）
 - 不跳过环境隔离自检：硬编码绝对路径、`qputenv` 无对应 `qunsetenv`、未 mock 的真实外部资源（QProcess/网络/socket/真实时间）、stub 未 `clear()` 必须检出

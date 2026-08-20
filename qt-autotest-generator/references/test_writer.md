@@ -9,7 +9,7 @@
 - 生成单测、建测试框架、批量生成单测、补全测试、修测试、重新对账
 - add gtest、setup unit tests、coverage gap、fix test failures、sync tests
 
-**若 `.ut-inventory.json` 不存在** → 先执行 Mode 1（`Read reference/inventory.md`）。
+**若 `.ut-inventory.json` 不存在** → 先执行 Mode 1（`Read references/inventory.md`）。
 
 ## 概述
 
@@ -39,7 +39,7 @@
 inventory_path = f"{test_dir}/.ut-inventory.json"
 if not file_exists(inventory_path):
     # 自动触发 Mode 1
-    Read("reference/inventory.md")
+    Read("references/inventory.md")
     # Mode 1 完成后 inventory_path 应存在
 
 inventory = read_json(inventory_path)
@@ -48,11 +48,11 @@ gui_names = {c["name"] for c in inventory.get("classes", []) if c.get("is_gui")}
 
 ### 2. 环境门禁
 
-`Read reference/environment_check.md` → MCP 提供方解析、索引验证
+`Read references/environment_check.md` → MCP 提供方解析、索引验证
 
 ### 3. 框架搭建（按需）
 
-若 `{test_dir}/` 不存在 → `Read reference/framework_builder.md`
+若 `{test_dir}/` 不存在 → `Read references/framework_builder.md`
 
 ### 4. 确定待测类列表
 
@@ -104,12 +104,12 @@ for c in sorted_classes:
 
 | 步骤 | 文件 | 说明 |
 |------|------|------|
-| 依赖追踪 | `reference/dependency_tracer.md` | 读 inventory 的 is_gui、MCP trace_path 出向、stub 决策、CMake 目录 |
-| 测试代码生成 | `reference/test_code_gen.md` | 读模板生成测试代码、用例数下限从 level/factors 推导、AAA、命名 |
-| 编译验证 | `reference/build_verifier.md` | 强制编译+运行、错误分类→修复表 |
-| 自检 | `reference/self_checker.md` | 覆盖率/命名/SPDX/stub/断言强度/环境隔离 |
-| 失败修复 | `reference/failure_repairer.md` | 编译/运行失败时 |
-| 增量补全 | `reference/incremental_updater.md` | 覆盖率缺口时 |
+| 依赖追踪 | `references/dependency_tracer.md` | 读 inventory 的 is_gui、MCP trace_path 出向、stub 决策、CMake 目录 |
+| 测试代码生成 | `references/test_code_gen.md` | 读模板生成测试代码、用例数下限从 level/factors 推导、AAA、命名 |
+| 编译验证 | `references/build_verifier.md` | 强制编译+运行、错误分类→修复表 |
+| 自检 | `references/self_checker.md` | 覆盖率/命名/SPDX/stub/断言强度/环境隔离 |
+| 失败修复 | `references/failure_repairer.md` | 编译/运行失败时 |
+| 增量补全 | `references/incremental_updater.md` | 覆盖率缺口时 |
 
 **迭代上限**：同一类最多循环 3 轮（Iron Law #10）。3 轮后仍未通过 → 标记 `failed` + `max_iterations_exceeded`，跳过该类，继续下一个。
 
@@ -150,11 +150,11 @@ gate = inventory["gate_thresholds"]
 # low:  行60% + 函数100%（同 mid）
 ```
 
-自检阶段按方法 level 应用对应门禁。详见 `reference/self_checker.md` 和 `reference/coverage-tiers.md`。
+自检阶段按方法 level 应用对应门禁。详见 `references/self_checker.md` 和 `references/coverage-tiers.md`。
 
 ### 8. 批次提交
 
-本批次所有类自检通过后 → `Read reference/code_committer.md`
+本批次所有类自检通过后 → `Read references/code_committer.md`
 
 只 commit，不 push。
 
@@ -162,7 +162,7 @@ gate = inventory["gate_thresholds"]
 
 全类提交完成即 Mode 2 结束。如需分级覆盖率采集报告
 （gtest XML + lcov HTML + 分级覆盖率 + 汇总 JSON），转 **Mode 3**
-（`Read reference/report_generator.md`），不在 Mode 2 内执行。
+（`Read references/report_generator.md`），不在 Mode 2 内执行。
 
 ## MCP 查询策略
 
