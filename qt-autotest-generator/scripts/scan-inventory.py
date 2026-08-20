@@ -129,9 +129,15 @@ def score_method(name: str, factors: list[str]) -> tuple[str, str, int]:
     """Return (level, source, score) using weighted scoring.
     
     Score ≥ 3 → high, ≥ 1 → mid, < 1 → low.
-    Key: in_degree alone only contributes +1 (mid-booster), needs complexity ≥ 10
-    or linear_scan_in_loop to reach high. This prevents methods with moderate
-    complexity (5-9) and moderate caller count from being misclassified as high.
+    
+    因子体系（3 层）：
+    - 主因子：complexity（圈复杂度）— 与缺陷率最相关
+    - 辅助因子：cognitive + lines — 补充圈复杂度无法捕获的嵌套深度和规模风险
+    - 风险因子：loop_count / alloc_in_loop / recursive / linear_scan_in_loop
+    - Mid-booster：in_degree — 仅对工具/库函数有效，Qt 回调函数基本无效
+    
+    核心原则：辅助因子不能独立推到 high。cognitive≥30 (+2) 或 lines≥50 (+1)
+    单独只能到 mid，需叠加 complexity≥5 才能到 high。
     """
     score = 0
     has_suggested = False
@@ -144,18 +150,43 @@ def score_method(name: str, factors: list[str]) -> tuple[str, str, int]:
         elif f == "q_invokable": score += 3
         elif f == "plugin_export": score += 3
         elif f == "concurrent_class" or f.startswith("concurrent_base:"): score += 1
+        # ── 主因子：complexity（圈复杂度） ──
         elif f.startswith("complexity:"):
             val = int(f.split(":")[1])
             if val >= 20: score += 3
-            elif val >= 10: score += 2
+            elif val >= 8: score += 2
             elif val >= 5: score += 1
+        # ── 辅助因子：cognitive（认知复杂度） ──
+        # 与圈复杂度互补：对深层嵌套和逻辑中断更敏感
+        elif f.startswith("cognitive:"):
+            val = int(f.split(":")[1])
+            if val >= 30: score += 2
+            elif val >= 15: score += 1
+        # ── 辅助因子：lines（代码行数） ──
+        # 保守加分：长函数不一定复杂（如纯数据组装），需叠加其他因子
+        elif f.startswith("lines:"):
+            val = int(f.split(":")[1])
+            if val >= 150: score += 1
+            elif val >= 50: score += 1
+        # ── 风险因子 ──
         elif f.startswith("transitive_loop_depth:"):
             val = int(f.split(":")[1])
             if val >= 3: score += 3
         elif f.startswith("linear_scan_in_loop:"):
             score += 1
+        elif f.startswith("loop_count:"):
+            val = int(f.split(":")[1])
+            if val >= 5: score += 1
+        elif f.startswith("alloc_in_loop:"):
+            score += 1
+        elif f == "recursive":
+            score += 1
+        # ── Mid-booster：in_degree ──
+        # Qt 项目中仅衡量跨文件被引用数，信号槽/虚函数回调不产生 CALLS 边
+        # 对工具/库函数有效，对 Qt 回调函数基本无效
         elif f.startswith("in_degree:"):
-            score += 1  # in_degree alone contributes to mid; needs cx≥10 or lsl to reach high
+            score += 1
+        # ── 降级因子 ──
         elif f == "destructor": score -= 1
         elif f == "operator": score -= 1
 
@@ -355,14 +386,30 @@ def build_inventory(mcp_data: dict, project_name: str, base_sha: str) -> dict:
                         factors.append(f"concurrent_base:{cb}")
                         break
 
-            # 复杂度（分级：≥20 high, ≥10 mid, ≥5 low）
+            # 复杂度（分级：≥20 high, ≥8 mid, ≥5 low）
             complexity = method.get("complexity", 0) or 0
             if complexity >= 20:
                 factors.append(f"complexity:{complexity}")
-            elif complexity >= 10:
+            elif complexity >= 8:
                 factors.append(f"complexity:{complexity}")
             elif complexity >= 5:
                 factors.append(f"complexity:{complexity}")
+
+            # 认知复杂度（与圈复杂度互补：对嵌套深度和逻辑中断更敏感）
+            # ≥30 → +2, ≥15 → +1；单独只能到 mid，需叠加 complexity 才到 high
+            cognitive = method.get("cognitive", 0) or 0
+            if cognitive >= 30:
+                factors.append(f"cognitive:{cognitive}")
+            elif cognitive >= 15:
+                factors.append(f"cognitive:{cognitive}")
+
+            # 代码行数（保守加分：长函数不一定复杂）
+            # ≥150 → +1, ≥50 → +1；单独只能到 mid
+            lines = method.get("lines", 0) or 0
+            if lines >= 150:
+                factors.append(f"lines:{lines}")
+            elif lines >= 50:
+                factors.append(f"lines:{lines}")
 
             # 隐蔽 O(n²)
             tld = method.get("transitive_loop_depth", 0) or 0
@@ -373,7 +420,22 @@ def build_inventory(mcp_data: dict, project_name: str, base_sha: str) -> dict:
             if lsl >= 1:
                 factors.append(f"linear_scan_in_loop:{lsl}")
 
+            # 循环风险（≥5 个循环 → +1）
+            lc = method.get("loop_count", 0) or 0
+            if lc >= 5:
+                factors.append(f"loop_count:{lc}")
+
+            # 循环内分配（性能缺陷强信号 → +1）
+            ail = method.get("alloc_in_loop", 0) or 0
+            if ail >= 1:
+                factors.append(f"alloc_in_loop:{ail}")
+
+            # 递归（需额外测试 → +1）
+            if method.get("recursive", False):
+                factors.append("recursive")
+
             # 调用热度（in_degree ≥ P75_非零，得分 +1，mid-booster）
+            # Qt 项目中仅对工具/库函数有效，信号槽/虚函数回调不产生 CALLS 边
             in_deg = method.get("in_degree", 0) or 0
             if in_deg >= in_degree_p75 and in_degree_p75 > 0:
                 factors.append(f"in_degree:{in_deg}")

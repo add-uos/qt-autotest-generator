@@ -478,11 +478,18 @@ def _parse_bases(base_classes_raw):
 
 
 def _dedup_classes(classes):
-    """Deduplicate classes by qualified_name."""
+    """Deduplicate classes by qualified_name.
+
+    缺 qualified_name 的节点（空字符串/None）不参与去重，全部保留——
+    它们是各自独立的噪声节点，塌缩成一个会丢失数据。
+    """
     seen = set()
     result = []
     for cls in classes:
-        qn = cls.get("qualified_name", "")
+        qn = cls.get("qualified_name") or ""
+        if not qn:  # 无 qn → 不去重，直接保留
+            result.append(cls)
+            continue
         if qn not in seen:
             seen.add(qn)
             result.append(cls)
