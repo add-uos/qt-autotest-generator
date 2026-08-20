@@ -70,7 +70,8 @@ Mode 1 **不生成测试代码、不编译、不运行**，只建表。
 ## Mode 2 · 单元测试编写
 
 1. **对账（reconcile）**：`Read` `references/reconcile-logic.md` → 若 inventory 不存在走首次运行（步骤 3 会触发 Mode 1）；若 `base_sha` 已漂移按差异路由（新增/签名变更/删除/分支切换）后再进入下方主流程
-2. **`Read`** `references/environment_check.md` → MCP 门禁
+2. **过时测试清理**：若 diff 报告含 `removed` 方法 → `Read` `references/stale-test-cleanup.md` → 主动注释/删除引用已删方法的用例 + 连带清理 INSTANTIATE_TEST_SUITE_P + 更新 usecase_count（**不等编译报错**）
+3. **`Read`** `references/environment_check.md` → MCP 门禁
 3. 检查 `{test_dir}/.ut-inventory.json` → 不存在则先执行 Mode 1
 4. **`Read`** `references/test_writer.md` → 逐类闭环 → 编译验证 → 更新 `usecase_count`
 
@@ -78,6 +79,7 @@ Mode 2 的子步骤按需读取：
 
 | 子步骤 | 文件 | 何时读 |
 |--------|------|--------|
+| 过时测试清理 | `references/stale-test-cleanup.md` | diff 报告含 removed 方法时 |
 | 框架搭建 | `references/framework_builder.md` | `{test_dir}/` 不存在时 |
 | 类准备 | `references/inventory.md` | 方法分级入表，`test_writer` §4 从中提取待测类 |
 | 依赖追踪 | `references/dependency_tracer.md` | 读 inventory 的 is_gui、MCP trace_path 出向、stub 决策、CMake 目录 |
@@ -154,6 +156,7 @@ Mode 5 **不跑测试、不编译、不改测试代码、不改源码**（与 Mo
 | 分级覆盖率采集 | `scripts/collect-coverage-report.py`（Mode 3） |
 | 变异测试 | `scripts/mutation-score.py`（Mode 4，可选，阈值 85%） |
 | 源码缺陷导出 | `scripts/export-defects.py`（Mode 5，可选，upsert/mark-fixed/export） |
+| 过时测试清理 | `scripts/stale-test-cleanup.py`（reconcile 后主动清理，不等编译报错） |
 | 缺陷数据文件 | `.ut-defects.json`（本地，不入 git） |
 
 ---
@@ -184,6 +187,7 @@ Mode 5 **不跑测试、不编译、不改测试代码、不改源码**（与 Mo
 □ Mode 1：已 Read references/environment_check.md + references/inventory.md；产出 .ut-inventory.json
 □ Mode 2：已 Read references/environment_check.md；.ut-inventory.json 存在（不存在则先执行 Mode 1）
 □ Mode 2：已按步骤 Read 对应 reference 子步骤文件
+□ 过时测试清理：若 diff 报告含 removed 方法，已 Read stale-test-cleanup.md 并主动清理（不等编译报错）
 □ MCP 提供方已解析（远端优先，本地兜底），互斥使用
 □ 逐类闭环：每类走 依赖追踪 → 测试生成 → 编译验证 → 自检（类列表与 level 来自 inventory）
 □ 单类失败：已记录 failure_reason + 跳过 + 继续下一个类

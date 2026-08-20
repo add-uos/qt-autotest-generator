@@ -38,7 +38,13 @@
       - 读 diff 报告驱动后续 Mode 2 动作（上层职责，非对账脚本自身）：
         · 新增方法 → 增量补全（references/incremental_updater.md）
         · 签名/体变更 → 测试生成（重新生成该类）→ 编译验证 → 自检
-        · 方法删除 → 失败修复（清理引用已删方法的测试，references/failure_repairer.md）
+        · 方法删除 → **主动清理测试用例**（references/stale-test-cleanup.md）
+          - 对账阶段立即执行，不等编译报错
+          - 读 diff 报告的 `removed` 列表，逐方法定位引用它的 TEST_F/TEST_P
+          - 注释或删除这些用例（加 `// Removed: method deleted from source`）
+          - TEST_P 连带移除对应 INSTANTIATE_TEST_SUITE_P
+          - 从 .ut-inventory.json 对应类的 methods 中更新 usecase_count
+          - 不视为源码缺陷（正常的代码演进）
    e. 相同 → 看当前状态决定下一步
    f. 分支切换检测：git branch --show-current 与内存变量记录的分支比较，
       若不同 → 强制刷新索引后重新对账：
