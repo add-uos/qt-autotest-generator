@@ -1,7 +1,7 @@
 ---
 name: qt-autotest-generator
-description: "Qt CMake 项目单元测试：函数重要性探测（Mode 1，生成 .ut-inventory.json 分级表）、按分级补全 GTest 用例（Mode 2，编译验证+覆盖率门禁+更新 usecase_count）、覆盖率采集与汇总（Mode 3，一条命令出分级报告）。触发于「扫描函数重要性/生成 inventory/探测分级/项目初始化单测分析」→ Mode 1；「生成单测/补全测试/add gtest/写测试/建测试框架/修测试/重新对账」→ Mode 2；「采集覆盖率/统计覆盖率/生成覆盖率报告/collect coverage/coverage report」→ Mode 3。硬门禁：codebase-memory-mcp 知识图谱（远端优先，本地兜底）。不触发于：非 Qt 或非 CMake 项目、Qt Test/Catch2 框架、仅运行测试/配 CI 不生成测试代码。"
-version: "3.1.0"
+description: "Qt CMake 项目单元测试：函数重要性探测（Mode 1，生成 .ut-inventory.json 分级表）、按分级补全 GTest 用例（Mode 2，编译验证+覆盖率门禁+更新 usecase_count）、覆盖率采集与汇总（Mode 3，一条命令出分级报告）、变异测试验证测试有效性（Mode 4，可选增强，注入变异体计算变异得分）。触发于「扫描函数重要性/生成 inventory/探测分级/项目初始化单测分析」→ Mode 1；「生成单测/补全测试/add gtest/写测试/建测试框架/修测试/重新对账」→ Mode 2；「采集覆盖率/统计覆盖率/生成覆盖率报告/collect coverage/coverage report」→ Mode 3；「变异测试/mutation testing/mutation score/验证测试有效性/测试能不能发现问题/测试够不够好/变异得分/high 级方法有效性」→ Mode 4。硬门禁：codebase-memory-mcp 知识图谱（远端优先，本地兜底）。不触发于：非 Qt 或非 CMake 项目、Qt Test/Catch2 框架、仅运行测试/配 CI 不生成测试代码。"
+version: "3.2.0"
 user-invocable: true
 argument-hint: "[项目路径 / 模块路径 / 类名]"
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash
@@ -16,17 +16,20 @@ compatibility:
 
 # Qt Autotest Generator
 
-基于 **codebase-memory-mcp 知识图谱** 的 Qt CMake 项目单元测试技能。支持三种模式；分步指令在 **`reference/`**，执行前须 **`Read`** 对应文件。
+基于 **codebase-memory-mcp 知识图谱** 的 Qt CMake 项目单元测试技能。支持四种模式（Mode 4 变异测试为可选增强）；分步指令在 **`reference/`**，执行前须 **`Read`** 对应文件。
 
 | 模式 | 何时用 | 主入口 |
 |------|--------|--------|
 | **Mode 1 · 函数重要性探测** | 项目初始化、扫描方法分级、生成 inventory | 下文 + `Read reference/inventory.md` |
 | **Mode 2 · 单元测试编写** | 按 inventory 补全 GTest 用例 | 下文 + `Read reference/test_writer.md` |
 | **Mode 3 · 覆盖率采集与汇总** | 只采集/统计覆盖率，不生成测试代码 | `Read reference/report_generator.md` + `scripts/collect-coverage-report.py` |
+| **Mode 4 · 变异测试**（可选） | 验证已有测试能否拦住缺陷（变异得分） | `Read reference/mutation_testing.md` + `scripts/mutation_score.py` |
 
 Mode 2 启动时若 `.ut-inventory.json` 不存在 → **自动触发 Mode 1**。
 
 Mode 3 为**只读采集**，不生成/修改测试代码，适合「跑一下看覆盖率」或「出分级覆盖率报告」。
+
+Mode 4 为**可选增强**，在 Mode 2 产出的测试上注入变异体验证有效性，不改变 Mode 2 产物状态。
 
 ## 环境与约定
 
@@ -43,6 +46,7 @@ Mode 3 为**只读采集**，不生成/修改测试代码，适合「跑一下�
 - **Mode 1**：扫描函数重要性、建立分级表、探测分级、生成 inventory、项目初始化单测分析、importance inventory、scan method importance
 - **Mode 2**：生成单测、建测试框架、批量生成单测、补全测试、修测试、重新对账、加测试、add gtest、setup unit tests、coverage gap、fix test failures、sync tests、improve coverage
 - **Mode 3**：采集覆盖率、统计覆盖率、生成覆盖率报告、collect coverage、coverage report、coverage summary
+- **Mode 4**：变异测试、mutation testing、mutation score、验证测试有效性、测试能不能发现问题、测试够不够好、变异得分、high 级方法有效性
 
 **不触发于**：非 Qt 或非 CMake 项目、Qt Test/Catch2/doctest 框架、仅运行测试/配 CI/看日志、集成测试/性能测试/UI 自动化
 
@@ -58,15 +62,6 @@ Mode 1 **不生成测试代码、不编译、不运行**，只建表。
 
 ---
 
-## Mode 3 · 覆盖率采集与汇总
-
-1. **`Read`** `reference/report_generator.md` → 调用 `scripts/collect-coverage-report.py`
-2. 脚本一条命令完成：运行测试 → lcov 采集 → genhtml → 分级覆盖率 → 汇总 JSON
-3. 产出：`report/`（gtest XML）+ `html/`（lcov HTML）+ `coverage_by_level.json`（分级详情）+ `ut-summary.json`（三合一汇总）
-
-Mode 3 **不生成测试代码、不编译新测试、不修改项目**，只采集和统计。
-
----
 
 ## Mode 2 · 单元测试编写
 
@@ -93,6 +88,27 @@ Mode 2 的子步骤按需读取：
 
 ---
 
+## Mode 3 · 覆盖率采集与汇总
+
+1. **`Read`** `reference/report_generator.md` → 调用 `scripts/collect-coverage-report.py`
+2. 脚本一条命令完成：运行测试 → lcov 采集 → genhtml → 分级覆盖率 → 汇总 JSON
+3. 产出：`report/`（gtest XML）+ `html/`（lcov HTML）+ `coverage_by_level.json`（分级详情）+ `ut-summary.json`（三合一汇总）
+
+Mode 3 **不生成测试代码、不编译新测试、不修改项目**，只采集和统计。
+
+---
+
+## Mode 4 · 变异测试（可选增强）
+
+1. **前置检查**：Mode 2 已产出可编译可运行的测试；`.ut-inventory.json` 存在；reconcile 通过
+2. **`Read`** `reference/mutation_testing.md` → 调用 `scripts/mutation_score.py`
+3. 脚本对 high 级方法注入变异体 → 增量编译 → 跑 GTest → 计算变异得分 → 恢复源码
+4. 产出：`mutation_report.md`（存活变异体建议清单）+ `mutation_report.json`
+
+Mode 4 **临时修改源码**（注入变异体），受"源码安全四铁律"约束（替代 Iron Law #7），退出时 `git diff` 必为空。**不阻塞 Mode 2 done、不占 3 轮预算、不污染 Mode 3 覆盖率**。存活变异体只出建议，回 Mode 2 补强。
+
+---
+
 ## 核心原则（Iron Laws）
 
 1. **知识图谱 MCP 硬门禁** —— 无图谱索引不执行
@@ -101,7 +117,7 @@ Mode 2 的子步骤按需读取：
 4. **强制编译+运行验证** —— 编译并跑通后才能报完成
 5. **内置 stub-ext** —— 从 `templates/stub-ext/` 复制，不从网络下载
 6. **逐类闭环** —— 每个类独立走完 依赖追踪→生成→验证→自检；单类失败记录跳过，不阻塞其他类
-7. **不修源码** —— 疑似源码缺陷只标红交还用户
+7. **不修源码** —— 疑似源码缺陷只标红交还用户（Mode 4 例外：受源码安全四铁律约束，退出 `git diff` 必为空，详见 `reference/mutation_testing.md`）
 8. **只 APPEND 不改已有** —— 不注释/删除/修改已有 CMake 代码
 9. **批次提交** —— 只 commit，不 push
 10. **全局闭环迭代上限** —— 同一类最多循环 3 轮；3 轮后仍未通过，标记 `failed` + `max_iterations_exceeded` 并跳过
@@ -122,6 +138,7 @@ Mode 2 的子步骤按需读取：
 | 函数覆盖率阈值 | 默认 90%，可由用户指定 |
 | 模板与 stub-ext | `templates/`，详见 `reference/templates-guide.md` |
 | 分级覆盖率采集 | `scripts/collect-coverage-report.py`（Mode 3） |
+| 变异测试 | `scripts/mutation_score.py`（Mode 4，可选，阈值 85%） |
 
 ---
 
@@ -138,7 +155,7 @@ Mode 2 的子步骤按需读取：
 - MCP 提供方未解析或混用多个提供方
 - 未编译通过就报完成
 - 从网络下载 stub-ext
-- 修改用户源码
+- 修改用户源码（Mode 4 例外：受源码安全四铁律约束，退出 `git diff` 必为空）
 - 单类失败阻塞整批
 
 ---
@@ -146,7 +163,7 @@ Mode 2 的子步骤按需读取：
 ## Agent 自用工作流检查清单
 
 ```
-□ 已区分 Mode 1（分析）/ Mode 2（编写）/ Mode 3（采集），未混跑
+□ 已区分 Mode 1（分析）/ Mode 2（编写）/ Mode 3（采集）/ Mode 4（变异，可选），未混跑
 □ 已执行 reconcile（比对 git HEAD 与 inventory.base_sha，按差异路由；首次运行无 inventory 直接进入环境检查）
 □ Mode 1：已 Read reference/environment_check.md + reference/inventory.md；产出 .ut-inventory.json
 □ Mode 2：已 Read reference/environment_check.md；.ut-inventory.json 存在（不存在则先执行 Mode 1）
@@ -158,4 +175,5 @@ Mode 2 的子步骤按需读取：
 □ 批次提交：本批次自检通过后已执行代码提交（只 commit 不 push）
 □ 疑似源码缺陷：已标红，未自行修源码
 □ 全类完成 + 覆盖达标：已批次提交（Mode 2 结束）；覆盖率报告属 Mode 3，按需单独触发
+□ Mode 4（可选）：已 Read reference/mutation_testing.md；变异后 git diff --exit-code 通过；存活变异体清单已交付（回 Mode 2 补强）
 ```
