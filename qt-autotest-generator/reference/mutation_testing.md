@@ -166,7 +166,7 @@ for mutant in mutants:
 
 产出双报告（写入 build 目录）：
 - `mutation_report.md`：人读报告（概述表 + 按函数详情 + **存活变异体建议清单** + 编译失败清单 + 按算子统计）
-- `mutation_report.json`：机读（每变异体 id/算子/行/状态/输出片段）
+- `.ut-mutation.json`：机读（与 `.ut-inventory.json` 命名对齐，格式见下文 §报告解读）
 
 存活变异体清单（Mode 4 的核心输出）：
 
@@ -275,10 +275,10 @@ C++ 语法有大量复合符号，变异算子若不区分会生成无效代码�
 ```bash
 python3 ${SKILL_DIR}/scripts/mutation_score.py \
     --source src/utils.cpp \
-    --function Utils::stringIsDigit \
+    --function Utils::stringIsDigit,Utils::reformatSeparators \
     --build-dir build-test \
     --test-target deepin-calculator-test \
-    --gtest-filter '*stringIsDigit*' \
+    --gtest-filter '*stringIsDigit*:*reformatSeparators*' \
     --project-dir .
 ```
 
@@ -297,7 +297,7 @@ python3 ${SKILL_DIR}/scripts/mutation_score.py \
 | 参数 | 必填 | 说明 |
 |------|------|------|
 | `--source` | 直接模式 | 源文件路径（相对项目根或绝对） |
-| `--function` | 直接模式 | 函数全限定名（`Class::method`） |
+| `--function` | 直接模式 | 函数全限定名（`Class::method`），多个用逗号分隔 |
 | `--inventory` | inventory 模式 | `.ut-inventory.json` 路径 |
 | `--all-high` | inventory 模式 | 对所有 high 级 testable 方法跑变异 |
 | `--build-dir` | ✅ | 构建目录（需已 cmake 配置） |
@@ -313,7 +313,7 @@ python3 ${SKILL_DIR}/scripts/mutation_score.py \
 
 ## 报告解读
 
-运行结束产出 `build-<dir>/mutation_report.md` + `mutation_report.json`：
+运行结束产出 `build-<dir>/mutation_report.md` + `.ut-mutation.json`：
 
 | 报告章节 | 含义 | 行动 |
 |---------|------|------|
@@ -326,6 +326,72 @@ python3 ${SKILL_DIR}/scripts/mutation_score.py \
 **判定逻辑**：
 - `PASS`：变异得分 ≥ 阈值（85%），测试有效性达标
 - `BELOW_THRESHOLD`：得分 < 阈值，存活变异体过多，建议补强测试
+
+### `.ut-mutation.json` 格式
+
+与 `.ut-inventory.json` 命名对齐，顶层含元数据 + 全局 summary + functions 数组。示例见 `examples/sample-qt-project/autotests/.ut-mutation.json`。
+
+```json
+{
+  "version": 1,
+  "project": "deepin-calculator",
+  "base_sha": "c9de5e9",
+  "timestamp": "2026-08-20T13:44:37",
+  "config": {
+    "threshold": 85.0,
+    "max_mutants_per_function": 20,
+    "test_target": "deepin-calculator-test",
+    "gtest_filter": "*stringIsDigit*:*reformatSeparators*"
+  },
+  "summary": {
+    "total_mutants": 44,
+    "killed": 41,
+    "survived": 0,
+    "compile_failed": 3,
+    "mutation_score": 100.0,
+    "verdict": "PASS"
+  },
+  "functions": [
+    {
+      "function": "Utils::stringIsDigit",
+      "file": "src/utils.cpp",
+      "line_range": [142, 157],
+      "total_mutants": 6,
+      "killed": 6,
+      "survived": 0,
+      "compile_failed": 0,
+      "mutation_score": 100.0,
+      "verdict": "PASS",
+      "details": [
+        {
+          "id": "ROR_147_!=_==",
+          "operator": "ROR",
+          "line": 148,
+          "description": "L148: != -> ==",
+          "status": "killed",
+          "output_snippet": "[  FAILED  ] Ut_Utils.stringIsDigit_..."
+        }
+      ]
+    }
+  ]
+}
+```
+
+**字段说明**：
+
+| 层级 | 字段 | 说明 |
+|------|------|------|
+| 顶层 | `version` | 格式版本（当前 1） |
+| 顶层 | `project` | 项目名（basename of project-dir） |
+| 顶层 | `base_sha` | 变异测试时的 git HEAD（短 SHA） |
+| 顶层 | `timestamp` | 运行时间（ISO 8601） |
+| 顶层 | `config` | 运行配置（阈值/上限/test-target/gtest-filter） |
+| `summary` | `mutation_score` | 全局变异得分 = killed / (killed + survived) |
+| `summary` | `verdict` | `PASS` / `BELOW_THRESHOLD` |
+| `functions[]` | `file` | 源文件相对路径 |
+| `functions[]` | `verdict` | 单函数 `PASS` / `BELOW_THRESHOLD` |
+| `details[]` | `status` | `killed` / `survived` / `compile_failed` |
+| `details[]` | `output_snippet` | 测试输出片段（killed 含 `[ FAILED ]`，compile_failed 含编译错误） |
 
 ---
 

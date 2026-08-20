@@ -36,6 +36,7 @@ import atexit
 import signal
 import subprocess
 from collections import defaultdict
+from datetime import datetime
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -45,6 +46,14 @@ from collections import defaultdict
 _PENDING_RESTORES = []  # [(backup_path, source_file), ...]
 _PROJECT_DIR = None     # 用于退出时 git diff 校验
 _MUTATED_FILES = set()  # 被变异过的源文件集合 (退出时只校验这些文件的 git diff)
+
+
+def _relative_path(abs_path, base_dir):
+    """将绝对路径转为相对 base_dir 的相对路径; 转换失败则原样返回."""
+    try:
+        return os.path.relpath(abs_path, base_dir)
+    except ValueError:
+        return abs_path
 
 
 def _restore_on_exit():
@@ -565,8 +574,8 @@ def run_mutation_testing(source_file, function_name, func_start, func_end,
     }
 
 
-def generate_report(results, output_path):
-    """生成变异测试报告 (Markdown + JSON)"""
+def generate_report(results, output_path, project=None, base_sha=None, config=None):
+    """生成变异测试报告 (Markdown + .ut-mutation.json)"""
     lines = []
     lines.append("# 变异测试报告 (Mode 4)")
     lines.append("")
@@ -660,10 +669,48 @@ def generate_report(results, output_path):
     with open(output_path, 'w') as f:
         f.write('\n'.join(lines))
 
-    # JSON 报告
-    json_path = output_path.replace('.md', '.json')
+    # JSON 报告 (.ut-mutation.json — 与 .ut-inventory.json 命名对齐)
+    json_path = os.path.join(os.path.dirname(output_path), '.ut-mutation.json')
+
+    total_killed = sum(r['killed'] for r in results)
+    total_survived = sum(r['survived'] for r in results)
+    total_valid = total_killed + total_survived
+    overall_score = round(total_killed / total_valid * 100, 1) if total_valid > 0 else 0
+
+    mutation_json = {
+        "version": 1,
+        "project": project or os.path.basename(_PROJECT_DIR or '.'),
+        "base_sha": base_sha or "",
+        "timestamp": datetime.now().isoformat(timespec='seconds'),
+        "config": config or {},
+        "summary": {
+            "total_mutants": sum(r['total_mutants'] for r in results),
+            "killed": total_killed,
+            "survived": total_survived,
+            "compile_failed": sum(r['compile_failed'] for r in results),
+            "mutation_score": overall_score,
+            "verdict": "PASS" if overall_score >= THRESHOLD else "BELOW_THRESHOLD"
+        },
+        "functions": []
+    }
+
+    for r in results:
+        func_data = {
+            "function": r['function'],
+            "file": _relative_path(r['file'], _PROJECT_DIR) if _PROJECT_DIR else r['file'],
+            "line_range": r['line_range'],
+            "total_mutants": r['total_mutants'],
+            "killed": r['killed'],
+            "survived": r['survived'],
+            "compile_failed": r['compile_failed'],
+            "mutation_score": r['mutation_score'],
+            "verdict": "PASS" if r['mutation_score'] >= THRESHOLD else "BELOW_THRESHOLD",
+            "details": r['details']
+        }
+        mutation_json["functions"].append(func_data)
+
     with open(json_path, 'w') as f:
-        json.dump(results, f, indent=2, ensure_ascii=False)
+        json.dump(mutation_json, f, indent=2, ensure_ascii=False)
 
     return output_path, json_path
 
@@ -675,7 +722,7 @@ def main():
     parser.add_argument('--source', default=None,
                         help='直接模式: 源文件路径 (相对项目根或绝对)')
     parser.add_argument('--function', default=None,
-                        help='直接模式: 函数全限定名 (Class::method)')
+                        help='直接模式: 函数全限定名 (Class::method)，多个用逗号分隔')
     parser.add_argument('--inventory', default=None,
                         help='inventory 模式: .ut-inventory.json 路径')
     parser.add_argument('--all-high', action='store_true',
@@ -707,13 +754,14 @@ def main():
     targets = []  # [(source_file, function_name), ...]
 
     if args.source and args.function:
-        # 直接模式
+        # 直接模式 (支持逗号分隔多函数)
         source_abs = args.source if os.path.isabs(args.source) \
             else os.path.join(_PROJECT_DIR, args.source)
         if not os.path.exists(source_abs):
             print("[Mode 4] 错误: 源文件不存在: {}".format(source_abs))
             sys.exit(1)
-        targets.append((source_abs, args.function))
+        for fn in (f.strip() for f in args.function.split(',')):
+            targets.append((source_abs, fn))
         print("[Mode 4] 直接模式: {}::{}".format(args.source, args.function))
     elif args.inventory and args.all_high:
         # inventory 模式
@@ -768,7 +816,31 @@ def main():
 
     # 生成报告
     report_path = os.path.join(args.build_dir, 'mutation_report.md')
-    md_path, json_path = generate_report(all_results, report_path)
+
+    # 元数据 (用于 .ut-mutation.json 顶层字段)
+    base_sha = ''
+    try:
+        base_sha = subprocess.check_output(
+            ['git', 'rev-parse', '--short', 'HEAD'],
+            cwd=_PROJECT_DIR, stderr=subprocess.DEVNULL
+        ).decode().strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pass
+
+    config = {
+        'threshold': THRESHOLD,
+        'max_mutants_per_function': args.max_mutants,
+        'test_target': args.test_target,
+    }
+    if args.gtest_filter:
+        config['gtest_filter'] = args.gtest_filter
+
+    md_path, json_path = generate_report(
+        all_results, report_path,
+        project=os.path.basename(_PROJECT_DIR) if _PROJECT_DIR else None,
+        base_sha=base_sha,
+        config=config
+    )
 
     # 总结
     total_killed = sum(r['killed'] for r in all_results)

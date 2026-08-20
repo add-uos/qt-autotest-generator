@@ -1,0 +1,422 @@
+{
+  "version": 1,
+  "project": "deepin-calculator",
+  "base_sha": "c9de5e9",
+  "timestamp": "2026-08-20T13:44:37",
+  "config": {
+    "threshold": 85.0,
+    "max_mutants_per_function": 20,
+    "test_target": "deepin-calculator-test",
+    "gtest_filter": "*stringIsDigit*:*reformatSeparators*:*formatThousandsSeparators*"
+  },
+  "summary": {
+    "total_mutants": 44,
+    "killed": 41,
+    "survived": 0,
+    "compile_failed": 3,
+    "mutation_score": 100.0,
+    "verdict": "PASS"
+  },
+  "functions": [
+    {
+      "function": "Utils::stringIsDigit",
+      "file": "src/utils.cpp",
+      "line_range": [
+        142,
+        157
+      ],
+      "total_mutants": 6,
+      "killed": 6,
+      "survived": 0,
+      "compile_failed": 0,
+      "mutation_score": 100.0,
+      "verdict": "PASS",
+      "details": [
+        {
+          "id": "ROR_147_!=_==",
+          "operator": "ROR",
+          "line": 148,
+          "description": "L148: != -> ==",
+          "status": "killed",
+          "output_snippet": "s\n[  FAILED  ] Ut_Utils_Baseline.stringIsDigit_WithDecimalPoint\n[  FAILED  ] Ut_Utils_Baseline.stringIsDigit_WithNegativeSign\n[  FAILED  ] Ut_Utils_Baseline.stringIsDigit_InvalidLetters\n[  FAILED  ] U"
+        },
+        {
+          "id": "ROR_147_!=_<",
+          "operator": "ROR",
+          "line": 148,
+          "description": "L148: != -> <",
+          "status": "killed",
+          "output_snippet": "rs_SmallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber (1 ms)\n[----------] 29 tests from Ut_Utils_Enhanced (18 ms total)\n\n[----------] Global test environment tear-down\n[="
+        },
+        {
+          "id": "ROR_147_!=_>",
+          "operator": "ROR",
+          "line": 148,
+          "description": "L148: != -> >",
+          "status": "killed",
+          "output_snippet": "usandsSeparators_SmallNumber (1 ms)\n[----------] 29 tests from Ut_Utils_Enhanced (22 ms total)\n\n[----------] Global test environment tear-down\n[==========] 69 tests from 3 test suites ran. (53 ms tota"
+        },
+        {
+          "id": "ROR_147_!=_<=",
+          "operator": "ROR",
+          "line": 148,
+          "description": "L148: != -> <=",
+          "status": "killed",
+          "output_snippet": "ms total)\n[  PASSED  ] 62 tests.\n[  FAILED  ] 7 tests, listed below:\n[  FAILED  ] Ut_Utils.formatThousandsSeparators\n[  FAILED  ] Ut_Utils_Baseline.stringIsDigit_WithDecimalPoint\n[  FAILED  ] Ut_Utils"
+        },
+        {
+          "id": "ROR_147_!=_>=",
+          "operator": "ROR",
+          "line": 148,
+          "description": "L148: != -> >=",
+          "status": "killed",
+          "output_snippet": "listed below:\n[  FAILED  ] Ut_Utils.formatThousandsSeparators\n[  FAILED  ] Ut_Utils_Baseline.stringIsDigit_WithDecimalPoint\n[  FAILED  ] Ut_Utils_Baseline.stringIsDigit_WithNegativeSign\n[  FAILED  ] U"
+        },
+        {
+          "id": "LOR_147_&&_||",
+          "operator": "LOR",
+          "line": 148,
+          "description": "L148: && -> ||",
+          "status": "killed",
+          "output_snippet": "dsSeparators\n[  FAILED  ] Ut_Utils_Baseline.stringIsDigit_PureDigits\n[  FAILED  ] Ut_Utils_Baseline.stringIsDigit_WithDecimalPoint\n[  FAILED  ] Ut_Utils_Baseline.stringIsDigit_WithComma\n[  FAILED  ] U"
+        }
+      ]
+    },
+    {
+      "function": "Utils::reformatSeparators",
+      "file": "src/utils.cpp",
+      "line_range": [
+        162,
+        196
+      ],
+      "total_mutants": 18,
+      "killed": 18,
+      "survived": 0,
+      "compile_failed": 0,
+      "mutation_score": 100.0,
+      "verdict": "PASS",
+      "details": [
+        {
+          "id": "AOR_178_-_+",
+          "operator": "AOR",
+          "line": 179,
+          "description": "L179: - -> +",
+          "status": "killed",
+          "output_snippet": "mallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber (0 ms)\n[----------] 29 tests from Ut_Utils_Enhanced (12 ms total)\n\n[----------] Global test environment tear-down\n[====="
+        },
+        {
+          "id": "AOR_178_-_*",
+          "operator": "AOR",
+          "line": 179,
+          "description": "L179: - -> *",
+          "status": "killed",
+          "output_snippet": "mallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber (1 ms)\n[----------] 29 tests from Ut_Utils_Enhanced (14 ms total)\n\n[----------] Global test environment tear-down\n[====="
+        },
+        {
+          "id": "AOR_178_-_/",
+          "operator": "AOR",
+          "line": 179,
+          "description": "L179: - -> /",
+          "status": "killed",
+          "output_snippet": "mallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber (1 ms)\n[----------] 29 tests from Ut_Utils_Enhanced (14 ms total)\n\n[----------] Global test environment tear-down\n[====="
+        },
+        {
+          "id": "ROR_168_==_!=",
+          "operator": "ROR",
+          "line": 169,
+          "description": "L169: == -> !=",
+          "status": "killed",
+          "output_snippet": "     OK ] Ut_Utils_Enhanced.formatThousandsSeparators_Zero (1 ms)\n[ RUN      ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNum"
+        },
+        {
+          "id": "ROR_168_==_<",
+          "operator": "ROR",
+          "line": 169,
+          "description": "L169: == -> <",
+          "status": "killed",
+          "output_snippet": "     OK ] Ut_Utils_Enhanced.formatThousandsSeparators_Zero (1 ms)\n[ RUN      ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNum"
+        },
+        {
+          "id": "ROR_168_==_>",
+          "operator": "ROR",
+          "line": 169,
+          "description": "L169: == -> >",
+          "status": "killed",
+          "output_snippet": "     OK ] Ut_Utils_Enhanced.formatThousandsSeparators_Zero (1 ms)\n[ RUN      ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNum"
+        },
+        {
+          "id": "ROR_168_==_<=",
+          "operator": "ROR",
+          "line": 169,
+          "description": "L169: == -> <=",
+          "status": "killed",
+          "output_snippet": "     OK ] Ut_Utils_Enhanced.formatThousandsSeparators_Zero (0 ms)\n[ RUN      ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNum"
+        },
+        {
+          "id": "ROR_168_==_>=",
+          "operator": "ROR",
+          "line": 169,
+          "description": "L169: == -> >=",
+          "status": "killed",
+          "output_snippet": "     OK ] Ut_Utils_Enhanced.formatThousandsSeparators_Zero (1 ms)\n[ RUN      ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNum"
+        },
+        {
+          "id": "ROR_178_==_!=",
+          "operator": "ROR",
+          "line": 179,
+          "description": "L179: == -> !=",
+          "status": "killed",
+          "output_snippet": "mallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber (1 ms)\n[----------] 29 tests from Ut_Utils_Enhanced (26 ms total)\n\n[----------] Global test environment tear-down\n[====="
+        },
+        {
+          "id": "ROR_178_==_<",
+          "operator": "ROR",
+          "line": 179,
+          "description": "L179: == -> <",
+          "status": "killed",
+          "output_snippet": "mallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber (1 ms)\n[----------] 29 tests from Ut_Utils_Enhanced (30 ms total)\n\n[----------] Global test environment tear-down\n[====="
+        },
+        {
+          "id": "ROR_178_==_>",
+          "operator": "ROR",
+          "line": 179,
+          "description": "L179: == -> >",
+          "status": "killed",
+          "output_snippet": "mallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber (1 ms)\n[----------] 29 tests from Ut_Utils_Enhanced (12 ms total)\n\n[----------] Global test environment tear-down\n[====="
+        },
+        {
+          "id": "ROR_178_==_<=",
+          "operator": "ROR",
+          "line": 179,
+          "description": "L179: == -> <=",
+          "status": "killed",
+          "output_snippet": "     OK ] Ut_Utils_Enhanced.formatThousandsSeparators_Zero (1 ms)\n[ RUN      ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNum"
+        },
+        {
+          "id": "ROR_178_==_>=",
+          "operator": "ROR",
+          "line": 179,
+          "description": "L179: == -> >=",
+          "status": "killed",
+          "output_snippet": "     OK ] Ut_Utils_Enhanced.formatThousandsSeparators_Zero (1 ms)\n[ RUN      ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNum"
+        },
+        {
+          "id": "LOR_168_||_&&",
+          "operator": "LOR",
+          "line": 169,
+          "description": "L169: || -> &&",
+          "status": "killed",
+          "output_snippet": "     OK ] Ut_Utils_Enhanced.formatThousandsSeparators_Zero (1 ms)\n[ RUN      ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNum"
+        },
+        {
+          "id": "CRC_166_0_1",
+          "operator": "CRC",
+          "line": 167,
+          "description": "L167: 0 -> 1",
+          "status": "killed",
+          "output_snippet": "mallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber (1 ms)\n[----------] 29 tests from Ut_Utils_Enhanced (16 ms total)\n\n[----------] Global test environment tear-down\n[====="
+        },
+        {
+          "id": "CRC_166_0_-1",
+          "operator": "CRC",
+          "line": 167,
+          "description": "L167: 0 -> -1",
+          "status": "killed",
+          "output_snippet": "mallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber (1 ms)\n[----------] 29 tests from Ut_Utils_Enhanced (12 ms total)\n\n[----------] Global test environment tear-down\n[====="
+        },
+        {
+          "id": "CRC_178_1_0",
+          "operator": "CRC",
+          "line": 179,
+          "description": "L179: 1 -> 0",
+          "status": "killed",
+          "output_snippet": "mallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber (1 ms)\n[----------] 29 tests from Ut_Utils_Enhanced (13 ms total)\n\n[----------] Global test environment tear-down\n[====="
+        },
+        {
+          "id": "CRC_178_1_2",
+          "operator": "CRC",
+          "line": 179,
+          "description": "L179: 1 -> 2",
+          "status": "killed",
+          "output_snippet": "mallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber (1 ms)\n[----------] 29 tests from Ut_Utils_Enhanced (16 ms total)\n\n[----------] Global test environment tear-down\n[====="
+        }
+      ]
+    },
+    {
+      "function": "Utils::formatThousandsSeparators",
+      "file": "src/utils.cpp",
+      "line_range": [
+        65,
+        137
+      ],
+      "total_mutants": 20,
+      "killed": 17,
+      "survived": 0,
+      "compile_failed": 3,
+      "mutation_score": 100.0,
+      "verdict": "PASS",
+      "details": [
+        {
+          "id": "AOR_106_+_-",
+          "operator": "AOR",
+          "line": 107,
+          "description": "L107: + -> -",
+          "status": "killed",
+          "output_snippet": "     OK ] Ut_Utils_Enhanced.formatThousandsSeparators_Zero (1 ms)\n[ RUN      ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNum"
+        },
+        {
+          "id": "AOR_106_+_*",
+          "operator": "AOR",
+          "line": 107,
+          "description": "L107: + -> *",
+          "status": "killed",
+          "output_snippet": "     OK ] Ut_Utils_Enhanced.formatThousandsSeparators_Zero (1 ms)\n[ RUN      ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNum"
+        },
+        {
+          "id": "AOR_106_+_/",
+          "operator": "AOR",
+          "line": 107,
+          "description": "L107: + -> /",
+          "status": "killed",
+          "output_snippet": "     OK ] Ut_Utils_Enhanced.formatThousandsSeparators_Zero (1 ms)\n[ RUN      ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNum"
+        },
+        {
+          "id": "AOR_121_-_+",
+          "operator": "AOR",
+          "line": 122,
+          "description": "L122: - -> +",
+          "status": "killed",
+          "output_snippet": "     OK ] Ut_Utils_Enhanced.formatThousandsSeparators_Zero (0 ms)\n[ RUN      ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNum"
+        },
+        {
+          "id": "AOR_121_-_*",
+          "operator": "AOR",
+          "line": 122,
+          "description": "L122: - -> *",
+          "status": "killed",
+          "output_snippet": "     OK ] Ut_Utils_Enhanced.formatThousandsSeparators_Zero (1 ms)\n[ RUN      ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNum"
+        },
+        {
+          "id": "AOR_121_-_/",
+          "operator": "AOR",
+          "line": 122,
+          "description": "L122: - -> /",
+          "status": "killed",
+          "output_snippet": "     OK ] Ut_Utils_Enhanced.formatThousandsSeparators_Zero (1 ms)\n[ RUN      ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNum"
+        },
+        {
+          "id": "AOR_126_+_-",
+          "operator": "AOR",
+          "line": 127,
+          "description": "L127: + -> -",
+          "status": "compile_failed",
+          "output_snippet": "e: declared here\n  195 |     inline qsizetype count() const { return d.size; }\n      |                      ^~~~~\ngmake[3]: *** [tests/CMakeFiles/deepin-calculator-test.dir/build.make:323：tests/CMakeF"
+        },
+        {
+          "id": "AOR_126_+_*",
+          "operator": "AOR",
+          "line": 127,
+          "description": "L127: + -> *",
+          "status": "compile_failed",
+          "output_snippet": "e: declared here\n  195 |     inline qsizetype count() const { return d.size; }\n      |                      ^~~~~\ngmake[3]: *** [tests/CMakeFiles/deepin-calculator-test.dir/build.make:323：tests/CMakeF"
+        },
+        {
+          "id": "AOR_126_+_/",
+          "operator": "AOR",
+          "line": 127,
+          "description": "L127: + -> /",
+          "status": "compile_failed",
+          "output_snippet": "e: declared here\n  195 |     inline qsizetype count() const { return d.size; }\n      |                      ^~~~~\ngmake[3]: *** [tests/CMakeFiles/deepin-calculator-test.dir/build.make:323：tests/CMakeF"
+        },
+        {
+          "id": "ROR_78_==_!=",
+          "operator": "ROR",
+          "line": 79,
+          "description": "L79: == -> !=",
+          "status": "killed",
+          "output_snippet": "     OK ] Ut_Utils_Enhanced.formatThousandsSeparators_Zero (0 ms)\n[ RUN      ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNum"
+        },
+        {
+          "id": "ROR_78_==_<",
+          "operator": "ROR",
+          "line": 79,
+          "description": "L79: == -> <",
+          "status": "killed",
+          "output_snippet": "     OK ] Ut_Utils_Enhanced.formatThousandsSeparators_Zero (1 ms)\n[ RUN      ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNum"
+        },
+        {
+          "id": "ROR_78_==_>",
+          "operator": "ROR",
+          "line": 79,
+          "description": "L79: == -> >",
+          "status": "killed",
+          "output_snippet": "     OK ] Ut_Utils_Enhanced.formatThousandsSeparators_Zero (1 ms)\n[ RUN      ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNum"
+        },
+        {
+          "id": "ROR_78_==_<=",
+          "operator": "ROR",
+          "line": 79,
+          "description": "L79: == -> <=",
+          "status": "killed",
+          "output_snippet": "     OK ] Ut_Utils_Enhanced.formatThousandsSeparators_Zero (1 ms)\n[ RUN      ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNum"
+        },
+        {
+          "id": "ROR_78_==_>=",
+          "operator": "ROR",
+          "line": 79,
+          "description": "L79: == -> >=",
+          "status": "killed",
+          "output_snippet": "     OK ] Ut_Utils_Enhanced.formatThousandsSeparators_Zero (1 ms)\n[ RUN      ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNum"
+        },
+        {
+          "id": "ROR_85_>=_>",
+          "operator": "ROR",
+          "line": 86,
+          "description": "L86: >= -> >",
+          "status": "killed",
+          "output_snippet": "     OK ] Ut_Utils_Enhanced.formatThousandsSeparators_Zero (1 ms)\n[ RUN      ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNum"
+        },
+        {
+          "id": "ROR_85_>=_<",
+          "operator": "ROR",
+          "line": 86,
+          "description": "L86: >= -> <",
+          "status": "killed",
+          "output_snippet": "r\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber (1 ms)\n[----------] 29 tests from Ut_Utils_Enhanced (17 ms total)\n\n[----------] Global test environment tear-down\n[==========] 69"
+        },
+        {
+          "id": "ROR_85_>=_<=",
+          "operator": "ROR",
+          "line": 86,
+          "description": "L86: >= -> <=",
+          "status": "killed",
+          "output_snippet": "r\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber (1 ms)\n[----------] 29 tests from Ut_Utils_Enhanced (23 ms total)\n\n[----------] Global test environment tear-down\n[==========] 69"
+        },
+        {
+          "id": "ROR_85_>=_==",
+          "operator": "ROR",
+          "line": 86,
+          "description": "L86: >= -> ==",
+          "status": "killed",
+          "output_snippet": "     OK ] Ut_Utils_Enhanced.formatThousandsSeparators_Zero (1 ms)\n[ RUN      ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNum"
+        },
+        {
+          "id": "ROR_85_>=_!=",
+          "operator": "ROR",
+          "line": 86,
+          "description": "L86: >= -> !=",
+          "status": "killed",
+          "output_snippet": "r\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber (1 ms)\n[----------] 29 tests from Ut_Utils_Enhanced (15 ms total)\n\n[----------] Global test environment tear-down\n[==========] 69"
+        },
+        {
+          "id": "ROR_97_!=_==",
+          "operator": "ROR",
+          "line": 98,
+          "description": "L98: != -> ==",
+          "status": "killed",
+          "output_snippet": "     OK ] Ut_Utils_Enhanced.formatThousandsSeparators_Zero (1 ms)\n[ RUN      ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNumber\n[       OK ] Ut_Utils_Enhanced.formatThousandsSeparators_SmallNum"
+        }
+      ]
+    }
+  ]
+}

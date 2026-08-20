@@ -103,7 +103,7 @@ Mode 3 **不生成测试代码、不编译新测试、不修改项目**，只采
 1. **前置检查**：Mode 2 已产出可编译可运行的测试；`.ut-inventory.json` 存在；reconcile 通过
 2. **`Read`** `reference/mutation_testing.md` → 调用 `scripts/mutation_score.py`
 3. 脚本对 high 级方法注入变异体 → 增量编译 → 跑 GTest → 计算变异得分 → 恢复源码
-4. 产出：`mutation_report.md`（存活变异体建议清单）+ `mutation_report.json`
+4. 产出：`mutation_report.md`（存活变异体建议清单）+ `.ut-mutation.json`（与 `.ut-inventory.json` 命名对齐）
 
 Mode 4 **临时修改源码**（注入变异体），受"源码安全四铁律"约束（替代 Iron Law #7），退出时 `git diff` 必为空。**不阻塞 Mode 2 done、不占 3 轮预算、不污染 Mode 3 覆盖率**。存活变异体只出建议，回 Mode 2 补强。
 
