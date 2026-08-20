@@ -538,7 +538,7 @@ def generate_summary(inventory: dict) -> str:
         lines.append(f"## 待复核条目 ({len(rq)})")
         lines.append(f"")
         for item in rq[:30]:
-            lines.append(f"- `{item['name']}` ({item['class_qn'] or '-'}): "
+            lines.append(f"- `{item.get('name', '?')}` ({item.get('class_qn') or '-'}): "
                          f"{item.get('reason', '')} → 建议 high，默认 mid")
 
     return "\n".join(lines)

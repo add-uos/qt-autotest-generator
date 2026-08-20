@@ -133,7 +133,7 @@
 | `file_path` | string | 源文件路径（相对项目根） |
 | `access` | string | `"public"` / `"protected"` / `"private"` |
 | `level` | string \| null | `"high"` / `"mid"` / `"low"` / `null`（exempt 时为 null） |
-| `score` | int | 评分总分 |
+| `score` | int | 评分总分（当 `source=manual` 时，`score` 反映 auto 评分，可能与 `level` 不一致，`level` 以人工值为准） |
 | `factors` | array | 命中的评分因子列表 |
 | `source` | string | `"auto"` / `"suggested"` / `"manual"` |
 | `testable` | bool | 是否可测试（scope=exempt 时为 false） |
@@ -196,6 +196,6 @@
 |------|---------|--------|
 | Mode 1 首次建表 | 全量 methods + gate_thresholds + scope_rules | Mode 1 |
 | Mode 2 每类编译通过 | 该类方法的 `usecase_count` | Mode 2 |
-| 源码变更对账 | 新增/删除/签名变更方法（TODO） | 增量更新脚本 |
+| 源码变更对账 | 新增/删除/签名变更方法 + 人工标记保留 | `fetch-mcp-data.py --incremental --existing` |
 
 > **注意**：`usecase_count` 更新是增量操作，只改当前类的数据，不覆盖其他类。

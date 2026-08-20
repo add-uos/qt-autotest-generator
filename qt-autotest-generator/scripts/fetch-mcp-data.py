@@ -49,6 +49,7 @@ import json
 import math
 import os
 import re
+import shutil
 import sys
 import time
 import urllib.request
@@ -484,6 +485,208 @@ def build_mcp_dump(project, methods, functions, dbus_adaptor, dbus_interface,
     }
 
 
+# ── 增量更新：人工标记 overlay ──────────────────────────────────────────────
+#
+# 思路：以图谱最新数据全量重建 methods，旧 inventory 中只有"人工标记"需要同步回写。
+#   - qn 对得上 → 同步人工字段（level/source/review_status/usecase_count）
+#   - qn 对不上（方法已删）→ 直接丢弃，不留墓碑
+#   - 不做改名软匹配：qn 是唯一主键，qn 变了即视为新方法，人工标记自然丢失
+#
+# 视为"人工标记"需要同步的字段：
+#   source == "manual"           → 人工设定了 level，同步 source + level
+#   review_status == "confirmed" → 人工确认过，同步 review_status
+#   usecase_count > 0            → Mode 2 写入的用例数，同步 usecase_count
+#
+# 顶层配置：file_overrides 整体保留；review_queue 中 confirmed 条目保留（方法仍存在时）。
+# scope_rules / gate_thresholds 跟随 build_inventory 重新生成（与 testable 计算保持一致）。
+
+
+def extract_human_overlay(old_inventory):
+    """从旧 inventory 提取人工标记。
+
+    返回 {qualified_name: {field: value}}，只含人工标记字段。
+    """
+    overlay = {}
+    for m in old_inventory.get("methods", []):
+        qn = m.get("qualified_name", "")
+        if not qn:
+            continue
+        human = {}
+        if m.get("source") == "manual" and m.get("level"):
+            human["source"] = "manual"
+            human["level"] = m["level"]
+        if m.get("review_status") == "confirmed":
+            human["review_status"] = "confirmed"
+        if m.get("usecase_count", 0) > 0:
+            human["usecase_count"] = m.get("usecase_count", 0)
+        if human:
+            overlay[qn] = human
+    return overlay
+
+
+def apply_overlay_to_methods(new_methods, overlay):
+    """把人工标记回写到新 methods。
+
+    返回 (applied_count, lost_list):
+      applied_count — 成功回写的方法数
+      lost_list     — 旧 inventory 中有人工标记、但新 methods 里已不存在（被删除）的方法
+    """
+    new_qns = {m.get("qualified_name") for m in new_methods}
+    applied = 0
+    for m in new_methods:
+        qn = m.get("qualified_name", "")
+        if qn in overlay:
+            m.update(overlay[qn])
+            applied += 1
+    lost = [{"qualified_name": qn, "fields": v}
+            for qn, v in overlay.items() if qn not in new_qns]
+    return applied, lost
+
+
+def merge_review_queue(new_rq, old_rq, new_method_qns, new_methods_by_qn=None):
+    """合并 review_queue。
+
+    - 旧 confirmed 且方法仍存在 → 保留（review_status=confirmed），补全缺失字段
+    - 旧 confirmed 但方法已删   → 丢弃（与"不存在的都去掉"一致）
+    - 新 pending 且未被旧 confirmed 覆盖 → 追加
+    - 新 pending 但该方法已 confirmed → 抑制（避免重复 pending）
+    """
+    confirmed_qns = set()
+    kept_confirmed = []
+    for r in old_rq or []:
+        if (r.get("review_status") == "confirmed"
+                and r.get("qualified_name") in new_method_qns):
+            # 从新 methods 补全旧 confirmed 条目可能缺的字段（class_qn 等）
+            entry = dict(r)  # 浅拷贝
+            if new_methods_by_qn and r.get("qualified_name") in new_methods_by_qn:
+                nm = new_methods_by_qn[r["qualified_name"]]
+                entry.setdefault("class_qn", nm.get("class_qn"))
+                entry.setdefault("name", nm.get("name"))
+            kept_confirmed.append(entry)
+            confirmed_qns.add(r.get("qualified_name"))
+    new_pending = [r for r in new_rq or []
+                   if r.get("qualified_name") not in confirmed_qns]
+    return kept_confirmed + new_pending
+
+
+def compute_diff(old_inventory, new_inventory, applied_count, lost_list):
+    """对比新旧 inventory，返回 diff dict 供报告渲染。"""
+    old_by_qn = {m.get("qualified_name"): m for m in old_inventory.get("methods", [])}
+    new_by_qn = {m.get("qualified_name"): m for m in new_inventory.get("methods", [])}
+
+    added, removed, sig_changed, level_changed = [], [], [], []
+
+    for qn, m in new_by_qn.items():
+        if qn not in old_by_qn:
+            added.append(m)
+            continue
+        old_m = old_by_qn[qn]
+        # 签名变更（qn 相同）
+        if (m.get("signature") or "") != (old_m.get("signature") or ""):
+            sig_changed.append({"qn": qn,
+                                "old": old_m.get("signature", ""),
+                                "new": m.get("signature", "")})
+        # level 变化：只看非 manual（manual 的 level 被 overlay 保留，必然不变）
+        if m.get("source") != "manual" and m.get("level") != old_m.get("level"):
+            level_changed.append({
+                "qn": qn, "old": old_m.get("level"), "new": m.get("level"),
+                "factors": m.get("factors", []),
+            })
+
+    for qn, m in old_by_qn.items():
+        if qn not in new_by_qn:
+            removed.append(m)
+
+    return {
+        "added": added, "removed": removed,
+        "sig_changed": sig_changed, "level_changed": level_changed,
+        "preserved": applied_count, "lost": lost_list,
+    }
+
+
+def _md_table(headers, rows):
+    """渲染一个 Markdown 表格。"""
+    out = ["| " + " | ".join(headers) + " |",
+           "|" + "|".join(["---"] * len(headers)) + "|"]
+    for r in rows:
+        out.append("| " + " | ".join(str(c) for c in r) + " |")
+    return out
+
+
+def render_diff_report(diff, project, old_sha, new_sha):
+    """渲染增量更新 Markdown 报告。"""
+    lines = [
+        "# Inventory 增量更新报告",
+        "",
+        f"- 项目: `{project}`",
+        f"- 旧 base_sha: `{old_sha}`",
+        f"- 新 base_sha: `{new_sha}`",
+        "",
+        "## 概览",
+        "",
+        "| 类别 | 数量 |",
+        "|------|------|",
+        f"| 新增方法 | {len(diff['added'])} |",
+        f"| 删除方法（已清理） | {len(diff['removed'])} |",
+        f"| 签名变更 | {len(diff['sig_changed'])} |",
+        f"| level 变化（auto 方法） | {len(diff['level_changed'])} |",
+        f"| 人工标记保留 | {diff['preserved']} |",
+        f"| 人工标记丢失（方法已删） | {len(diff['lost'])} |",
+        "",
+    ]
+
+    if diff["added"]:
+        lines += ["## 新增方法", ""]
+        lines += _md_table(
+            ["qualified_name", "类", "level", "factors"],
+            [[m.get("qualified_name"), m.get("class_qn") or "-",
+              m.get("level"), ", ".join(m.get("factors", []))] for m in diff["added"]])
+        lines.append("")
+
+    if diff["removed"]:
+        lines += ["## 删除方法（已从 inventory 清理）", ""]
+        lines += _md_table(
+            ["qualified_name", "原 level", "含人工标记"],
+            [[m.get("qualified_name"), m.get("level"),
+              "是" if (m.get("source") == "manual"
+                       or m.get("review_status") == "confirmed") else "否"]
+             for m in diff["removed"]])
+        lines.append("")
+
+    if diff["sig_changed"]:
+        lines += ["## 签名变更", "",
+                  "> qn 相同但 signature 变化：对应测试可能需要重新生成。", ""]
+        lines += _md_table(
+            ["qualified_name", "旧 signature", "新 signature"],
+            [[r["qn"], (r["old"] or "")[:80], (r["new"] or "")[:80]]
+             for r in diff["sig_changed"]])
+        lines.append("")
+
+    if diff["level_changed"]:
+        lines += ["## level 变化（仅 auto 方法，人工 manual 不受影响）", ""]
+        lines += _md_table(
+            ["qualified_name", "旧 level", "新 level", "factors"],
+            [[r["qn"], r["old"], r["new"], ", ".join(r["factors"])]
+             for r in diff["level_changed"]])
+        lines.append("")
+
+    if diff["lost"]:
+        lines += ["## ⚠️ 人工标记丢失（方法已从代码库删除）", "",
+                  "以下方法曾有人工标记，但图谱中已不存在，已被清理。",
+                  "如需保留请从 git 历史恢复旧 inventory。", ""]
+        lines += _md_table(
+            ["qualified_name", "丢失字段"],
+            [[r["qualified_name"], ", ".join(r["fields"].keys())] for r in diff["lost"]])
+        lines.append("")
+
+    if diff["preserved"]:
+        lines += [f"## 人工标记保留（{diff['preserved']} 个方法已回写）", "",
+                  "详见 .ut-inventory.json 中 source=manual / "
+                  "review_status=confirmed 的条目。", ""]
+
+    return "\n".join(lines)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="端到端 MCP → .ut-inventory.json 函数重要性探测")
@@ -500,7 +703,24 @@ def main():
                         help="同时输出 Markdown 摘要")
     parser.add_argument("--keep-dump", action="store_true",
                         help="保留中间 mcp_dump.json 文件")
+    parser.add_argument("--incremental", action="store_true",
+                        help="增量模式：全量重建 + 同步旧 inventory 的人工标记"
+                             "（level/source/review_status/usecase_count）。"
+                             "需配合 --existing 指向旧 .ut-inventory.json")
+    parser.add_argument("--existing", default=None,
+                        help="旧 .ut-inventory.json 路径（--incremental 时必需，"
+                             "从中提取人工标记回写到新输出；file_overrides 整体保留）")
     args = parser.parse_args()
+
+    # 增量模式前置校验：--existing 必须存在，避免浪费 MCP 采集
+    if args.incremental:
+        if not args.existing:
+            print("❌ --incremental 需配合 --existing 指向旧 .ut-inventory.json",
+                  file=sys.stderr)
+            sys.exit(1)
+        if not os.path.isfile(args.existing):
+            print(f"❌ --existing 文件不存在: {args.existing}", file=sys.stderr)
+            sys.exit(1)
 
     # 动态加载 scan-inventory.py（文件名含连字符，无法用 import 语句）
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -549,8 +769,70 @@ def main():
     print(f"\n🔧 Scoring methods via scan_inventory.build_inventory()...")
     inventory = scan_inventory.build_inventory(mcp_dump, args.project, args.base_sha)
 
+    # ── 增量模式：同步旧 inventory 的人工标记 ──
+    old_sha_for_report = "unknown"
+    diff = None
+    if args.incremental:
+        try:
+            with open(args.existing, "r", encoding="utf-8") as f:
+                old_inventory = json.load(f)
+        except json.JSONDecodeError as e:
+            print(f"❌ --existing JSON 损坏: {args.existing}: {e}", file=sys.stderr)
+            sys.exit(1)
+        old_sha_for_report = old_inventory.get("base_sha", "unknown")
+        print(f"\n🔀 增量模式：从 {args.existing} 同步人工标记...")
+
+        overlay = extract_human_overlay(old_inventory)
+        print(f"   提取人工标记: {len(overlay)} 个方法")
+
+        applied, lost = apply_overlay_to_methods(inventory["methods"], overlay)
+        print(f"   回写: {applied} 个，丢失（方法已删）: {len(lost)} 个")
+
+        new_method_qns = {m.get("qualified_name") for m in inventory["methods"]}
+        new_methods_by_qn = {m.get("qualified_name"): m for m in inventory["methods"]}
+        inventory["review_queue"] = merge_review_queue(
+            inventory.get("review_queue", []),
+            old_inventory.get("review_queue", []),
+            new_method_qns,
+            new_methods_by_qn,
+        )
+
+        # file_overrides 整体保留
+        if "file_overrides" in old_inventory:
+            inventory["file_overrides"] = old_inventory["file_overrides"]
+
+        # 重算 scan_stats 中受 overlay 影响的统计
+        stats = inventory["scan_stats"]
+        stats["review_pending"] = sum(
+            1 for r in inventory["review_queue"]
+            if r.get("review_status") == "pending")
+        # usecase_covered 只统计 testable 方法（non-testable 方法有 usecase 也不计）
+        covered = sum(1 for m in inventory["methods"]
+                      if m.get("testable", True) and m.get("usecase_count", 0) > 0)
+        stats["usecase_covered"] = covered
+        stats["usecase_not_covered"] = stats["testable"] - covered
+        # overlay 可能改变 level 分布（manual 覆盖 auto），需重算
+        level_counts = {"high": 0, "mid": 0, "low": 0}
+        for m in inventory["methods"]:
+            if m.get("testable") and m.get("level"):
+                level_counts[m["level"]] = level_counts.get(m["level"], 0) + 1
+        stats["high"] = level_counts["high"]
+        stats["mid"] = level_counts["mid"]
+        stats["low"] = level_counts["low"]
+
+        # 计算 diff 供报告
+        diff = compute_diff(old_inventory, inventory, applied, lost)
+
     # 写 .ut-inventory.json
     os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
+
+    # 增量覆盖原文件时自动备份（inventory 纳入 git，.bak 不入）
+    if args.incremental and os.path.isfile(args.output) \
+            and os.path.abspath(args.output) == os.path.abspath(args.existing):
+        bak = args.output + ".bak"
+        shutil.copyfile(args.output, bak)
+        print(f"💾 已备份原文件到 {bak}")
+
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump(inventory, f, indent=2, ensure_ascii=False)
     print(f"✅ 写入 {args.output} ({len(inventory['methods'])} 方法)")
@@ -561,6 +843,14 @@ def main():
         with open(summary_path, "w", encoding="utf-8") as f:
             f.write(scan_inventory.generate_summary(inventory))
         print(f"✅ 写入 {summary_path}")
+
+    # 增量模式：写 diff 报告
+    if diff is not None:
+        report_path = args.output.replace(".json", "-diff.md")
+        with open(report_path, "w", encoding="utf-8") as f:
+            f.write(render_diff_report(diff, args.project,
+                                       old_sha_for_report, args.base_sha))
+        print(f"✅ 写入增量报告 {report_path}")
 
     # 打印概要
     stats = inventory["scan_stats"]

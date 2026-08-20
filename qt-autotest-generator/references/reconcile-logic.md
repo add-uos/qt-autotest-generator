@@ -22,11 +22,23 @@
       - 索引 ready 后验证新鲜度：query_graph 查一个已知类，
         若返回的 file_path 对应的 git log 与当前 HEAD 一致则索引已同步；
         若不一致 → 同上按提供方类型处理（本地可 index_repository 刷新，远端只能等待/提醒）
-      - 执行 inventory 对账（方法级 diff：图谱当前方法集 vs `methods[]`）
-      - 新增方法 → 增量补全
-      - 签名/体变更 → 测试生成（重新生成该类）→ 编译验证 → 自检
-      - 方法删除 → 失败修复（清理引用已删方法的测试）
-      - 更新 inventory.base_sha
+      - 执行 inventory 对账（更新 inventory 本身 + 产出 diff 报告）：
+          python3 scripts/fetch-mcp-data.py \
+            --project <project_name> --file-pattern "src/**" \
+            --output {test_dir}/.ut-inventory.json \
+            --base-sha <HEAD> \
+            --incremental --existing {test_dir}/.ut-inventory.json --summary
+        · 全量重建 methods（图谱最新为准）+ 回写旧 inventory 的人工标记
+          （source=manual 的 level、review_status=confirmed、usecase_count）
+        · 方法删除直接清理（不留墓碑，不做改名软匹配）
+        · 产出 {test_dir}/.ut-inventory-diff.md：新增/删除/签名变更/level 变化
+        · base_sha 由脚本写入新 inventory（= --base-sha）
+        · 原地覆盖自动备份 .ut-inventory.json.bak
+        详见 references/incremental_inventory.md
+      - 读 diff 报告驱动后续 Mode 2 动作（上层职责，非对账脚本自身）：
+        · 新增方法 → 增量补全（references/incremental_updater.md）
+        · 签名/体变更 → 测试生成（重新生成该类）→ 编译验证 → 自检
+        · 方法删除 → 失败修复（清理引用已删方法的测试，references/failure_repairer.md）
    e. 相同 → 看当前状态决定下一步
    f. 分支切换检测：git branch --show-current 与内存变量记录的分支比较，
       若不同 → 强制刷新索引后重新对账：

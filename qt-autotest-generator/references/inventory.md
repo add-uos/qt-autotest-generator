@@ -45,9 +45,26 @@ if file_exists(inventory_path):
         print_summary(existing)
         return
     else:
-        # TODO: 增量更新（基于 git diff 更新 JSON，人工审核不覆盖）
-        # 当前版本：全量重建
-        pass
+        # 增量更新：全量重建 + 同步旧 inventory 的人工标记
+        # 完整方案见 references/incremental_inventory.md
+        # 落地：fetch-mcp-data.py --incremental --existing <path>
+        #   - qn 对得上 → 回写 level/source/review_status/usecase_count
+        #   - qn 对不上 → 直接丢弃（不留墓碑，不做改名软匹配）
+        #   - file_overrides 整体保留；review_queue confirmed 条目保留
+        #   - 产出 -diff.md 报告供人工复核
+        head = current_git_sha()
+        subprocess.run([
+            "python3", f"{skill_dir}/scripts/fetch-mcp-data.py",
+            "--project", project_name,
+            "--file-pattern", file_pattern or "src/**",
+            "--output", inventory_path,        # 原地覆盖，脚本自动备份 .bak
+            "--base-sha", head,
+            "--incremental",
+            "--existing", inventory_path,    # 旧 inventory（即当前文件）
+            "--summary",
+        ], check=True)
+        # 脚本产出：inventory_path（base_sha=head）+ inventory-diff.md + inventory-summary.md
+        return
 # 否则 → 全量建表（Step 3）
 ```
 
@@ -218,7 +235,7 @@ Agent 输出 Markdown 摘要 + review_queue，与用户交互：
 
 ## TODO
 
-- **增量更新脚本**：基于 `git diff` 检测源码变更，增量更新 `.ut-inventory.json`（新增方法入表、删除方法标记、签名变更重新评分）。更新结果需人工审核，**不自动覆盖**。
+- **增量更新脚本**：增量更新 `.ut-inventory.json`，全量重建 + 同步旧 inventory 的人工标记（`source=manual` 的 level、`review_status=confirmed`、`usecase_count`）；方法删除直接清理（不留墓碑，不做改名软匹配）；`file_overrides` 整体保留。**已落地**于 `fetch-mcp-data.py --incremental --existing`，详见 `references/incremental_inventory.md`。
 
 ## 关键约束
 
