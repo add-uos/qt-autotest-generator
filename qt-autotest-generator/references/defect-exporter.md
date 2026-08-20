@@ -50,7 +50,7 @@ python3 ${SKILL_DIR}/scripts/export-defects.py export \
 若 `--inventory` 指定或自动探测到 `.ut-inventory.json`，读取方法分级信息，为每条缺陷记录补全：
 
 - `method_level`：high / mid / low
-- `severity`：critical / major / minor
+- `severity`：`high` / `mid` / `low`（派生规则见 `references/defect-schema.md` §severity 派生规则）
 
 无 inventory 时保留缺陷原始字段，不报错。
 

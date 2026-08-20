@@ -6,6 +6,8 @@
 
 只采集/统计覆盖率，**不生成测试代码**。一条命令完成：运行测试 → lcov 采集 → genhtml → 分级覆盖率 → 汇总 JSON。
 
+> **与 `run-ut.sh` 的关系**：`run-ut.sh`（框架搭建时由 `scripts/generate-runner.sh` 生成）是用户手动运行的便捷脚本，支持交互式步骤选择；Mode 3 正式采集走 `scripts/collect-coverage-report.py`，支持 `--skip-build`、`--inventory` 等参数化控制。两者功能部分重叠但不冲突——`run-ut.sh` 面向人工操作，`collect-coverage-report.py` 面向 Agent 自动化。
+
 ## 适用时机
 
 用户意图为**只看覆盖率/采集报告/统计分级**，不需要生成或修改测试代码。典型触发：

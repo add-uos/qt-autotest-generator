@@ -192,7 +192,7 @@ for method in all_methods:
 
 测试文件首行必须有：
 ```cpp
-// SPDX-FileCopyrightText: 2026 UnionTech Software Technology Co., Ltd.
+// SPDX-FileCopyrightText: {SPDX_YEAR} UnionTech Software Technology Co., Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later
 ```
 

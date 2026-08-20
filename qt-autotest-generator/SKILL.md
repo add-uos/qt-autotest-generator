@@ -1,6 +1,6 @@
 ---
 name: qt-autotest-generator
-description: "Qt CMake 项目单元测试：函数重要性探测（Mode 1，生成 .ut-inventory.json 分级表）、按分级补全 GTest 用例（Mode 2，编译验证+覆盖率门禁+更新 usecase_count）、覆盖率采集与汇总（Mode 3，一条命令出分级报告）、变异测试验证测试有效性（Mode 4，可选增强，注入变异体计算变异得分）、源码缺陷导出与统计（Mode 5，用例级缺陷持久化+导出标红清单）。触发于「扫描函数重要性/生成 inventory/探测分级/项目初始化单测分析/importance inventory/scan method importance」→ Mode 1；「生成单测/批量生成单测/补全测试/add gtest/写测试/建测试框架/修测试/重新对账/加测试/sync tests/coverage gap/fix test failures/improve coverage/函数覆盖率/清理无效测试/对账」→ Mode 2；「采集覆盖率/统计覆盖率/生成覆盖率报告/collect coverage/coverage report/coverage summary」→ Mode 3；「变异测试/mutation testing/mutation score/验证测试有效性/测试能不能发现问题/测试够不够好/变异得分/high 级方法有效性」→ Mode 4；「导出源码缺陷/统计源码缺陷/defect report/缺陷清单/导出缺陷数据/源码缺陷标红清单」→ Mode 5。硬门禁：codebase-memory-mcp 知识图谱（远端优先，本地兜底）。不触发于：非 Qt 或非 CMake 项目、Qt Test/Catch2 框架、仅运行测试/配 CI 不生成测试代码。"
+description: "Qt CMake 项目 GTest 单元测试自动生成与质量闭环。基于 codebase-memory-mcp 知识图谱，支持：函数重要性探测与分级（Mode 1）、按分级补全 GTest 用例（Mode 2，编译验证+覆盖率门禁）、覆盖率采集与汇总（Mode 3）、变异测试（Mode 4，可选，验证测试有效性）、源码缺陷导出与统计（Mode 5，可选，用例级标红清单）。触发于：生成单测/补全测试/扫描函数重要性/采集覆盖率/变异测试/导出源码缺陷/add gtest/coverage gap/fix test failures/mutation score/defect report 等。硬门禁：codebase-memory-mcp 知识图谱（远端优先，本地兜底），无图谱不执行。不触发于：非 Qt 或非 CMake 项目、Qt Test/Catch2/doctest、仅运行测试/配 CI/不生成测试代码。"
 version: "3.3.0"
 user-invocable: true
 argument-hint: "[项目路径 / 模块路径 / 类名]"
@@ -151,7 +151,7 @@ Mode 5 **不跑测试、不编译、不改测试代码、不改源码**（与 Mo
 | 用例命名 | `{Feature}_{Scenario}_{ExpectedResult}` |
 | MCP 工具 | `search_graph`, `get_code_snippet`, `trace_path`, `query_graph`, `index_status` |
 | 编译重试 | per-error 3 次，max 10 loops |
-| 函数覆盖率阈值 | 默认 90%，可由用户指定 |
+| 函数覆盖率阈值 | 分级门禁：high 行90%+分支80%+函数100%，mid/low 行60%+函数100%
 | 模板与 stub-ext | `templates/`，详见 `references/templates-guide.md` |
 | 分级覆盖率采集 | `scripts/collect-coverage-report.py`（Mode 3） |
 | 变异测试 | `scripts/mutation-score.py`（Mode 4，可选，阈值 85%） |

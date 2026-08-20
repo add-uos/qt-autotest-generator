@@ -70,7 +70,7 @@ read("${SKILL_DIR}/templates/cmake-submodule.txt")
 - `{header_file}` → 目标类头文件路径（相对项目根）
 - `{ClassName}` → 类名
 - `{TestCases}` → 生成的测试用例
-- `{SPDX_YEAR}` → 当前年份（如 2026），由 test_writer 填入
+- `{SPDX_YEAR}` → 当前年份（如 2025），由 test_writer 在生成时填入。**示例中不得硬编码年份，一律用 `{SPDX_YEAR}` 占位**
 
 **占位符说明**：
 - `{BranchList}` → 分支清单 + 用例映射注释块（test-types §4.1 要求，复杂方法必须落，简单方法可省）；插入位置：`{Namespace}` 之前、`#include` 之后

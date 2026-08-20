@@ -66,7 +66,7 @@ for method in inventory["methods"]:
         continue
     class_qn = method.get("class_qn", "")
     if not class_qn:
-        continue  # 自由函数暂跳过
+        continue  # 自由函数单独收集（见下方 free_functions 列表）
     if class_qn not in testable_classes:
         testable_classes[class_qn] = {
             "name": class_qn.split(".")[-1],
@@ -80,12 +80,29 @@ for method in inventory["methods"]:
     if level_rank(method["level"]) > level_rank(testable_classes[class_qn]["level"]):
         testable_classes[class_qn]["level"] = method["level"]
 
+# 自由函数收集（class_qn 为空的 testable 方法）
+free_functions = [m for m in inventory["methods"] if m["testable"] and not m.get("class_qn")]
+
 # 排序：high → mid → low
 sorted_classes = sorted(testable_classes.values(), key=lambda c: -level_rank(c["level"]))
 
 # 初始化类处理状态（内存变量）
 for c in sorted_classes:
     class_status[c["name"]] = {"status": "pending"}
+```
+
+#### 自由函数处理策略
+
+自由函数（`class_qn` 为空、`node_type="Function"`）按以下规则处理：
+
+- **同文件自由函数归组**：按 `file_path` 分组，同一源文件下的自由函数归入一个测试文件 `{test_dir}/{module}/test_free_{module}.cpp`
+- **Fixture 命名**：`Free{Module}Test`（如 `FreeUtilsTest`）
+- **优先级排序**：与类方法相同，按 level 高低排序
+- **依赖追踪 / stub / 编译验证 / 自检**：与类方法走相同闭环
+- **usecase_count 更新**：自由函数的 `usecase_count` 独立统计并写回 inventory
+- **不跳过**：自由函数不是"暂跳过"，而是延后处理——所有类完成后再处理自由函数
+
+> **注意**：若自由函数与某类强耦合（如友元函数、仅服务于某类的工具函数），可考虑合并到该类测试文件中，由 Agent 根据源码上下文判断。
 ```
 
 ### 5. 逐类闭环

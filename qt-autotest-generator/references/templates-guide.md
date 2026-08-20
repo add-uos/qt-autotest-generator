@@ -1,6 +1,8 @@
 # 模板文件指南（`templates/`）
 
-技能内置的两类资产合并存放于根级 `templates/` 目录：**代码生成模板**（带占位符，读取后替换）和 **stub-ext 库**（vendored 第三方库，整目录原样复制）。
+技能内置的三类资产合并存放于根级 `templates/` 目录：**代码生成模板**（带占位符，Agent 读取后替换）、**生成脚本**（Agent 执行 `bash` 运行，输出产物直接落盘）、**stub-ext 库**（vendored 第三方库，整目录原样复制）。
+
+> **模板 vs 脚本**：模板文件（`templates/*.txt` / `templates/*.cpp`）由 Agent 用 `Read` 读取后手动替换占位符再 `Write` 写出；生成脚本（`scripts/generate-cmake-utils.sh` / `scripts/generate-runner.sh`）由 Agent 用 `bash` 直接执行，脚本内部读取自身模板并输出最终文件。两者**不混用**——对同一产物只走一条路径。
 
 ## 代码生成模板（平铺于 `templates/`）
 
