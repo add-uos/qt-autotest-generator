@@ -84,7 +84,7 @@ read("${SKILL_DIR}/templates/cmake-submodule.txt")
 - 测试文件路径 = `{test_dir}/{module_path_flattened}/test_{classname}.cpp`
 - 例：`{test_dir}/a/test_manager.cpp` 和 `{test_dir}/b/test_manager.cpp`
 - CMake 子目录按模块路径拆分，每个路径独立 `add_subdirectory`
-- 依赖追踪（`references/dependency_tracer.md`）需在 `source_dirs` 中区分同名类的模块路径
+- 依赖追踪（`references/dependency-tracer.md`）需在 `source_dirs` 中区分同名类的模块路径
 
 ### 4. 生成测试用例
 

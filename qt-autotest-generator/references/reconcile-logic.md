@@ -7,7 +7,7 @@
 ```
 1. 读 {test_dir}/.ut-inventory.json（不存在 → 首次运行）
 2. 首次运行（用户提供本地 project_path）：
-   → 环境检查（references/environment_check.md）→ 框架搭建（references/framework_builder.md）
+   → 环境检查（references/environment-check.md）→ 框架搭建（references/framework-builder.md）
 3. 有 inventory：
    a. 重新校验 MCP 提供方：确认该提供方仍可用（`list_projects()` 可调通）且目标项目仍索引 ready。
       若提供方已失联（如远端断开），重新走环境检查解析
@@ -34,9 +34,9 @@
         · 产出 {test_dir}/.ut-inventory-diff.md：新增/删除/签名变更/level 变化
         · base_sha 由脚本写入新 inventory（= --base-sha）
         · 原地覆盖自动备份 .ut-inventory.json.bak
-        详见 references/incremental_inventory.md
+        详见 references/incremental-inventory.md
       - 读 diff 报告驱动后续 Mode 2 动作（上层职责，非对账脚本自身）：
-        · 新增方法 → 增量补全（references/incremental_updater.md）
+        · 新增方法 → 增量补全（references/incremental-updater.md）
         · 签名/体变更 → 测试生成（重新生成该类）→ 编译验证 → 自检
         · 方法删除 → **主动清理测试用例**（references/stale-test-cleanup.md）
           - 对账阶段立即执行，不等编译报错

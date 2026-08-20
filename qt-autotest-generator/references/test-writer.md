@@ -48,11 +48,11 @@ gui_names = {c["name"] for c in inventory.get("classes", []) if c.get("is_gui")}
 
 ### 2. 环境门禁
 
-`Read references/environment_check.md` → MCP 提供方解析、索引验证
+`Read references/environment-check.md` → MCP 提供方解析、索引验证
 
 ### 3. 框架搭建（按需）
 
-若 `{test_dir}/` 不存在 → `Read references/framework_builder.md`
+若 `{test_dir}/` 不存在 → `Read references/framework-builder.md`
 
 ### 4. 确定待测类列表
 
@@ -104,12 +104,12 @@ for c in sorted_classes:
 
 | 步骤 | 文件 | 说明 |
 |------|------|------|
-| 依赖追踪 | `references/dependency_tracer.md` | 读 inventory 的 is_gui、MCP trace_path 出向、stub 决策、CMake 目录 |
-| 测试代码生成 | `references/test_code_gen.md` | 读模板生成测试代码、用例数下限从 level/factors 推导、AAA、命名 |
-| 编译验证 | `references/build_verifier.md` | 强制编译+运行、错误分类→修复表 |
-| 自检 | `references/self_checker.md` | 覆盖率/命名/SPDX/stub/断言强度/环境隔离 |
-| 失败修复 | `references/failure_repairer.md` | 编译/运行失败时 |
-| 增量补全 | `references/incremental_updater.md` | 覆盖率缺口时 |
+| 依赖追踪 | `references/dependency-tracer.md` | 读 inventory 的 is_gui、MCP trace_path 出向、stub 决策、CMake 目录 |
+| 测试代码生成 | `references/test-code-gen.md` | 读模板生成测试代码、用例数下限从 level/factors 推导、AAA、命名 |
+| 编译验证 | `references/build-verifier.md` | 强制编译+运行、错误分类→修复表 |
+| 自检 | `references/self-checker.md` | 覆盖率/命名/SPDX/stub/断言强度/环境隔离 |
+| 失败修复 | `references/failure-repairer.md` | 编译/运行失败时 |
+| 增量补全 | `references/incremental-updater.md` | 覆盖率缺口时 |
 
 **迭代上限**：同一类最多循环 3 轮（Iron Law #10）。3 轮后仍未通过 → 标记 `failed` + `max_iterations_exceeded`，跳过该类，继续下一个。
 
@@ -150,11 +150,11 @@ gate = inventory["gate_thresholds"]
 # low:  行60% + 函数100%（同 mid）
 ```
 
-自检阶段按方法 level 应用对应门禁。详见 `references/self_checker.md` 和 `references/coverage-tiers.md`。
+自检阶段按方法 level 应用对应门禁。详见 `references/self-checker.md` 和 `references/coverage-tiers.md`。
 
 ### 8. 批次提交
 
-本批次所有类自检通过后 → `Read references/code_committer.md`
+本批次所有类自检通过后 → `Read references/code-committer.md`
 
 只 commit，不 push。
 
@@ -162,8 +162,8 @@ gate = inventory["gate_thresholds"]
 
 全部批次提交完成（无下一批次）即 Mode 2 结束。此时统一生成**最终报告**，只执行一次：
 
-1. **Mode 3 覆盖率报告**：`Read references/report_generator.md` → 调用 `scripts/collect-coverage-report.py`（gtest XML + lcov HTML + 分级覆盖率 + 汇总 JSON）
-2. **Mode 5 缺陷导出**：`Read references/defect_exporter.md` → 调用 `scripts/export-defects.py export`（`.ut-defects.json` → `defects.json` + `defects-summary.md`）
+1. **Mode 3 覆盖率报告**：`Read references/report-generator.md` → 调用 `scripts/collect-coverage-report.py`（gtest XML + lcov HTML + 分级覆盖率 + 汇总 JSON）
+2. **Mode 5 缺陷导出**：`Read references/defect-exporter.md` → 调用 `scripts/export-defects.py export`（`.ut-defects.json` → `defects.json` + `defects-summary.md`）
 
 > ⚠️ **报告只在最终退出前生成一次**，不在每笔批次提交后触发。原因：Mode 2 可能有**多笔批次提交**（每批次一笔），中间重复跑报告既浪费又状态不完整；最终退出前的报告反映所有类、所有缺陷、累计覆盖率的完整状态。
 

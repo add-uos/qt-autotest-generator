@@ -46,7 +46,7 @@ if file_exists(inventory_path):
         return
     else:
         # 增量更新：全量重建 + 同步旧 inventory 的人工标记
-        # 完整方案见 references/incremental_inventory.md
+        # 完整方案见 references/incremental-inventory.md
         # 落地：fetch-mcp-data.py --incremental --existing <path>
         #   - qn 对得上 → 回写 level/source/review_status/usecase_count
         #   - qn 对不上 → 直接丢弃（不留墓碑，不做改名软匹配）
@@ -235,7 +235,7 @@ Agent 输出 Markdown 摘要 + review_queue，与用户交互：
 
 ## TODO
 
-- **增量更新脚本**：增量更新 `.ut-inventory.json`，全量重建 + 同步旧 inventory 的人工标记（`source=manual` 的 level、`review_status=confirmed`、`usecase_count`）；方法删除直接清理（不留墓碑，不做改名软匹配）；`file_overrides` 整体保留。**已落地**于 `fetch-mcp-data.py --incremental --existing`，详见 `references/incremental_inventory.md`。
+- **增量更新脚本**：增量更新 `.ut-inventory.json`，全量重建 + 同步旧 inventory 的人工标记（`source=manual` 的 level、`review_status=confirmed`、`usecase_count`）；方法删除直接清理（不留墓碑，不做改名软匹配）；`file_overrides` 整体保留。**已落地**于 `fetch-mcp-data.py --incremental --existing`，详见 `references/incremental-inventory.md`。
 
 ## 关键约束
 
