@@ -52,7 +52,8 @@ SCOPE_RULES = [
     {"pattern": "test/**",        "scope": "exempt", "reason": "测试代码本身"},
 ]
 
-GATE_THRESHOLDS = {
+# 默认门禁阈值（仅首次建表使用；已有 inventory 时从 inventory 读取，不覆盖外部设定）
+DEFAULT_GATE_THRESHOLDS = {
     "high": {"line": 90, "branch": 80, "function": 100},
     "mid":  {"line": 60, "branch": 0, "function": 100},
     "low":  {"line": 60, "branch": 0, "function": 100},
@@ -208,8 +209,14 @@ def load_mcp_dump(path: str) -> dict:
 
 # ── 主流程 ──
 
-def build_inventory(mcp_data: dict, project_name: str, base_sha: str) -> dict:
-    """Build .ut-inventory.json from pre-fetched MCP data."""
+def build_inventory(mcp_data: dict, project_name: str, base_sha: str,
+                    gate_thresholds: dict | None = None) -> dict:
+    """Build .ut-inventory.json from pre-fetched MCP data.
+
+    Args:
+        gate_thresholds: 外部门禁阈值；为 None 时使用 DEFAULT_GATE_THRESHOLDS。
+            增量模式应传入旧 inventory 的 gate_thresholds，避免覆盖外部设定。
+    """
 
     all_methods = mcp_data.get("methods", [])
     all_functions = mcp_data.get("functions", [])
@@ -516,7 +523,7 @@ def build_inventory(mcp_data: dict, project_name: str, base_sha: str) -> dict:
         "base_sha": base_sha,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "scan_stats": stats,
-        "gate_thresholds": GATE_THRESHOLDS,
+        "gate_thresholds": gate_thresholds if gate_thresholds is not None else DEFAULT_GATE_THRESHOLDS,
         "scope_rules": SCOPE_RULES,
         "file_overrides": [],
         # 类级画像：只列 GUI 类，不在列表中的类 is_gui=false（Mode 2 直接读，不再查图谱）

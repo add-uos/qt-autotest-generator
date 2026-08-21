@@ -106,6 +106,9 @@
 | `low` | ≥ 60% | — | 100% | 门禁同 mid（构造/析构等仍需覆盖） |
 
 > `branch: 0` 表示不检查分支覆盖率。
+>
+> **来源**：以上为首次建表的**默认值**。`gate_thresholds` 由外部确定，已有 inventory 时从旧 inventory 读取保留，
+> 增量重建不覆盖外部设定。用户可直接编辑 `.ut-inventory.json` 中的 `gate_thresholds` 自定义阈值。
 
 ### classes 条目
 

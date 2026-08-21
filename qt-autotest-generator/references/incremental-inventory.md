@@ -48,7 +48,8 @@ python3 scripts/fetch-mcp-data.py \
 |------|------|
 | `file_overrides` | **整体保留**（per-file 人工覆盖，正交于评分） |
 | `review_queue` 中 `confirmed` 条目 | **保留**（仅当对应方法仍存在） |
-| `scope_rules` / `gate_thresholds` | 跟随 `build_inventory` **重新生成**（与 `testable` 计算保持一致；如需自定义豁免，用 `file_overrides`） |
+| `scope_rules` | 跟随 `build_inventory` **重新生成**（与 `testable` 计算保持一致；如需自定义豁免，用 `file_overrides`） |
+| `gate_thresholds` | **从旧 inventory 保留**（外部可修改，不随 build_inventory 覆盖）；首次建表使用默认值 |
 
 ### review_queue 合并规则
 

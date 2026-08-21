@@ -855,7 +855,21 @@ def main():
 
     # 调用 scan_inventory 评分
     print(f"\n🔧 Scoring methods via scan_inventory.build_inventory()...")
-    inventory = scan_inventory.build_inventory(mcp_dump, args.project, base_sha)
+
+    # gate_thresholds：增量模式从旧 inventory 读取（保留外部设定），首次建表用默认值
+    existing_gates = None
+    if args.incremental and args.existing:
+        try:
+            with open(args.existing, "r", encoding="utf-8") as f:
+                old_inv = json.load(f)
+            existing_gates = old_inv.get("gate_thresholds")
+            if existing_gates:
+                print(f"   gate_thresholds: 从旧 inventory 读取（保留外部设定）")
+        except Exception:
+            pass  # 读取失败不影响主流程，后续正式 load 会再校验
+
+    inventory = scan_inventory.build_inventory(mcp_dump, args.project, base_sha,
+                                                gate_thresholds=existing_gates)
 
     # ── 增量模式：同步旧 inventory 的人工标记 ──
     old_sha_for_report = "unknown"
@@ -888,6 +902,10 @@ def main():
         # file_overrides 整体保留
         if "file_overrides" in old_inventory:
             inventory["file_overrides"] = old_inventory["file_overrides"]
+
+        # gate_thresholds 保留旧 inventory 的值（已在 build_inventory 调用时传入，此处确认一致性）
+        if "gate_thresholds" in old_inventory:
+            inventory["gate_thresholds"] = old_inventory["gate_thresholds"]
 
         # 重算 scan_stats 中受 overlay 影响的统计
         stats = inventory["scan_stats"]

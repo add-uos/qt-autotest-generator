@@ -144,6 +144,7 @@ if result.total == 0:
     "mid": { "line": 60, "branch": 0, "function": 100 },
     "low": { "line": 60, "branch": 0, "function": 100 }
   },
+  // ⚠️ 以上为默认值。gate_thresholds 由外部确定，已有 inventory 时从 inventory 读取，不覆盖
   "scope_rules": [],
   "methods": [],
   "review_queue": []
