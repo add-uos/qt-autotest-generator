@@ -62,6 +62,7 @@ import sys
 import time
 import urllib.request
 import urllib.error
+from pathlib import Path
 
 # ── 配置 ──
 
@@ -868,8 +869,17 @@ def main():
         except Exception:
             pass  # 读取失败不影响主流程，后续正式 load 会再校验
 
+    # 推导项目根目录：inventory 文件通常在 <project>/autotests/.ut-inventory.json
+    # 取 output 父目录的父目录；若路径不含 autotests/ 则取父目录
+    output_dir = Path(args.output).resolve().parent
+    output_parent = output_dir.parent
+    dir_name = output_dir.name
+    project_root = str(output_parent) if dir_name == "autotests" else str(output_dir)
+    print(f"📁 推导项目根目录: {project_root}  (from --output {args.output})")
+
     inventory = scan_inventory.build_inventory(mcp_dump, args.project, base_sha,
-                                                gate_thresholds=existing_gates)
+                                                gate_thresholds=existing_gates,
+                                                project_root=project_root)
 
     # ── 增量模式：同步旧 inventory 的人工标记 ──
     old_sha_for_report = "unknown"

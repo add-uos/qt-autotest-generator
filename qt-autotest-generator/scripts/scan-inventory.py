@@ -210,12 +210,15 @@ def load_mcp_dump(path: str) -> dict:
 # ── 主流程 ──
 
 def build_inventory(mcp_data: dict, project_name: str, base_sha: str,
-                    gate_thresholds: dict | None = None) -> dict:
+                    gate_thresholds: dict | None = None,
+                    project_root: str = "") -> dict:
     """Build .ut-inventory.json from pre-fetched MCP data.
 
     Args:
         gate_thresholds: 外部门禁阈值；为 None 时使用 DEFAULT_GATE_THRESHOLDS。
             增量模式应传入旧 inventory 的 gate_thresholds，避免覆盖外部设定。
+        project_root: 本地项目根目录（如 /home/user/deepin-picker），
+            由 fetch-mcp-data 从 --output 路径自动推导，写入 JSON 供编辑器使用。
     """
 
     all_methods = mcp_data.get("methods", [])
@@ -520,6 +523,7 @@ def build_inventory(mcp_data: dict, project_name: str, base_sha: str,
     inventory = {
         "version": 1,
         "project": project_name,
+        "project_root": project_root,
         "base_sha": base_sha,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "scan_stats": stats,
@@ -644,7 +648,10 @@ def main():
         print("请先用 Agent 采集 MCP 数据并保存为 JSON", file=sys.stderr)
         sys.exit(1)
 
-    inventory = build_inventory(mcp_data, args.project, args.base_sha)
+    inventory = build_inventory(mcp_data, args.project, args.base_sha,
+                                project_root=str(Path(args.output).resolve().parent.parent)
+                                if Path(args.output).resolve().parent.name == 'autotests'
+                                else str(Path(args.output).resolve().parent))
 
     # 写 JSON
     with open(args.output, 'w', encoding='utf-8') as f:
