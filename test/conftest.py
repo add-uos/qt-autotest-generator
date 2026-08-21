@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-SCRIPTS_DIR = Path(__file__).resolve().parent.parent
+SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "qt-autotest-generator" / "scripts"
 
 # 模块名 → 文件名映射（模块名用下划线，便于测试 import）
 _SCRIPT_FILES = {
