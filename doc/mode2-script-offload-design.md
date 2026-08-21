@@ -186,15 +186,16 @@ python3 scripts/verify-build.py \
 
 ### 2.3 `self-check-structural.py`（固化 self-checker 结构性检查，✅ 已落地）
 
-**已实现**：`scripts/self-check-structural.py` + `test/test_self_check_structural.py`（57 用例）
+**已实现**：`scripts/self-check-structural.py` + `test/test_self_check_structural.py`（68 用例）
 
-固化 self-checker.md §2/§2b/§3/§4/§5/§5b 的纯文件正则检查（无图谱依赖），Python 实现块切分（不依赖 awk，跨平台可单测）。六类检查：
+固化 self-checker.md §2/§2b/§3/§4/§5/§5b 的纯文件正则检查（无图谱依赖），Python 实现块切分（不依赖 awk，跨平台可单测）。七类检查：
 
 | 检查项 | 规则 | 违规码 |
 |--------|------|--------|
 | spdx | 前 5 行有 Copyright + GPL-3.0 License | — |
 | naming | 用例名 ≥2 下划线分段 + 禁轮数批次号 `R\d+`/`Round\d+`/`Batch\d+` | TOO_FEW_SEGMENTS / ROUND_BATCH / MEANINGLESS |
-| assertion | 每用例 ≥2 有效 EXPECT_*（排除 NO_FATAL/NO_THROW/EXPECT_CALL） | EMPTY_ASSERT / SOLE_NO_FATAL / SOLE_GMOCK_EXPECT / LOW_ASSERT / SOLE_BOOL_ASSERT(warn) |
+| assertion | 每用例 ≥2 有效 EXPECT_*（排除 NO_FATAL/NO_THROW/EXPECT_CALL）+ 用例数不低于声明表 min | EMPTY_ASSERT / SOLE_NO_FATAL / SOLE_GMOCK_EXPECT / LOW_ASSERT / SOLE_BOOL_ASSERT(warn) / BELOW_MIN_CASES / MISSING_DECL(warn) |
+| aaa | 每个 TEST_F 必须包含 `// Arrange` / `// Act` / `// Assert` 三段注释；空段标 warning | MISSING_AAA / EMPTY_AAA(warn) |
 | structure | 继承 `::testing::Test` + SetUp/TearDown 存在 | — |
 | stub | set_lamda 出现须有 clear；clear 须在 TearDown | STUB_NOT_CLEARED / STUB_CLEAR_NOT_IN_TEARDOWN(warn) |
 | env | 硬编码绝对路径（排除 QTemporaryDir）/ qputenv-qunsetenv 不平衡 / 真实外部资源（含时间/随机依赖，排除 stub） / 用户目录访问（QDir::homePath/QStandardPaths，warning） | HARDCODED_PATH / ENV_UNBALANCED / REAL_EXTERNAL_CALL / HOME_PATH_ACCESS(warn) |
@@ -202,7 +203,8 @@ python3 scripts/verify-build.py \
 **实现要点**：
 - 块切分 `split_test_blocks` 按大括号深度判定边界，等价 awk 行为；局限（字符串字面量内 `{}` 干扰）与 awk 相同，注释说明
 - `extract_tested_names` 提取用例名首段 PascalCase，供方法名差集（§1a）用——图谱侧拉全量仍需 MCP，留模型
-- 语义检查（断言名实相符、AAA 结构、期望值正确性、副作用/返回值断言缺失的源码侧判断）**留模型**，需 trace_path 图谱
+- 语义检查（断言名实相符、期望值正确性、副作用/返回值断言缺失的源码侧判断）**留模型**，需 trace_path 图谱
+- **三轮加强**：新增 `check_aaa`（AAA 注释缺失/空段检测）+ `check_usecase_decl`（用例计数声明表 min/actual 对比），从纯建议升级为可机械验证的结构性规则；模板 `google-test-base.cpp` 内置用例计数声明表 + 最小清单 checkbox + AAA 强制注释警告，从源头物理强制
 - **自审修正**：env 检查的 stub 排除正则初版用 `stub`（过宽），会吞掉注释中含 'stub' 的真实外部调用行；后收窄为 `stub\.set_lamda|__DBG_STUB_INVOKE__`，与 reference grep 严格一致（grep 仅排除这两种形式）
 - **二轮修正**：`EXTERNAL_CALL_RE` 初版缺 §5b 时间/随机模式（`QDateTime::currentDateTime`/`QTime::currentTime`/`QRandomGenerator::system`/`srand`/`qsrand`），对照 reference 补齐；新增 `HOME_PATH_RE` 检测 `QDir::homePath()`/`QStandardPaths::writableLocation()` 用户目录访问（标 warning，语义留给模型复核是否已重定向到临时目录）
 
@@ -250,7 +252,7 @@ python3 scripts/verify-build.py \
 |--------|----|------|
 | P0 | §2.2 verify-build.py | **✅ 已落地 v1.1**（`scripts/verify-build.py` + 46 单测；sample 五路径 + deepin-image-viewer 真实项目全流程实测；reference `build-verifier.md §1` 已接入首选方式） |
 | P0 | §2.1 plan-test-classes.py | **✅ 已落地**（`scripts/plan-test-classes.py` + 33 单测；sample + deepin-image-viewer 双项目验证；reference `test-writer.md §4` 已接入首选方式） |
-| P1 | §2.3 self-check-structural.py | **✅ 已落地**（`scripts/self-check-structural.py` + 57 单测；sample 验证如实报出 15 LOW_ASSERT；reference `self-checker.md` 已接入首选方式） |
+| P1 | §2.3 self-check-structural.py | **✅ 已落地**（`scripts/self-check-structural.py` + 68 单测；七类检查含 AAA+usecase_decl；sample 验证如实报出 15 LOW_ASSERT；reference `self-checker.md` 已接入首选方式） |
 | P2 | §2.4 update-usecase-count.py | **✅ 已落地**（`scripts/update-usecase-count.py` + 22 单测；sample 15 用例正确分配到 9 方法；reference `test-writer.md §6` 已接入首选方式） |
 | P2 | §2.5 compose-commit.py | **✅ 已落地**（`scripts/compose-commit.py` + 18 单测；端到端验证多类多状态；reference `code-committer.md §5` 已接入首选方式） |
 

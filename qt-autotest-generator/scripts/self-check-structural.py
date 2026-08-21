@@ -292,18 +292,118 @@ def check_env(content):
     return v
 
 
-# ── 汇总与输出 ────────────────────────────────────────────────────────
+# ── AAA 结构检查正则 ────────────────────────────────────────────────
 
-CHECK_NAMES = ["spdx", "naming", "assertion", "structure", "stub", "env"]
+ARRIVE_RE = re.compile(r'//\s*Arrange')
+ACT_RE = re.compile(r'//\s*Act')
+ASSERT_COMMENT_RE = re.compile(r'//\s*Assert')
+
+# ── 用例计数声明正则 ────────────────────────────────────────────────
+
+# 匹配 "| method | level | factors | min | actual |" 表格行
+DECL_ROW_RE = re.compile(
+    r'\|\s*\S+\s*\|\s*(\S+)\s*\|\s*(\S+)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|')
+
+
+def check_aaa(blocks):
+    """§4.1 AAA 结构：每个 TEST_F 必须包含 // Arrange / // Act / // Assert 三段注释。
+
+    self-checker 可验证的结构性规则：缺少任一段注释即 MISSING_AAA 违规；
+    空段（注释后无实质代码）报 EMPTY_AAA warning。
+    """
+    v = []
+    for b in blocks:
+        body = b["body"]
+        case = b["case"]
+        sl = b["start_line"]
+        lines = body.split('\n')
+
+        has_arrange = any(ARRIVE_RE.search(l) for l in lines)
+        has_act = any(ACT_RE.search(l) for l in lines)
+        has_assert = any(ASSERT_COMMENT_RE.search(l) for l in lines)
+
+        missing = []
+        if not has_arrange:
+            missing.append("Arrange")
+        if not has_act:
+            missing.append("Act")
+        if not has_assert:
+            missing.append("Assert")
+
+        if missing:
+            v.append(_v("aaa", "error",
+                        f"缺少 AAA 注释段: {', '.join(missing)}",
+                        case=case, line=sl, rule="MISSING_AAA"))
+        else:
+            # 检查空段：// Arrange 后到 // Act 之间是否有实质代码行
+            segs = _split_aaa_segments(lines)
+            for seg_name, seg_lines in [("Arrange", segs[0]), ("Act", segs[1]), ("Assert", segs[2])]:
+                # 实质行 = 非空、非纯注释、非仅大括号
+                substantive = [l for l in seg_lines
+                               if l.strip() and l.strip() not in ('{', '}')
+                               and not l.strip().startswith('//')]
+                if not substantive:
+                    v.append(_v("aaa", "warning",
+                                f"{seg_name} 段为空（无实质代码）",
+                                case=case, line=sl, rule="EMPTY_AAA"))
+    return v
+
+
+def _split_aaa_segments(lines):
+    """将用例体按 // Arrange / // Act / // Assert 分为三段。返回 [arrange_lines, act_lines, assert_lines]。"""
+    arrange = act = assert_ = []
+    current = 0  # 0=before arrange, 1=arrange, 2=act, 3=assert
+    segs = [[], [], []]
+    for line in lines:
+        if ARRIVE_RE.search(line):
+            current = 1
+            continue
+        if ACT_RE.search(line):
+            current = 2
+            continue
+        if ASSERT_COMMENT_RE.search(line):
+            current = 3
+            continue
+        if current >= 1:
+            segs[current - 1].append(line)
+    return segs
+
+
+def check_usecase_decl(content):
+    """§4 用例计数声明：模板要求文件顶部有 min/actual 表格，actual < min 报违规。
+
+    这是纯文件检查：读取模板生成的声明表格，比较 min 和 actual 列。
+    如果文件无声明表格（旧格式），仅报 MISSING_DECL warning。
+    """
+    v = []
+    rows = DECL_ROW_RE.findall(content)
+    if not rows:
+        # 无声明表格——可能是旧格式文件，标 warning 提醒
+        v.append(_v("assertion", "warning", "缺少用例计数声明表格（模板已内置）",
+                    line=1, rule="MISSING_DECL"))
+        return v
+    for level, factors, min_s, actual_s in rows:
+        min_n = int(min_s)
+        actual_n = int(actual_s)
+        method_name = "?"  # 正则未提取方法名，从违规消息看不出具体方法
+        if actual_n < min_n:
+            v.append(_v("assertion", "error",
+                        f"用例数不足下限（actual={actual_n} < min={min_n}, level={level}）",
+                        line=1, rule="BELOW_MIN_CASES"))
+    return v
+
+
+CHECK_NAMES = ["spdx", "naming", "assertion", "aaa", "structure", "stub", "env"]
 
 
 def run_all_checks(content):
-    """跑全部 6 类检查，返回 (violations, summary, blocks)。"""
+    """跑全部 7 类检查，返回 (violations, summary, blocks)。"""
     blocks = split_test_blocks(content)
     results = {
         "spdx": check_spdx(content),
         "naming": check_naming(blocks),
-        "assertion": check_assertion(blocks),
+        "assertion": check_assertion(blocks) + check_usecase_decl(content),
+        "aaa": check_aaa(blocks),
         "structure": check_structure(content),
         "stub": check_stub(content),
         "env": check_env(content),
@@ -376,7 +476,7 @@ def main_no_exit(argv=None):
             json.dump(report, f, ensure_ascii=False, indent=2)
         print(f"[CHECK] report written: {out}")
 
-    return 0 if not violations else 1
+    return 0 if not any(v["severity"] == "error" for v in violations) else 1
 
 
 def main():

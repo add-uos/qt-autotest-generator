@@ -69,7 +69,7 @@ read("${SKILL_DIR}/templates/cmake-submodule.txt")
 替换模板占位符：
 - `{header_file}` → 目标类头文件路径（相对项目根）
 - `{ClassName}` → 类名
-- `{TestCases}` → 生成的测试用例
+- `{TestCases}` → 生成的测试用例。**每个 TEST_F 必须包含 `// Arrange` / `// Act` / `// Assert` 三段注释**（self-check-structural 会验证，缺少报 MISSING_AAA 违规）。模板文件中已有强制注释说明。
 - `{SPDX_YEAR}` → 当前年份（如 2025），由 test_writer 在生成时填入。**示例中不得硬编码年份，一律用 `{SPDX_YEAR}` 占位**
 
 **占位符说明**：
@@ -119,7 +119,7 @@ read("${SKILL_DIR}/templates/cmake-submodule.txt")
 
 #### 4.1 用例结构
 
-**AAA 模式**（每个用例必须包含）：
+**AAA 模式**（每个用例**强制**包含，self-check-structural 验证——缺少 `// Arrange` / `// Act` / `// Assert` 任一段注释即报 `MISSING_AAA` 违规）：
 ```cpp
 // Arrange
 <准备前置条件、stub、对象构造>
@@ -148,7 +148,18 @@ read("${SKILL_DIR}/templates/cmake-submodule.txt")
 - ❌ 用例名带 `ReturnsTrue` 但只 `EXPECT_NO_FATAL_FAILURE` 不实际断言返回值——名实不符
 - ✅ `EXPECT_EQ(ret, 42);  // 期望返回 42` + `EXPECT_EQ(obj->count(), 3);` + `EXPECT_EQ(spy.count(), 1);`——多维度交叉验证
 
-**用例自检**：生成每个用例后，回读 Assert 段，确认——(a) 至少 2 个 `EXPECT_*` 断言；(b) 至少 1 个是精确值/状态断言而非纯布尔；(c) 若方法有返回值，必须断言返回值的具体期望值；(d) 若方法有副作用（写状态/发信号/调下游），必须断言副作用发生。不满足则补全或重写。
+**用例自检**：生成每个用例后，**逐用例回读** Assert 段，确认——(a) 至少 2 个 `EXPECT_*` 断言；(b) 至少 1 个是精确值/状态断言而非纯布尔；(c) 若方法有返回值，必须断言返回值的具体期望值；(d) 若方法有副作用（写状态/发信号/调下游），必须断言副作用发生。不满足则补全或重写。
+
+**生成后自检门（强制）**：每个类全部用例生成完毕后，**立即执行以下 3 步才可进入编译验证**，不得跳过：
+
+1. **填入用例计数声明**：在测试文件顶部注释的「用例计数声明」表格中填入 actual 列。对每个方法：
+   - 从 level/factors 查 §4 最少用例数
+   - 统计该方法的实际用例数
+   - `actual < min` → 必须补用例直到满足下限
+2. **勾选最小清单**：在测试文件顶部注释的 10 项最小清单中逐项勾选 `[x]`。任一项无法勾选 → 回到生成步骤补齐
+3. **运行 self-check-structural**：`python3 ${SKILL_DIR}/scripts/self-check-structural.py --file <test_file>` 确认无 MISSING_AAA / LOW_ASSERT / SOLE_BOOL_ASSERT 等违规。有违规 → 修复后重跑直到全 pass
+
+> ⚠️ 跳过自检门直接进编译验证 = 流程违规。编译通过不代表用例质量达标。
 
 **类级自检**（test-types.md §8 最小清单，每个类生成完后在测试文件顶部 `{BranchList}` 注释段落落完成情况）。
 

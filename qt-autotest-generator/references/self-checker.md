@@ -32,17 +32,24 @@ if iter_count >= MAX_ITERATIONS:
 ## 工作步骤
 
 > **结构性检查首选方式**：跑 `scripts/self-check-structural.py`，固化 §2/§2b/§3/§4/§5/§5b
-> 的纯文件正则检查（spdx/naming/assertion/structure/stub/env 六类），输出违规清单。
+> 的纯文件正则检查（spdx/naming/assertion/aaa/structure/stub/env 七类），输出违规清单。
 > 模型只看清单决定改什么，不回读自己的文件做正则。方法名差集的 tested_names 提取
 > 已内置（`extract_tested_names`），图谱侧拉全量方法仍需 MCP（§1a 下文保留）。
 >
 > ```bash
 > python3 ${SKILL_DIR}/scripts/self-check-structural.py \
 >     --file ${test_dir}/${module}/test_${classname}.cpp [--json] [-o report.json]
-> # 退出码 0=全通过 / 1=有违规；stdout 摘要 + 违规清单
+> # 退出码 0=无 error / 1=有 error（warnings 不阻塞）
+> # stdout 摘要 + 违规清单
 > ```
 >
-> 语义检查（断言名实相符、AAA 结构、期望值正确性）仍留模型，不固化。
+> 新增检查项：
+> - **aaa**：每个 TEST_F 必须包含 `// Arrange` / `// Act` / `// Assert` 三段注释（MISSING_AAA=error）；
+>   空段标 EMPTY_AAA warning
+> - **assertion** 增加 `BELOW_MIN_CASES`：用例计数声明表中 actual < min 报 error；
+>   无声明表标 MISSING_DECL warning
+>
+> 语义检查（断言名实相符、期望值正确性）仍留模型，不固化。
 
 #### 1. 覆盖率自检（方法名差集 + lcov 函数覆盖率门禁）
 
@@ -294,6 +301,8 @@ for method in all_methods:
 | SPDX 缺失 | 无头 | 流转至 `test_writer` 补 |
 | stub 问题 | 有问题 | 流转至 `test_writer` 修正 |
 | 断言强度违规 | NO_FATAL 唯一断言/空断言/纯 gMock 期望/副作用未断言/返回值未断言 | 流转至 `test_writer` 重写对应用例 Assert 段 |
+| AAA 结构违规 | 缺少 // Arrange / // Act / // Assert 注释（MISSING_AAA） | 流转至 `test_writer` 补 AAA 注释 |
+| 用例数低于下限 | 声明表中 actual < min（BELOW_MIN_CASES） | 流转至 `test_writer` 补用例 |
 | 环境隔离违规 | 硬编码路径/env 未还原/真实外部资源/stub 未清理 | 流转至 `test_writer` 补 mock 或隔离 |
 | 全部通过 | - | 标记 `done`，下一类 |
 
@@ -331,6 +340,8 @@ for method in all_methods:
     "spdx": "pass",
     "stub": "pass",
     "assertion_strength": "pass",
+    "aaa": "pass",
+    "usecase_decl": "pass",
     "env_isolation": "pass"
   }
 }

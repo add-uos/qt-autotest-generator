@@ -25,11 +25,22 @@ GOOD_FIXTURE = (
 )
 
 
-def _file(cases, header=GOOD_HEADER, fixture=GOOD_FIXTURE):
-    """拼一个测试文件：header + fixture + 若干 TEST_F 块。cases=[(case_name, body)]。"""
+def _file(cases, header=GOOD_HEADER, fixture=GOOD_FIXTURE, with_aaa=True):
+    """拼一个测试文件：header + fixture + 若干 TEST_F 块。cases=[(case_name, body)]。
+    with_aaa=True 时在 body 前插入 // Arrange / // Act / // Assert 注释框架。
+    """
     parts = [header, fixture]
     for name, body in cases:
-        parts.append(f"TEST_F(CalculatorTest, {name}) {{\n{body}\n}}\n")
+        if with_aaa:
+            # 把 body 包在 // Act 段，补 // Arrange 和 // Assert 空框架
+            parts.append(
+                f"TEST_F(CalculatorTest, {name}) {{\n"
+                f"    // Arrange\n"
+                f"    // Act\n{body}\n"
+                f"    // Assert\n"
+                f"}}\n")
+        else:
+            parts.append(f"TEST_F(CalculatorTest, {name}) {{\n{body}\n}}\n")
     return "\n".join(parts)
 
 
@@ -316,6 +327,130 @@ class TestEnv:
         hv = next(x for x in v if x["rule"] == "HOME_PATH_ACCESS")
         assert hv["severity"] == "warning"  # 不是 error，是 warning
 
+
+# ── AAA 结构检查 ────────────────────────────────────────────────────
+
+class TestAAA:
+    def test_full_aaa_pass(self, self_check_structural):
+        c = ("TEST_F(T, Add_Pos_ReturnsSum) {\n"
+             "    // Arrange\n"
+             "    int a = 1, b = 2;\n"
+             "    // Act\n"
+             "    int r = obj->add(a, b);\n"
+             "    // Assert\n"
+             "    EXPECT_EQ(r, 3);\n"
+             "}\n")
+        blocks = self_check_structural.split_test_blocks(c)
+        v = self_check_structural.check_aaa(blocks)
+        assert v == []
+
+    def test_missing_arrange(self, self_check_structural):
+        c = ("TEST_F(T, Add_Pos_ReturnsSum) {\n"
+             "    // Act\n"
+             "    int r = obj->add(1, 2);\n"
+             "    // Assert\n"
+             "    EXPECT_EQ(r, 3);\n"
+             "}\n")
+        blocks = self_check_structural.split_test_blocks(c)
+        v = self_check_structural.check_aaa(blocks)
+        assert any(x["rule"] == "MISSING_AAA" for x in v)
+        mv = next(x for x in v if x["rule"] == "MISSING_AAA")
+        assert "Arrange" in mv["message"]
+
+    def test_missing_act(self, self_check_structural):
+        c = ("TEST_F(T, Add_Pos_ReturnsSum) {\n"
+             "    // Arrange\n"
+             "    int a = 1;\n"
+             "    // Assert\n"
+             "    EXPECT_EQ(obj->add(a, 2), 3);\n"
+             "}\n")
+        blocks = self_check_structural.split_test_blocks(c)
+        v = self_check_structural.check_aaa(blocks)
+        assert any(x["rule"] == "MISSING_AAA" for x in v)
+        mv = next(x for x in v if x["rule"] == "MISSING_AAA")
+        assert "Act" in mv["message"]
+
+    def test_missing_assert_comment(self, self_check_structural):
+        c = ("TEST_F(T, Add_Pos_ReturnsSum) {\n"
+             "    // Arrange\n"
+             "    int a = 1;\n"
+             "    // Act\n"
+             "    EXPECT_EQ(obj->add(a, 2), 3);\n"
+             "}\n")
+        blocks = self_check_structural.split_test_blocks(c)
+        v = self_check_structural.check_aaa(blocks)
+        assert any(x["rule"] == "MISSING_AAA" for x in v)
+
+    def test_no_aaa_at_all(self, self_check_structural):
+        c = ("TEST_F(T, Add_Pos_ReturnsSum) {\n"
+             "    EXPECT_EQ(obj->add(1,2), 3);\n"
+             "}\n")
+        blocks = self_check_structural.split_test_blocks(c)
+        v = self_check_structural.check_aaa(blocks)
+        assert any(x["rule"] == "MISSING_AAA" for x in v)
+        mv = next(x for x in v if x["rule"] == "MISSING_AAA")
+        assert "Arrange" in mv["message"] and "Act" in mv["message"] and "Assert" in mv["message"]
+
+    def test_empty_arrange_warning(self, self_check_structural):
+        c = ("TEST_F(T, Add_Pos_ReturnsSum) {\n"
+             "    // Arrange\n"
+             "    // Act\n"
+             "    int r = obj->add(1, 2);\n"
+             "    // Assert\n"
+             "    EXPECT_EQ(r, 3);\n"
+             "}\n")
+        blocks = self_check_structural.split_test_blocks(c)
+        v = self_check_structural.check_aaa(blocks)
+        assert any(x["rule"] == "EMPTY_AAA" for x in v)
+        ev = next(x for x in v if x["rule"] == "EMPTY_AAA")
+        assert ev["severity"] == "warning"
+        assert "Arrange" in ev["message"]
+
+
+# ── 用例计数声明检查 ────────────────────────────────────────────────
+
+class TestUsecaseDecl:
+    def test_missing_decl_warning(self, self_check_structural):
+        # 无声明表格 → MISSING_DECL warning
+        c = "// SPDX-FileCopyrightText: 2026 UnionTech Software Technology Co., Ltd.\n"
+        v = self_check_structural.check_usecase_decl(c)
+        assert any(x["rule"] == "MISSING_DECL" for x in v)
+        dv = next(x for x in v if x["rule"] == "MISSING_DECL")
+        assert dv["severity"] == "warning"
+
+    def test_decl_met_below_min(self, self_check_structural):
+        # actual < min → BELOW_MIN_CASES error
+        c = ("// | method | level | factors | min | actual |\n"
+             "// | add | high | complexity_ge_20 | 3 | 1 |\n")
+        v = self_check_structural.check_usecase_decl(c)
+        assert any(x["rule"] == "BELOW_MIN_CASES" for x in v)
+        bv = next(x for x in v if x["rule"] == "BELOW_MIN_CASES")
+        assert bv["severity"] == "error"
+        assert "actual=1 < min=3" in bv["message"]
+
+    def test_decl_met_equal(self, self_check_structural):
+        # actual == min → 无违规
+        c = ("// | method | level | factors | min | actual |\n"
+             "// | add | high | complexity_ge_20 | 3 | 3 |\n")
+        v = self_check_structural.check_usecase_decl(c)
+        assert not any(x["rule"] == "BELOW_MIN_CASES" for x in v)
+
+    def test_decl_met_above_min(self, self_check_structural):
+        # actual > min → 无违规（下限不是上限）
+        c = ("// | method | level | factors | min | actual |\n"
+             "// | add | high | complexity_ge_20 | 3 | 5 |\n")
+        v = self_check_structural.check_usecase_decl(c)
+        assert not any(x["rule"] == "BELOW_MIN_CASES" for x in v)
+
+    def test_decl_multiple_rows(self, self_check_structural):
+        c = ("// | method | level | factors | min | actual |\n"
+             "// | add | high | complexity_ge_20 | 3 | 3 |\n"
+             "// | sub | mid | - | 2 | 1 |\n")
+        v = self_check_structural.check_usecase_decl(c)
+        below = [x for x in v if x["rule"] == "BELOW_MIN_CASES"]
+        assert len(below) == 1  # 只有 sub 不达标
+        assert "actual=1 < min=2" in below[0]["message"]
+
     def test_writable_location_warning(self, self_check_structural):
         c = "    QString loc = QStandardPaths::writableLocation(QStandardPaths::HomeLocation);\n"
         v = self_check_structural.check_env(c)
@@ -337,8 +472,10 @@ class TestRunAll:
         c = _file([("Add_Pos_ReturnsSum",
                     "    EXPECT_EQ(obj->add(1,2), 3);\n    EXPECT_EQ(obj->add(0,0), 0);\n")])
         v, summary, blocks = self_check_structural.run_all_checks(c)
-        assert v == []
-        assert all(summary[n] == "pass" for n in self_check_structural.CHECK_NAMES)
+        errors = [x for x in v if x["severity"] == "error"]
+        assert errors == [], f"unexpected errors: {errors}"
+        # warning 可能存在（EMPTY_AAA/MISSING_DECL），不阻塞
+        assert all(summary[n] != "fail" for n in self_check_structural.CHECK_NAMES)
         assert len(blocks) == 1
 
     def test_summary_fail_when_error(self, self_check_structural):
@@ -363,12 +500,12 @@ class TestCli:
     def test_clean_file_exit_zero(self, self_check_structural, tmp_path, capsys):
         f = tmp_path / "t.cpp"
         f.write_text(_file([("Add_Pos_ReturnsSum",
-                             "    EXPECT_EQ(obj->add(1,2), 3);\n    EXPECT_EQ(obj->add(0,0), 0);\n")]),
-                      encoding="utf-8")
+                            "    EXPECT_EQ(obj->add(1,2), 3);\n    EXPECT_EQ(obj->add(0,0), 0);\n")]),
+                     encoding="utf-8")
+        # 无 error 时退出码 0（warnings 不阻塞）
         rc = self_check_structural.main_no_exit(["--file", str(f)])
-        out = capsys.readouterr().out
         assert rc == 0
-        assert "all" not in out  # 无 violations 行
+        out = capsys.readouterr().out
         assert "pass" in out
 
     def test_violations_exit_one(self, self_check_structural, tmp_path, capsys):
