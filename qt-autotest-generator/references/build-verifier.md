@@ -14,9 +14,20 @@
 
 ### 1. 编译测试
 
+> **首选方式**：跑 `scripts/verify-build.py`，消费结构化摘要（≤8 行 stdout + 退出码）。
+> 它固化了 configure → 编译 → 运行 → gtest XML 解析 → 错误正则预分类全流程，原始 log 落盘
+> `{test_dir}/.results/build-<class>.log` 供定向回读。模型只看摘要做修复决策，不读完整 log。
+>
+> ```bash
+> python3 ${SKILL_DIR}/scripts/verify-build.py --project ${PROJECT_PATH} --class <ClassName> \
+>     [--module <module>] [--target <target>] [--test-dir ${test_dir}] [--timeout 120]
+> ```
+>
+> 下方手动命令仅作兜底（脚本不可用时）。
+
 test_dir = test_dir  # "autotests" 或 "tests"（内存变量）
 cd ${PROJECT_PATH}/build-${test_dir}
-cmake .. -DBUILD_TESTS=ON 2>&1
+cmake .. -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug 2>&1
 cmake --build . -j$(nproc) --target test_<classname> 2>&1
 
 捕获完整编译输出。

@@ -13,7 +13,7 @@
 
 ## 概述
 
-读取 `.ut-inventory.json` 的分级信息，按 high → mid → low 优先级逐类生成 Google Test 用例，强制编译验证，覆盖率门禁自检，每类通过后更新 `usecase_count`。全类完成后提交代码并生成报告。
+读取 `.ut-inventory.json` 的分级信息，按 high → mid → low 优先级**以类为单位**逐类生成 Google Test 用例，强制编译验证，覆盖率门禁自检，每类通过后更新 `usecase_count`。全类完成后提交代码并生成报告。
 
 ## 状态传递
 
@@ -56,6 +56,18 @@ gui_names = {c["name"] for c in inventory.get("classes", []) if c.get("is_gui")}
 
 ### 4. 确定待测类列表
 
+> **首选方式**：跑 `scripts/plan-test-classes.py`，消费 `{test_dir}/.reports/testable-classes.json`。
+> 脚本固化了按 class_qn 分组 → 类 level 取最高 → level_rank 排序 → is_gui 匹配 →
+> 自由函数归组全流程，兼容双 schema 字段（`qn`/`file` vs `qualified_name`/`file_path`）。
+> 模型只读排好序的类清单，不读 inventory 全量。
+>
+> ```bash
+> python3 ${SKILL_DIR}/scripts/plan-test-classes.py --inventory ${test_dir}/.ut-inventory.json
+> # 输出：${test_dir}/.reports/testable-classes.json + stdout 摘要
+> ```
+>
+> 下方伪代码仅作兜底（脚本不可用时）。
+
 从 `.ut-inventory.json` 提取待测类：
 
 ```python
@@ -90,6 +102,8 @@ sorted_classes = sorted(testable_classes.values(), key=lambda c: -level_rank(c["
 for c in sorted_classes:
     class_status[c["name"]] = {"status": "pending"}
 ```
+
+> **优先级排序作用于类粒度，不按方法优先级跨类穿插**：排序对象是**类**（类 level = 其方法中最高 level）。同类内所有 testable 方法（含 low/析构）随该类**一次性闭环处理完**，不存在"先写完全部类的 high 方法再写 mid 方法"的跨类穿插。方法 level 只决定用例数下限与覆盖率门禁（见 test-code-gen.md §4 / §7），不决定处理顺序。
 
 #### 自由函数处理策略
 
@@ -133,6 +147,19 @@ for c in sorted_classes:
 **单类失败不阻塞**：记录 `failure_reason`，跳过，继续下一个类。
 
 ### 6. 每类通过后更新 usecase_count
+
+> **首选方式**：跑 `scripts/update-usecase-count.py`，脚本统计 TEST_F 用例数 +
+> 按方法名匹配（首段 PascalCase vs 方法名 camelCase 小写归一化）增量写回 inventory。
+> 失败安全：匹配不到的方法保持原值不动。只改当前类方法，不覆盖其他类。
+>
+> ```bash
+> python3 ${SKILL_DIR}/scripts/update-usecase-count.py \
+>     --test-file ${test_dir}/${module}/test_${classname}.cpp \
+>     --inventory ${test_dir}/.ut-inventory.json --class ${classname}
+> # 同名类歧义时用 --class-qn <全限定名> 精确匹配
+> ```
+>
+> 下方伪代码仅作兜底（脚本不可用时）。
 
 **关键**：每类编译通过（build_verifier pass + self_checker pass）后，立即更新 `.ut-inventory.json`：
 

@@ -21,6 +21,11 @@ _SCRIPT_FILES = {
     "stale_test_cleanup": "stale-test-cleanup.py",
     "collect_coverage_report": "collect-coverage-report.py",
     "coverage_by_level": "coverage-by-level.py",
+    "verify_build": "verify-build.py",
+    "plan_test_classes": "plan-test-classes.py",
+    "self_check_structural": "self-check-structural.py",
+    "update_usecase_count": "update-usecase-count.py",
+    "compose_commit": "compose-commit.py",
 }
 
 
@@ -76,3 +81,28 @@ def collect_coverage_report():
 @pytest.fixture(scope="session")
 def coverage_by_level():
     return _load_module("coverage_by_level", "coverage-by-level.py")
+
+
+@pytest.fixture(scope="session")
+def verify_build():
+    return _load_module("verify_build", "verify-build.py")
+
+
+@pytest.fixture(scope="session")
+def plan_test_classes():
+    return _load_module("plan_test_classes", "plan-test-classes.py")
+
+
+@pytest.fixture(scope="session")
+def self_check_structural():
+    return _load_module("self_check_structural", "self-check-structural.py")
+
+
+@pytest.fixture(scope="session")
+def update_usecase_count():
+    return _load_module("update_usecase_count", "update-usecase-count.py")
+
+
+@pytest.fixture(scope="session")
+def compose_commit():
+    return _load_module("compose_commit", "compose-commit.py")

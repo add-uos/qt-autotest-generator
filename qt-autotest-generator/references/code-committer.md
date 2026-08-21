@@ -108,6 +108,18 @@ git add .gitignore 2>/dev/null || true
 
 ### 5. 生成提交信息
 
+> **首选方式**：跑 `scripts/compose-commit.py`，脚本从 classes_status 统计本批次/累计数据，
+> 按 git-commit-workflow 的 test 类型 Log/Influence 格式渲染提交信息到 stdout。
+> 模型把内存变量 dump 成 JSON 传入，脚本输出提交信息，模型只负责 `git commit -F`。
+>
+> ```bash
+> # 先把内存变量 dump 成 JSON（模型负责拼 status.json）
+> python3 ${SKILL_DIR}/scripts/compose-commit.py --status-file status.json [--git-dir ${PROJECT_PATH}]
+> # 输出提交信息到 stdout；退出码 0=有 done 类可提交 / 2=无可提交类（跳过）
+> ```
+>
+> 下方手动统计+填模板仅作兜底（脚本不可用时）。
+
 从内存变量提取本批次统计 + 累计统计：
 
 ```bash

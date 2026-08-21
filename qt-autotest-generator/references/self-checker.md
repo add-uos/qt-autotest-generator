@@ -31,6 +31,19 @@ if iter_count >= MAX_ITERATIONS:
 
 ## 工作步骤
 
+> **结构性检查首选方式**：跑 `scripts/self-check-structural.py`，固化 §2/§2b/§3/§4/§5/§5b
+> 的纯文件正则检查（spdx/naming/assertion/structure/stub/env 六类），输出违规清单。
+> 模型只看清单决定改什么，不回读自己的文件做正则。方法名差集的 tested_names 提取
+> 已内置（`extract_tested_names`），图谱侧拉全量方法仍需 MCP（§1a 下文保留）。
+>
+> ```bash
+> python3 ${SKILL_DIR}/scripts/self-check-structural.py \
+>     --file ${test_dir}/${module}/test_${classname}.cpp [--json] [-o report.json]
+> # 退出码 0=全通过 / 1=有违规；stdout 摘要 + 违规清单
+> ```
+>
+> 语义检查（断言名实相符、AAA 结构、期望值正确性）仍留模型，不固化。
+
 #### 1. 覆盖率自检（方法名差集 + lcov 函数覆盖率门禁）
 
 覆盖率自检分两层：
