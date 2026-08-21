@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Qt Autotest Generator — 设计评审</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0F172A;--card:rgba(30,41,59,.72);--code:#1E293B;--cta:#22C55E;--cdim:rgba(34,197,94,.15);--warn:#F59E0B;--danger:#EF4444;--info:#38BDF8;--purple:#A78BFA;--text:#F8FAFC;--dim:#94A3B8;--mid:#CBD5E1;--bdr:rgba(148,163,184,.18);--ui:'IBM Plex Sans',system-ui,sans-serif;--mono:'JetBrains Mono',monospace}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html{font-size:max(18px,1.25vw);-webkit-font-smoothing:antialiased}
+body{background:var(--bg);color:var(--text);font-family:var(--ui);overflow:hidden;height:100vh;width:100vw}
+
+/* ── Full-screen Deck ── */
+.deck{width:100vw;height:100vh;position:relative;overflow:hidden;background:linear-gradient(160deg,#0F172A,#1a2744 50%,#0F172A)}
+.slide{position:absolute;inset:0;display:flex;flex-direction:column;padding:4vh 6vw 3.5vh;opacity:0;transform:translateX(3vw);transition:opacity .45s ease,transform .45s ease;pointer-events:none}
+.slide.active{opacity:1;transform:none;pointer-events:auto}
+.slide.out{opacity:0;transform:translateX(-3vw)}
+
+/* ── Decorative ── */
+.grid{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.04;background-image:linear-gradient(var(--dim) 1px,transparent 1px),linear-gradient(90deg,var(--dim) 1px,transparent 1px);background-size:3rem 3rem}
+.orb{position:absolute;border-radius:50%;filter:blur(100px);pointer-events:none;z-index:0}
+.z{z-index:1;position:relative}
+
+/* ── Typography ── */
+h2.t{font-size:2.6rem;font-weight:700;letter-spacing:-.02em;margin-bottom:.35rem}
+p.s{font-size:1.1rem;color:var(--dim);margin-bottom:1.2rem}
+.gl{height:2px;background:linear-gradient(90deg,transparent,var(--cta),transparent);margin:.7rem 0 1rem;border-radius:2px}
+
+/* ── Cards ── */
+.c{background:var(--card);border:1px solid var(--bdr);border-radius:1rem;padding:1.2rem 1.4rem;backdrop-filter:blur(12px);transition:transform .2s}
+.c:hover{transform:translateY(-2px)}
+.c h3{font-size:1.05rem;font-weight:600;margin-bottom:.4rem;display:flex;align-items:center;gap:.45rem}
+.c p,.c li{font-size:.95rem;line-height:1.55;color:var(--mid)}
+.c ul{padding-left:1.1rem}
+
+/* ── Grids ── */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:1rem;flex:1}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.9rem}
+
+/* ── Pills ── */
+.pill{display:inline-flex;font-size:.82rem;font-weight:600;padding:.25rem .7rem;border-radius:99px;letter-spacing:.02em}
+.pg{background:var(--cdim);color:var(--cta);border:1px solid rgba(34,197,94,.3)}
+.pb{background:rgba(56,189,248,.1);color:var(--info);border:1px solid rgba(56,189,248,.3)}
+.pw{background:rgba(245,158,11,.1);color:var(--warn);border:1px solid rgba(245,158,11,.3)}
+.pp{background:rgba(167,139,250,.1);color:var(--purple);border:1px solid rgba(167,139,250,.3)}
+.pdr{background:rgba(239,68,68,.1);color:var(--danger);border:1px solid rgba(239,68,68,.3)}
+
+/* ── Misc ── */
+.sn{position:absolute;bottom:1rem;right:1.5rem;font-size:.82rem;color:var(--dim);font-family:var(--mono);z-index:10}
+.ic{width:1.2rem;height:1.2rem;flex-shrink:0}
+code{font-family:var(--mono);font-size:.9em}
+
+/* ── Tables ── */
+table.tb{width:100%;border-collapse:separate;border-spacing:0;font-size:.92rem}
+.tb th{background:#334155;color:var(--text);font-weight:600;padding:.55rem .85rem;text-align:left}
+.tb th:first-child{border-radius:7px 0 0 0}.tb th:last-child{border-radius:0 7px 0 0}
+.tb td{padding:.5rem .85rem;border-bottom:1px solid var(--bdr);color:var(--mid)}
+.tb tr:last-child td{border-bottom:none}
+
+/* ── Progress Bars ── */
+.bar{display:flex;align-items:center;gap:.5rem;font-size:.88rem}
+.bar-t{flex:1;height:7px;background:#334155;border-radius:3px;overflow:hidden}
+.bar-f{height:100%;border-radius:3px;transition:width .6s ease}
+
+/* ── Factor Items ── */
+.fn{display:flex;justify-content:space-between;padding:.3rem .65rem;border-radius:6px;font-size:.9rem;transition:background .15s}
+.fn:hover{background:rgba(255,255,255,.04)}
+
+/* ── Mode Boxes ── */
+.mb{background:var(--card);border:1px solid var(--bdr);border-radius:.7rem;padding:.85rem .9rem;text-align:center;transition:border-color .3s}
+.mb:hover{border-color:var(--cta)}
+.mb .mn{font-family:var(--mono);font-size:.8rem;font-weight:700;letter-spacing:.08em;margin-bottom:.2rem}
+.mb .mt{font-size:.95rem;font-weight:600;margin-bottom:.15rem}
+.mb .md{font-size:.9rem;color:var(--dim);line-height:1.4}
+
+/* ── Iron Law Items ── */
+.lr{display:flex;align-items:flex-start;gap:.6rem;padding:.4rem 0}
+.ln{font-family:var(--mono);font-size:.82rem;font-weight:700;color:var(--cta);background:var(--cdim);border-radius:5px;padding:.15rem .5rem;flex-shrink:0;margin-top:.05rem}
+.lt{font-size:.95rem;line-height:1.5;color:var(--mid)}
+.lt strong{color:var(--text);font-weight:600}
+
+/* ── Iron Law Cards ── */
+.ig{display:grid;grid-template-columns:1fr 1fr;gap:.7rem}
+.icard{background:var(--card);border:1px solid var(--bdr);border-radius:.65rem;padding:.9rem 1rem;position:relative;overflow:hidden}
+.icard::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;background:var(--danger)}
+.icard h4{font-size:.92rem;font-weight:700;color:var(--danger);margin-bottom:.3rem;font-family:var(--mono)}
+.icard p{font-size:.88rem;line-height:1.5;color:var(--mid)}
+
+/* ── Loop Diagram ── */
+.lp{display:flex;align-items:center;justify-content:center;flex:1;min-height:22vh;position:relative}
+.ls{display:flex;flex-direction:column;align-items:center;gap:.3rem;z-index:1}
+.li{width:3.8rem;height:3.8rem;border-radius:.9rem;display:flex;align-items:center;justify-content:center;border:1.5px solid var(--bdr);background:var(--card);transition:border-color .2s,transform .2s}
+.li:hover{border-color:var(--cta);transform:scale(1.06)}
+.ll{font-size:.78rem;font-weight:600;text-align:center;color:var(--dim);max-width:5.5rem}
+.lc{width:2.8rem;height:2px;background:var(--bdr);position:relative;flex-shrink:0}
+.lc::after{content:'';position:absolute;right:-3px;top:-3px;border-left:6px solid var(--dim);border-top:4px solid transparent;border-bottom:4px solid transparent}
+.lfb{position:absolute;bottom:.6rem;left:50%;transform:translateX(-50%);font-size:.78rem;color:var(--warn);font-family:var(--mono);white-space:nowrap;opacity:.7}
+
+/* ── Navigation ── */
+.nav-dots{position:fixed;bottom:1.6rem;left:50%;transform:translateX(-50%);display:flex;gap:.55rem;z-index:100}
+.dot{width:.6rem;height:.6rem;border-radius:50%;background:#334155;cursor:pointer;transition:background .25s,transform .25s;border:none}
+.dot:focus-visible{box-shadow:0 0 0 3px var(--cta)}.dot.on{background:var(--cta);transform:scale(1.3)}
+.arr{position:fixed;top:50%;transform:translateY(-50%);z-index:100;width:3rem;height:3rem;border-radius:50%;background:var(--card);border:1px solid var(--bdr);color:var(--dim);font-size:1.5rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s,color .2s,border-color .2s;backdrop-filter:blur(8px)}
+.arr:hover{background:#334155;color:var(--text);border-color:var(--cta)}
+.arr:disabled{opacity:.2;cursor:default}
+
+@media(prefers-reduced-motion:reduce){.slide{transition:opacity .15s;transform:none!important}.slide.active,.slide.out{transform:none!important}}
+</style>
+</head>
+<body>
+<div style="position:fixed;inset:0;z-index:100;pointer-events:none;display:flex;justify-content:space-between;padding:0 .5rem;align-items:center">
+<button class="arr" id="pbtn" onclick="go(-1)" disabled aria-label="上一页">&#8249;</button>
+<button class="arr" id="nbtn" onclick="go(1)" aria-label="下一页">&#8250;</button>
+</div>
+<div class="nav-dots" id="dots"></div>
+<div class="deck" id="deck">
+<div class="deck" id="deck">
+
+<!-- ====== SLIDE 1: Title ====== -->
+<div class="slide active" id="s0">
+<div class="grid"></div><div class="orb" style="width:28vw;height:28vw;background:var(--cta);top:-5vw;right:-5vw;opacity:.12"></div><div class="orb" style="width:20vw;height:20vw;background:var(--purple);top:30%;left:50%;transform:translateX(-50%);opacity:.06"></div>
+<div class="z" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:.8rem">
+  <div style="display:flex;align-items:center;gap:.8rem">
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--cta)" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+    <h1 style="font-size:3.2rem;font-weight:700;letter-spacing:-.03em;line-height:1.1">Qt Autotest <span style="color:var(--cta)">Generator</span></h1>
+  </div>
+  <div style="font-family:var(--mono);font-size:.9rem;color:var(--dim)">v3.3.0 · Design Review</div>
+  <div class="gl" style="width:12rem"></div>
+  <p style="font-size:1.2rem;font-weight:300;color:var(--mid);max-width:42rem;line-height:1.55">基于 <strong>codebase-memory-mcp 知识图谱</strong> 的 Qt CMake 项目<br>单元测试自动生成与质量闭环</p>
+  <div style="display:flex;gap:.6rem;margin-top:.5rem">
+    <span class="pill pg">5-Mode Architecture</span>
+    <span class="pill pb">GTest Only</span>
+    <span class="pill pp">知识图谱驱动</span>
+  </div>
+  <p style="font-size:.78rem;color:var(--dim);margin-top:1.2rem;font-family:var(--mono)">← → 键或点击箭头翻页</p>
+</div>
+<span class="sn">1 / 10</span>
+</div>
+
+<!-- ====== SLIDE 2: 5-Mode Architecture ====== -->
+<div class="slide" id="s1">
+<div class="grid"></div><div class="orb" style="width:30vw;height:30vw;background:var(--info);bottom:-6vw;left:-6vw;opacity:.12"></div>
+<div class="z" style="display:flex;flex-direction:column;flex:1">
+  <h2 class="t">五模式 <span style="color:var(--cta)">渐进式架构</span></h2>
+  <p class="s">从分析到验证的完整闭环 — 每种模式职责清晰、数据流转单向</p>
+  <div class="gl"></div>
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:.7rem">
+    <div class="mb"><div class="mn" style="color:var(--info)">MODE 1</div><div class="mt">函数重要性探测</div><div class="md">全量扫描评分<br>产出 inventory</div><div style="margin-top:5px"><span class="pill pb" style="font-size:.72rem">只建表</span></div></div>
+    <div class="mb"><div class="mn" style="color:var(--cta)">MODE 2</div><div class="mt">单元测试编写</div><div class="md">逐类闭环<br>编译验证+自检</div><div style="margin-top:5px"><span class="pill pg" style="font-size:.72rem">核心模式</span></div></div>
+    <div class="mb"><div class="mn" style="color:var(--warn)">MODE 3</div><div class="mt">覆盖率采集汇总</div><div class="md">lcov+genhtml<br>分级覆盖率报告</div><div style="margin-top:5px"><span class="pill pw" style="font-size:.72rem">只读</span></div></div>
+    <div class="mb"><div class="mn" style="color:var(--purple)">MODE 4</div><div class="mt">变异测试</div><div class="md">注入变异体<br>验证有效性</div><div style="margin-top:5px"><span class="pill pp" style="font-size:.72rem">可选增强</span></div></div>
+    <div class="mb"><div class="mn" style="color:var(--danger)">MODE 5</div><div class="mt">源码缺陷导出</div><div class="md">标红清单<br>用例级缺陷追踪</div><div style="margin-top:5px"><span class="pill pdr" style="font-size:.72rem">可选增强</span></div></div>
+  </div>
+  <div style="margin-top:1.4rem;padding:.9rem 1.1rem;background:var(--card);border:1px solid var(--bdr);border-radius:10px">
+    <div style="font-size:.7rem;font-weight:600;margin-bottom:.6rem">数据流向</div>
+    <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+      <div style="background:var(--card);border:1px solid var(--cta);color:var(--cta);border-radius:8px;padding:.55rem .85rem;font-size:.88rem;font-weight:500">知识图谱 MCP</div>
+      <span style="color:var(--dim)">→</span>
+      <div style="background:var(--card);border:1px solid var(--bdr);border-radius:8px;padding:.55rem .85rem;font-size:.88rem">Mode 1: .ut-inventory.json</div>
+      <span style="color:var(--dim)">→</span>
+      <div style="background:var(--card);border:1px solid var(--cta);color:var(--cta);border-radius:8px;padding:.55rem .85rem;font-size:.88rem;font-weight:500">Mode 2: 测试代码</div>
+      <span style="color:var(--dim)">→</span>
+      <div style="background:var(--card);border:1px solid var(--bdr);border-radius:8px;padding:.55rem .85rem;font-size:.88rem">Mode 3: 覆盖率报告</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-top:.5rem;justify-content:flex-end">
+      <div style="background:var(--card);border:1px solid var(--warn);color:var(--warn);border-radius:8px;padding:.55rem .85rem;font-size:.88rem">Mode 4: 变异报告</div>
+      <span style="color:var(--dim)">←</span>
+      <div style="background:var(--card);border:1px solid var(--cta);color:var(--cta);border-radius:8px;padding:.55rem .85rem;font-size:.88rem;font-weight:500">Mode 2 产出</div>
+      <span style="color:var(--dim)">←</span>
+      <div style="background:var(--card);border:1px solid var(--danger);color:var(--danger);border-radius:8px;padding:.55rem .85rem;font-size:.88rem">Mode 5: 缺陷清单</div>
+    </div>
+  </div>
+</div>
+<span class="sn">2 / 10</span>
+</div>
+
+<!-- ====== SLIDE 3: MCP Hard Gate ====== -->
+<div class="slide" id="s2">
+<div class="grid"></div><div class="orb" style="width:26vw;height:26vw;background:var(--cta);top:-4vw;right:-4vw;opacity:.12"></div>
+<div class="z" style="display:flex;flex-direction:column;flex:1">
+  <h2 class="t">知识图谱 MCP <span style="color:var(--danger)">硬门禁</span></h2>
+  <p class="s">Iron Law #1 — 无图谱索引不执行，不降级到文件扫描 / LSP</p>
+  <div class="gl"></div>
+  <div class="g2">
+    <div class="c" style="border-color:var(--danger);position:relative;overflow:hidden">
+      <div style="position:absolute;top:0;left:0;width:3px;height:100%;background:var(--danger)"></div>
+      <h3><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>为什么不降级？</h3>
+      <ul><li>文件扫描无法获取 <strong>调用链</strong>（trace_path）</li><li>无法做 <strong>继承检测</strong>（DBus/并发基类）</li><li>无法计算 <strong>in_degree P75</strong> 百分位</li><li>无法 <strong>Cypher 查询</strong> 传递依赖</li><li>降级评分失真 → 分级无效 → 门禁形同虚设</li></ul>
+    </div>
+    <div class="c" style="border-color:var(--cta)">
+      <h3><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--cta)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M6 12h12"/></svg>双提供方策略</h3>
+      <ul><li><strong>远端优先</strong>：remote-codebase-memory-mcp</li><li><strong>本地兜底</strong>：codebase-memory-mcp（≥0.8.0）</li><li><strong>互斥使用</strong>：不混用多个提供方</li><li>environment_check 一次性解析</li><li>12000 方法端到端仅 ~2 秒</li></ul>
+    </div>
+    <div class="c">
+      <h3><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--info)" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>核心 MCP 工具</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem;font-size:.82rem;margin-top:.3rem">
+        <div><code style="color:var(--cta)">search_graph</code><br><span style="color:var(--dim);font-size:.78rem">全量类/方法分页</span></div>
+        <div><code style="color:var(--cta)">trace_path</code><br><span style="color:var(--dim);font-size:.78rem">出向调用链追踪</span></div>
+        <div><code style="color:var(--cta)">get_code_snippet</code><br><span style="color:var(--dim);font-size:.78rem">方法级源码</span></div>
+        <div><code style="color:var(--cta)">query_graph</code><br><span style="color:var(--dim);font-size:.78rem">Cypher 继承/IMPORTS</span></div>
+      </div>
+    </div>
+    <div class="c" style="border-color:var(--warn)">
+      <h3><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>实测踩坑</h3>
+      <ul><li><code>is_exported</code> 不可靠 — 已移除</li><li><code>in_degree</code> 对 Qt 回调失效</li><li>P75 必须排除零值</li><li>MCP 不支持 <code>percentileCont()</code></li></ul>
+    </div>
+  </div>
+</div>
+<span class="sn">3 / 10</span>
+</div>
+
+<!-- ====== SLIDE 4: Scoring Model ====== -->
+<div class="slide" id="s3">
+<div class="grid"></div><div class="orb" style="width:28vw;height:28vw;background:var(--info);bottom:-5.5vw;left:-5.5vw;opacity:.12"></div>
+<div class="z" style="display:flex;flex-direction:column;flex:1">
+  <h2 class="t">函数重要性 <span style="color:var(--cta)">多因子评分模型</span></h2>
+  <p class="s">Mode 1 核心产出 — 15+ 因子加权评分 → high / mid / low 三级</p>
+  <div class="gl"></div>
+  <div class="g2">
+    <div class="c" style="display:flex;flex-direction:column">
+      <h3><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--cta)" stroke-width="2"><path d="M12 20V10M18 20V4M6 20v-4"/></svg>评分因子</h3>
+      <div style="flex:1;overflow-y:auto">
+        <div class="fn"><span>DBus 契约槽</span><span style="font-family:var(--mono);font-weight:600;color:var(--cta)">+3</span></div>
+        <div class="fn"><span>Q_INVOKABLE</span><span style="font-family:var(--mono);font-weight:600;color:var(--cta)">+3</span></div>
+        <div class="fn"><span>插件导出</span><span style="font-family:var(--mono);font-weight:600;color:var(--cta)">+3</span></div>
+        <div class="fn"><span>圈复杂度 ≥ 20</span><span style="font-family:var(--mono);font-weight:600;color:var(--cta)">+3</span></div>
+        <div class="fn"><span>传递环路 ≥ 3</span><span style="font-family:var(--mono);font-weight:600;color:var(--cta)">+3</span></div>
+        <div class="fn"><span>圈复杂度 8–19</span><span style="font-family:var(--mono);font-weight:600;color:var(--warn)">+2</span></div>
+        <div class="fn"><span>认知复杂度 ≥ 30</span><span style="font-family:var(--mono);font-weight:600;color:var(--warn)">+2</span></div>
+        <div class="fn"><span>圈复杂度 5–7</span><span style="font-family:var(--mono);font-weight:600;color:var(--dim)">+1</span></div>
+        <div class="fn"><span>in_degree ≥ P75</span><span style="font-family:var(--mono);font-weight:600;color:var(--dim)">+1</span></div>
+        <div class="fn"><span>析构 / operator</span><span style="font-family:var(--mono);font-weight:600;color:var(--danger)">-1</span></div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:.8rem">
+      <div class="c" style="border-color:var(--cta)">
+        <h3 style="color:var(--cta)"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--cta)" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>分级规则</h3>
+        <div style="display:flex;gap:20px;margin-top:8px">
+          <div style="text-align:center"><div style="font-size:1.9rem;font-weight:700;color:var(--cta)">high</div><div style="font-size:.88rem;color:var(--dim)">score ≥ 3</div></div>
+          <div style="text-align:center"><div style="font-size:1.9rem;font-weight:700;color:var(--warn)">mid</div><div style="font-size:.88rem;color:var(--dim)">score ≥ 1</div></div>
+          <div style="text-align:center"><div style="font-size:1.9rem;font-weight:700;color:var(--dim)">low</div><div style="font-size:.88rem;color:var(--dim)">score &lt; 1</div></div>
+        </div>
+      </div>
+      <div class="c">
+        <h3><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>三层防护</h3>
+        <ul><li><strong style="color:var(--cta)">主</strong>：圈复杂度 — 与缺陷率最相关</li><li><strong style="color:var(--info)">辅</strong>：认知复杂度 + 代码行数</li><li><strong style="color:var(--warn)">险</strong>：loop/alloc/recursive</li></ul>
+        <p style="margin-top:5px;font-size:.82rem;color:var(--warn)">⚠ 辅助因子不能独立推到 high</p>
+      </div>
+      <div class="c">
+        <h3><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--info)" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>豁免规则</h3>
+        <p>3rdparty/**, moc_*, ui_*, .pb. → <code>testable=false</code></p>
+      </div>
+    </div>
+  </div>
+</div>
+<span class="sn">4 / 10</span>
+</div>
+
+<!-- ====== SLIDE 5: Per-Class Closed Loop ====== -->
+<div class="slide" id="s4">
+<div class="grid"></div><div class="orb" style="width:26vw;height:26vw;background:var(--cta);top:-4vw;right:-4vw;opacity:.12"></div>
+<div class="z" style="display:flex;flex-direction:column;flex:1">
+  <h2 class="t">逐类 <span style="color:var(--cta)">闭环流水线</span></h2>
+  <p class="s">Mode 2 核心 — 依赖追踪→生成→验证→自检，单类失败不阻塞</p>
+  <div class="gl"></div>
+  <div class="lp">
+    <div class="ls"><div class="li" style="border-color:var(--info)"><svg width="1.5rem" height="1.5rem" viewBox="0 0 24 24" fill="none" stroke="var(--info)" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/></svg></div><div class="ll">依赖追踪</div></div>
+    <div class="lc"></div>
+    <div class="ls"><div class="li" style="border-color:var(--cta)"><svg width="1.5rem" height="1.5rem" viewBox="0 0 24 24" fill="none" stroke="var(--cta)" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><div class="ll">测试生成</div></div>
+    <div class="lc"></div>
+    <div class="ls"><div class="li" style="border-color:var(--warn)"><svg width="1.5rem" height="1.5rem" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 10h8"/></svg></div><div class="ll">编译验证</div></div>
+    <div class="lc"></div>
+    <div class="ls"><div class="li" style="border-color:var(--purple)"><svg width="1.5rem" height="1.5rem" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div><div class="ll">自检</div></div>
+    <div class="lfb">↩ 失败修复 / 增量补全（最多 3 轮）</div>
+  </div>
+  <div class="g3" style="margin-top:14px">
+    <div class="c"><h3 style="color:var(--cta)"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--cta)" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>依赖追踪</h3><ul><li>trace_path depth=2 出向</li><li>本项代码编入 CMake</li><li>UI/IO/网络/定时器 → stub</li><li>IMPORTS Cypher 补传递</li></ul></div>
+    <div class="c"><h3 style="color:var(--warn)"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>编译验证铁律</h3><ul><li>编译通过才能报完成</li><li>per-error 3 次，max 10</li><li>源码缺陷只标红不修</li><li>内置 stub-ext 不下载</li></ul></div>
+    <div class="c"><h3 style="color:var(--purple)"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2"><path d="M9 12l2 2 4-4"/></svg>自检维度</h3><ul><li>覆盖率分级门禁</li><li>用例命名规范</li><li>SPDX 版权头</li><li>断言强度 & 隔离</li></ul></div>
+  </div>
+</div>
+<span class="sn">5 / 10</span>
+</div>
+
+<!-- ====== SLIDE 6: Reconciliation ====== -->
+<div class="slide" id="s5">
+<div class="grid"></div><div class="orb" style="width:20vw;height:20vw;background:var(--purple);top:30%;left:50%;transform:translateX(-50%);opacity:.06"></div>
+<div class="z" style="display:flex;flex-direction:column;flex:1">
+  <h2 class="t">对账机制 & <span style="color:var(--info)">增量更新</span></h2>
+  <p class="s">每次触发必先 reconcile — 基于 git SHA 漂移检测，智能差异路由</p>
+  <div class="gl"></div>
+  <div class="g2">
+    <div style="display:flex;flex-direction:column;gap:.8rem">
+      <div class="c">
+        <h3><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--info)" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>对账流程</h3>
+        <div style="background:var(--code);border:1px solid var(--bdr);border-radius:9px;padding:.9rem 1rem;font-family:var(--mono);font-size:.82rem;line-height:1.75;color:var(--mid)">
+<span style="color:#64748B">// 1. 读 .ut-inventory.json</span><br>
+<span style="color:var(--purple)">if</span> (!<span style="color:var(--cta)">exists</span>) → <span style="color:var(--warn)">首次运行</span><br>
+<span style="color:var(--purple)">if</span> (base_sha == HEAD) → <span style="color:var(--warn)">表最新</span><br>
+<span style="color:var(--purple)">if</span> (base_sha != HEAD) → <span style="color:var(--warn)">源码已变更</span><br><br>
+<span style="color:#64748B">// 2. 变更 → 差异路由</span><br>
+fetch-mcp-data.py --incremental
+        </div>
+      </div>
+      <div class="c">
+        <h3><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>索引等待超时</h3>
+        <ul><li>硬超时 <strong style="color:var(--warn)">300s</strong></li><li>本地 → index_repository(fast)</li><li>远端 → 等 watcher 同步</li></ul>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:.8rem">
+      <div class="c" style="border-color:var(--cta)">
+        <h3 style="color:var(--cta)"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--cta)" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>差异路由</h3>
+        <table class="tb" style="font-size:.88rem"><thead><tr><th>Diff 类型</th><th>动作</th></tr></thead><tbody>
+          <tr><td style="color:var(--cta)">新增方法</td><td>增量补全</td></tr>
+          <tr><td style="color:var(--warn)">签名变更</td><td>重新生成该类</td></tr>
+          <tr><td style="color:var(--danger)">方法删除</td><td>主动清理用例</td></tr>
+          <tr><td style="color:var(--info)">分支切换</td><td>stale+重新对账</td></tr>
+        </tbody></table>
+      </div>
+      <div class="c" style="border-color:var(--danger)">
+        <h3 style="color:var(--danger)"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2"><path d="M3 6l3 1 .75 9.43a2 2 0 002 1.82h8.5a2 2 0 002-1.82L20 7H7.05"/></svg>过时测试清理</h3>
+        <ul><li>对账阶段<strong style="color:var(--danger)">立即执行</strong></li><li>不等编译报错</li><li>定位 TEST_F → 注释/删除</li><li>更新 usecase_count</li></ul>
+      </div>
+    </div>
+  </div>
+</div>
+<span class="sn">6 / 10</span>
+</div>
+
+<!-- ====== SLIDE 7: Tiered Coverage Gates ====== -->
+<div class="slide" id="s6">
+<div class="grid"></div><div class="orb" style="width:30vw;height:30vw;background:var(--info);bottom:-6vw;left:-6vw;opacity:.12"></div>
+<div class="z" style="display:flex;flex-direction:column;flex:1">
+  <h2 class="t">分级 <span style="color:var(--warn)">覆盖率门禁</span></h2>
+  <p class="s">Iron Law #3 — 不同重要性等级对应不同阈值，拒绝一刀切</p>
+  <div class="gl"></div>
+  <div style="display:flex;gap:16px;flex:1">
+    <div style="flex:1.2;display:flex;flex-direction:column;gap:.8rem">
+      <div class="c" style="border-color:var(--cta)">
+        <div style="display:flex;justify-content:space-between;margin-bottom:.6rem"><h3 style="margin:0"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--cta);box-shadow:0 0 8px var(--cta)"></span> <span style="color:var(--cta)">🌟 HIGH</span></h3><span class="pill pg">最严格</span></div>
+        <div class="bar"><span style="width:5rem;font-weight:600;color:var(--cta)">行覆盖</span><div class="bar-t"><div class="bar-f" style="width:90%;background:var(--cta)"></div></div><span style="font-family:var(--mono);font-weight:600;color:var(--cta)">90%</span></div>
+        <div class="bar"><span style="width:5rem;font-weight:600;color:var(--cta)">分支</span><div class="bar-t"><div class="bar-f" style="width:80%;background:var(--cta)"></div></div><span style="font-family:var(--mono);font-weight:600;color:var(--cta)">80%</span></div>
+        <div class="bar"><span style="width:5rem;font-weight:600;color:var(--cta)">函数</span><div class="bar-t"><div class="bar-f" style="width:100%;background:var(--cta)"></div></div><span style="font-family:var(--mono);font-weight:600;color:var(--cta)">100%</span></div>
+      </div>
+      <div class="c" style="border-color:var(--warn)">
+        <div style="display:flex;justify-content:space-between;margin-bottom:.6rem"><h3 style="margin:0"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--warn);box-shadow:0 0 8px var(--warn)"></span> <span style="color:var(--warn)">⚖ MID</span></h3><span class="pill pw">适中</span></div>
+        <div class="bar"><span style="width:5rem;font-weight:600;color:var(--warn)">行覆盖</span><div class="bar-t"><div class="bar-f" style="width:60%;background:var(--warn)"></div></div><span style="font-family:var(--mono);font-weight:600;color:var(--warn)">60%</span></div>
+        <div class="bar"><span style="width:5rem;font-weight:600;color:var(--warn)">函数</span><div class="bar-t"><div class="bar-f" style="width:100%;background:var(--warn)"></div></div><span style="font-family:var(--mono);font-weight:600;color:var(--warn)">100%</span></div>
+      </div>
+      <div class="c" style="border-color:var(--dim)">
+        <div style="display:flex;justify-content:space-between;margin-bottom:.6rem"><h3 style="margin:0"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--dim)"></span> <span style="color:var(--dim)">💤 LOW</span></h3><span class="pill" style="background:rgba(148,163,184,.08);color:var(--dim);border:1px solid var(--bdr)">同 mid</span></div>
+        <div class="bar"><span style="width:5rem;font-weight:600;color:var(--dim)">行覆盖</span><div class="bar-t"><div class="bar-f" style="width:60%;background:var(--dim)"></div></div><span style="font-family:var(--mono);font-weight:600;color:var(--dim)">60%</span></div>
+        <div class="bar"><span style="width:5rem;font-weight:600;color:var(--dim)">函数</span><div class="bar-t"><div class="bar-f" style="width:100%;background:var(--dim)"></div></div><span style="font-family:var(--mono);font-weight:600;color:var(--dim)">100%</span></div>
+      </div>
+    </div>
+    <div style="flex:.8;display:flex;flex-direction:column;gap:.8rem">
+      <div class="c"><h3><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--info)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>设计动机</h3><ul><li>high 级是核心契约</li><li>mid/low 不必同标准</li><li>避免一刀切浪费精力</li></ul></div>
+      <div class="c"><h3><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--cta)" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>采集链路</h3><ul><li>lcov + genhtml</li><li>collect-coverage-report.py</li><li>coverage_by_level.json</li><li>ut-summary.json 三合一</li></ul></div>
+      <div class="c" style="border-color:var(--purple)"><h3><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5"/></svg>覆盖 ≠ 有效</h3><p style="font-size:.9rem">弱断言也能过 → <strong style="color:var(--purple)">Mode 4</strong> 补这个洞</p></div>
+    </div>
+  </div>
+</div>
+<span class="sn">7 / 10</span>
+</div>
+
+<!-- ====== SLIDE 8: Mutation Testing ====== -->
+<div class="slide" id="s7">
+<div class="grid"></div><div class="orb" style="width:26vw;height:26vw;background:var(--cta);top:-4vw;right:-4vw;opacity:.12"></div>
+<div class="z" style="display:flex;flex-direction:column;flex:1">
+  <h2 class="t">变异测试 <span style="color:var(--purple)">Mode 4</span></h2>
+  <p class="s">覆盖率 ≠ 有效性 — 注入变异体验证测试能否拦截缺陷</p>
+  <div class="gl"></div>
+  <div class="g2">
+    <div style="display:flex;flex-direction:column;gap:.7rem">
+      <div class="ig">
+        <div class="icard"><h4>#1 备份先于修改</h4><p>cp → .mutation_backup</p></div>
+        <div class="icard"><h4>#2 恢复必有机制</h4><p>atexit+SIGTERM+SIGINT</p></div>
+        <div class="icard"><h4>#3 变异不落盘</h4><p>绝不 commit/push</p></div>
+        <div class="icard"><h4>#4 退出必校验</h4><p>git diff --exit-code</p></div>
+      </div>
+      <div class="c">
+        <h3><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2"><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/></svg>5 类变异算子</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem;font-size:.85rem;margin-top:.3rem">
+          <div style="padding:.4rem .6rem;background:rgba(255,255,255,.03);border-radius:5px"><strong style="color:var(--cta)">AOR</strong> 算术 +-*/</div>
+          <div style="padding:.4rem .6rem;background:rgba(255,255,255,.03);border-radius:5px"><strong style="color:var(--info)">ROR</strong> 关系 ==!=></div>
+          <div style="padding:.4rem .6rem;background:rgba(255,255,255,.03);border-radius:5px"><strong style="color:var(--warn)">LOR</strong> 逻辑 &&||</div>
+          <div style="padding:.4rem .6rem;background:rgba(255,255,255,.03);border-radius:5px"><strong style="color:var(--purple)">CRC</strong> 常量 0↔1</div>
+          <div style="padding:.4rem .6rem;background:rgba(255,255,255,.03);border-radius:5px"><strong style="color:var(--danger)">RVF</strong> 返回 true↔false</div>
+          <div style="padding:.4rem .6rem;background:rgba(255,255,255,.03);border-radius:5px"><strong style="color:var(--dim)">上限</strong> 20/方法</div>
+        </div>
+      </div>
+      <div class="c" style="border-color:var(--warn)">
+        <h3 style="color:var(--warn)"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>C++ 跳过规则</h3>
+        <p><code>-></code> / <code>++</code> / <code>//</code> / <code>+=</code> / 字符串字面量 — 缺一不可</p>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:.7rem">
+      <div class="c" style="border-color:var(--cta)">
+        <h3 style="color:var(--cta)"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--cta)" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>实测数据</h3>
+        <table class="tb" style="font-size:.88rem"><thead><tr><th>函数</th><th>变异</th><th>杀</th><th>活</th><th>得分</th></tr></thead><tbody>
+          <tr><td style="color:var(--cta)">stringIsDigit</td><td>6</td><td>6</td><td>0</td><td style="color:var(--cta);font-weight:600">100%</td></tr>
+          <tr><td style="color:var(--warn)">reformat…</td><td>18</td><td>10</td><td>8</td><td style="color:var(--warn);font-weight:600">55.6%</td></tr>
+          <tr><td style="color:var(--cta)">formatTh…</td><td>20</td><td>17</td><td>0</td><td style="color:var(--cta);font-weight:600">100%</td></tr>
+        </tbody></table>
+        <p style="margin-top:5px;font-size:.82rem;color:var(--dim)">单变异体 ~7.4s（增量编译+GTest）</p>
+      </div>
+      <div class="c">
+        <h3><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--info)" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>成本控制</h3>
+        <ul><li>只对 <strong>high 级</strong> 跑（5-15% 方法）</li><li>独立 build-mutation/ 不污染 Mode 3</li><li>禁 ccache 避免假存活</li><li>10 high × 20 × 7.4s ≈ <strong>25 分钟</strong></li></ul>
+      </div>
+    </div>
+  </div>
+</div>
+<span class="sn">8 / 10</span>
+</div>
+
+<!-- ====== SLIDE 9: Defect Export + Iron Laws ====== -->
+<div class="slide" id="s8">
+<div class="grid"></div><div class="orb" style="width:28vw;height:28vw;background:var(--info);bottom:-5.5vw;left:-5.5vw;opacity:.12"></div>
+<div class="z" style="display:flex;flex-direction:column;flex:1">
+  <h2 class="t">缺陷导出 <span style="color:var(--danger)">Mode 5</span> & <span style="color:var(--cta)">11 条铁律</span></h2>
+  <p class="s">测试过程发现的源码缺陷标红交还用户 + 核心设计原则总览</p>
+  <div class="gl"></div>
+  <div class="g2">
+    <div style="display:flex;flex-direction:column;gap:.7rem">
+      <div class="c" style="border-color:var(--danger)">
+        <h3 style="color:var(--danger)"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Mode 5 实时持久化</h3>
+        <ul><li>failure_repairer 标红 → <code>upsert</code> 落盘</li><li>build_verifier 预记录</li><li>通过验证 → <code>mark-fixed</code> 闭环</li><li>落盘 <code>.ut-defects.json</code>（不入 git）</li><li>颗粒度：用例级 <code>method#Fixture.Case</code></li></ul>
+      </div>
+      <div class="c" style="border-color:var(--warn)">
+        <h3 style="color:var(--warn)"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 3v5h5"/></svg>产出</h3>
+        <ul><li><code>defects.json</code> — 机读数据</li><li><code>defects-summary.md</code> — 标红清单</li><li>md 内链接跳转源码行</li><li>与 Mode 4 数据模型独立</li></ul>
+      </div>
+    </div>
+    <div class="c" style="display:flex;flex-direction:column">
+      <h3><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--cta)" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Iron Laws（铁律）</h3>
+      <div style="flex:1;overflow-y:auto">
+        <div class="lr"><span class="ln">#1</span><span class="lt"><strong>知识图谱硬门禁</strong> — 无索引不执行</span></div>
+        <div class="lr"><span class="ln">#2</span><span class="lt"><strong>Google Test only</strong> — 不用 Qt Test</span></div>
+        <div class="lr"><span class="ln">#3</span><span class="lt"><strong>分级覆盖率门禁</strong> — high90 mid60</span></div>
+        <div class="lr"><span class="ln">#4</span><span class="lt"><strong>强制编译+运行验证</strong></span></div>
+        <div class="lr"><span class="ln">#5</span><span class="lt"><strong>内置 stub-ext</strong> — 不从网络下载</span></div>
+        <div class="lr"><span class="ln">#6</span><span class="lt"><strong>逐类闭环</strong> — 单类失败不阻塞</span></div>
+        <div class="lr"><span class="ln">#7</span><span class="lt"><strong>不修源码</strong> — 缺陷只标红</span></div>
+        <div class="lr"><span class="ln">#8</span><span class="lt"><strong>只 APPEND</strong> — 不改已有 CMake</span></div>
+        <div class="lr"><span class="ln">#9</span><span class="lt"><strong>只 commit 不 push</strong></span></div>
+        <div class="lr"><span class="ln">#10</span><span class="lt"><strong>3 轮迭代上限</strong></span></div>
+        <div class="lr"><span class="ln">#11</span><span class="lt"><strong>usecase_count 实时更新</strong></span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<span class="sn">9 / 10</span>
+</div>
+
+<!-- ====== SLIDE 10: Key Innovations Summary ====== -->
+<div class="slide" id="s9">
+<div class="grid"></div><div class="orb" style="width:28vw;height:28vw;background:var(--cta);top:-4vw;right:-4vw;opacity:.12"></div><div class="orb" style="width:20vw;height:20vw;background:var(--purple);top:30%;left:50%;transform:translateX(-50%);opacity:.06"></div>
+<div class="z" style="display:flex;flex-direction:column;flex:1">
+  <h2 class="t">核心 <span style="color:var(--cta)">设计创新</span> 总结</h2>
+  <p class="s">让单测生成从「手工拼凑」变成「知识图谱驱动的工程化闭环」</p>
+  <div class="gl"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;flex:1">
+    <div class="c" style="border-color:var(--cta)">
+      <h3 style="color:var(--cta)"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--cta)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M6 12h12"/></svg>知识图谱硬门禁</h3>
+      <p>拒绝降级到文件扫描。图谱提供调用链、继承链、传递依赖——这些是评分和 stub 决策的基础设施，没有它们整个体系会崩塌。</p>
+    </div>
+    <div class="c" style="border-color:var(--info)">
+      <h3 style="color:var(--info)"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--info)" stroke-width="2"><path d="M12 20V10M18 20V4M6 20v-4"/></svg>多因子评分 → 分级门禁</h3>
+      <p>不是一刀切。15+ 因子加权评分区分 high/mid/low，对应不同覆盖率阈值。核心契约方法 90% 行覆盖，辅助方法 60% 即可。</p>
+    </div>
+    <div class="c" style="border-color:var(--warn)">
+      <h3 style="color:var(--warn)"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>对账 + 差异路由</h3>
+      <p>每次运行先比对 git SHA。新增→补全、变更→重生、删除→主动清理、分支切换→stale 标记。源码演进了，测试跟着演进。</p>
+    </div>
+    <div class="c" style="border-color:var(--purple)">
+      <h3 style="color:var(--purple)"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2"><path d="M9 12l2 2 4-4"/></svg>闭环验证链</h3>
+      <p>逐类闭环：trace→gen→build→check。编译不过不报完成，覆盖率不过自检拦截，变异测试补有效性。5 层质量保障层层递进。</p>
+    </div>
+    <div class="c" style="border-color:var(--danger)">
+      <h3 style="color:var(--danger)"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>安全边界</h3>
+      <p>不修源码、只 APPEND 不改已有、变异测试四铁律、过时测试主动清理不等编译报错。每条铁律背后都是一次真实踩坑的教训。</p>
+    </div>
+    <div class="c" style="border-color:var(--cta)">
+      <h3 style="color:var(--cta)"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--cta)" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>可选增强不干扰</h3>
+      <p>Mode 4/5 可选增强：不占迭代预算、不污染覆盖率、不更新 inventory、不自动改测试。核心流程干净，增强按需接入。</p>
+    </div>
+  </div>
+  <div style="text-align:center;margin-top:12px;font-size:.88rem;color:var(--dim)">v3.3.0 · 5 Modes · 11 Iron Laws · 1 Knowledge Graph · 0 Source Code Modification</div>
+</div>
+<span class="sn">10 / 10</span>
+</div>
+
+</div><!-- /deck -->
+<script>
+const TOTAL=10;let cur=0;const deck=document.getElementById('deck'),dots=document.getElementById('dots'),pbtn=document.getElementById('pbtn'),nbtn=document.getElementById('nbtn');
+for(let i=0;i<TOTAL;i++){const d=document.createElement('button');d.className='dot'+(i===0?' on':'');d.onclick=()=>goTo(i);d.setAttribute('aria-label','第'+(i+1)+'页');dots.appendChild(d)}
+function goTo(n){if(n<0||n>=TOTAL||n===cur)return;const slides=deck.querySelectorAll('.slide'),ddots=dots.querySelectorAll('.dot');slides[cur].classList.remove('active');slides[cur].classList.add('out');setTimeout(()=>slides[cur].classList.remove('out'),500);slides[n].classList.add('active');ddots[cur].classList.remove('on');ddots[n].classList.add('on');cur=n;pbtn.disabled=cur===0;nbtn.disabled=cur===TOTAL-1}
+function go(d){goTo(cur+d)}
+document.addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key==='ArrowDown')go(1);else if(e.key==='ArrowLeft'||e.key==='ArrowUp')go(-1)});
+// Touch support
+let tx=0;deck.addEventListener('touchstart',e=>{tx=e.touches[0].clientX},{passive:true});deck.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-tx;if(Math.abs(dx)>40){dx<0?go(1):go(-1)}},{passive:true});
+</script>
+</body>
+</html>
