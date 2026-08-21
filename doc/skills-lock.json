@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "skills-best-practices": {
+      "source": "lefant/agent-skills",
+      "sourceType": "github",
+      "skillPath": "lefant/skills-best-practices/SKILL.md",
+      "computedHash": "17a617469ff27607484336369bbea8e0c1c919e3190e7e4e82d56e4d5f15a598"
+    }
+  }
+}
