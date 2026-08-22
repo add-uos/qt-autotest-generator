@@ -138,6 +138,8 @@ Mode 5 **不跑测试、不编译、不改测试代码、不改源码**（与 Mo
 9. **批次提交** —— 只 commit，不 push
 10. **全局闭环迭代上限** —— 同一类最多循环 3 轮；3 轮后仍未通过，标记 `failed` + `max_iterations_exceeded` 并跳过
 11. **usecase_count 实时更新** —— 每类编译通过后立即更新 `.ut-inventory.json` 的 `usecase_count` 字段
+12. **项目源码只走 MCP** —— 被测类的实现/签名/调用链/分支/隐式依赖**必须**通过 MCP 工具获取（`get_code_snippet` 拿方法体、`trace_path` 拿出向调用链、`search_graph` 拿类与方法、`query_graph` 拿 IMPORTS/复杂关系）。**禁止**用 `read`/`grep`/`glob` 直读项目源码文件去理解被测代码——图谱是预解析的全局视角，毫秒级拿到调用链与传递依赖；逐文件 `read` 慢、漏传递依赖、漏隐式分支，是低质单测的首要根因。`read` 仅限：本技能自带文件（`references/`/`templates/`/`scripts/`）、inventory/defects JSON、**已生成的**测试文件。
+13. **白盒质量用 MCP 反查校验** —— 测试文件顶部声明分支清单后，自检必须用 `get_code_snippet` 取真实源码分支（if/switch/for/while/throw/early-return）做差集，声明分支缺失真实分支即 `BRANCH_NOT_MAPPED` 违规；不得只写注释不核对源码。
 
 ---
 
@@ -149,7 +151,7 @@ Mode 5 **不跑测试、不编译、不改测试代码、不改源码**（与 Mo
 | 测试文件 | `test_myclass.cpp` |
 | 测试类名 | `MyClassTest` |
 | 用例命名 | `{Feature}_{Scenario}_{ExpectedResult}` |
-| MCP 工具 | `search_graph`, `get_code_snippet`, `trace_path`, `query_graph`, `index_status` |
+| MCP 工具 | `search_graph`, `get_code_snippet`, `trace_path`, `query_graph`, `index_status` —— **项目源码理解的唯一来源，禁止 read/grep 直读源文件** |
 | 编译重试 | per-error 3 次，max 10 loops |
 | 函数覆盖率阈值 | 分级门禁：high 行90%+分支80%+函数100%，mid/low 行60%+函数100%
 | 模板与 stub-ext | `templates/`，详见 `references/templates-guide.md` |
@@ -157,7 +159,9 @@ Mode 5 **不跑测试、不编译、不改测试代码、不改源码**（与 Mo
 | 变异测试 | `scripts/mutation-score.py`（Mode 4，可选，阈值 85%） |
 | 源码缺陷导出 | `scripts/export-defects.py`（Mode 5，可选，upsert/mark-fixed/export） |
 | 过时测试清理 | `scripts/stale-test-cleanup.py`（reconcile 后主动清理，不等编译报错） |
+| 分支清单交叉验证 | `scripts/fetch-mcp-data.py extract-branches`（self-checker §2c，MCP `get_code_snippet` 反查真实分支做差集） |
 | 缺陷数据文件 | `.ut-defects.json`（本地，不入 git） |
+| 单元测试 | `scripts/tests/test_extract_branches.py`（extract-branches 纯函数 + 端到端冲烟，68 用例，`python3 -m unittest tests.test_extract_branches`） |
 
 ---
 
@@ -176,6 +180,8 @@ Mode 5 **不跑测试、不编译、不改测试代码、不改源码**（与 Mo
 - 从网络下载 stub-ext
 - 修改用户源码（Mode 4 例外：受源码安全四铁律约束，退出 `git diff` 必为空）
 - 单类失败阻塞整批
+- 用 `read`/`grep`/`glob` 直读**项目源码**理解被测类（实现/签名/调用链/分支/依赖）—— 必须走 MCP；`read` 只用于技能自带文件 / inventory·defects JSON / 已生成的测试文件
+- 测试文件声明了分支清单但未用 MCP `get_code_snippet` 反查真实源码分支（声明 < 实际即漏测）
 
 ---
 
@@ -189,7 +195,9 @@ Mode 5 **不跑测试、不编译、不改测试代码、不改源码**（与 Mo
 □ Mode 2：已按步骤 Read 对应 reference 子步骤文件
 □ 过时测试清理：若 diff 报告含 removed 方法，已 Read stale-test-cleanup.md 并主动清理（不等编译报错）
 □ MCP 提供方已解析（远端优先，本地兜底），互斥使用
+□ 项目源码理解只走 MCP：方法体用 `get_code_snippet`、调用链/隐式依赖用 `trace_path`、类与方法用 `search_graph`、IMPORTS 用 `query_graph`；未用 `read`/`grep` 直读项目源码
 □ 逐类闭环：每类走 依赖追踪 → 测试生成 → 编译验证 → 自检（类列表与 level 来自 inventory）
+□ 白盒反查：分支清单已用 `get_code_snippet` 取真实源码分支做差集，无 `BRANCH_NOT_MAPPED` 漏报
 □ 单类失败：已记录 failure_reason + 跳过 + 继续下一个类
 □ 每类编译通过后：已更新 .ut-inventory.json 的 usecase_count
 □ 批次提交：本批次自检通过后已执行代码提交（只 commit 不 push）

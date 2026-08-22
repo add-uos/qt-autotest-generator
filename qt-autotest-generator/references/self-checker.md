@@ -208,6 +208,52 @@ for method in all_methods:
 
 **判定**：任一违规 → 流转至 `test_writer` 重写对应用例的 Assert 段（传入违规用例名 + 违规类型）
 
+#### 2c. 分支清单交叉验证（白盒质量门禁，MCP 反查）
+
+§4.1 要求测试文件顶部注释声明「分支清单 → 用例映射」。本步**用 MCP `get_code_snippet` 反查真实源码分支**，校验声明是否对得上实现——这是白盒覆盖质量的硬门禁，不靠 agent 自觉读 test-types.md。
+
+> **首选方式**：跑 `scripts/fetch-mcp-data.py extract-branches`，脚本固化 §2c 全流程——从 inventory 取类方法、调 MCP `get_code_snippet` 拉方法体、正则数真实分支（if/else if/switch case/for/while/throw/early return/三元）、解析测试文件声明的 `// B1:` 分支清单、做差集输出 `MISSING_BRANCH_LIST` / `BRANCH_NOT_MAPPED` 违规清单。模型只消费违规清单决定补什么用例，不自己回读源码数分支。
+>
+> ```bash
+> python3 ${SKILL_DIR}/scripts/fetch-mcp-data.py extract-branches \
+>   --project <project_name_in_graph> \
+>   --test-file ${test_dir}/${module}/test_${classname}.cpp \
+>   --inventory ${test_dir}/.ut-inventory.json \
+>   [--class ${classname}] [--json] [-o ${test_dir}/.reports/branch-check.json]
+> # 退出码 0=无 error / 1=有 error（warning 不阻塞）
+> # stdout 摘要 + 违规清单
+> ```
+>
+> 脚本核心逻辑（`extract_branches` / `parse_declared_branches` / `cross_check_branches`）为纯函数，单元测试见 `scripts/tests/test_extract_branches.py`（68 用例，含端到端冲烟）。下方伪代码仅作原理说明（脚本不可用时兑底）。
+
+```python
+# 对每个 testable 方法（§1a 的 all_methods），用 MCP 取真实方法体
+for method in all_methods:
+    snippet = mcp.get_code_snippet(qualified_name=method.qualified_name)  # qn 必须来自图谱返回
+    body = snippet.body  # 方法体全文（不是 read 源文件）
+
+    # 提取真实分支：if / else if / switch case + default / for / while / throw / early return / 三元
+    real = extract_branches(body)          # 返回 dict，real["total"] 为真实分支总数
+
+    # 解析测试文件顶部声明的分支清单（// B1: cond → outcome 格式，见 test-code-gen §4.1）
+    declared = parse_declared_branches(test_content, method.name)  # 返回 int
+
+    is_complex = method.complexity >= 10 or real["total"] >= 3
+    if is_complex and declared == 0:
+        violations.append(("branch", "error", "MISSING_BRANCH_LIST", method.name))
+    elif declared > 0 and declared < real["total"]:
+        violations.append(("branch", "error",
+            f"BRANCH_NOT_MAPPED declared={declared} actual={real['total']}", method.name))
+    # 简单方法 declared==0 → 不判违规（§4.1 允许简单方法省略清单）
+```
+
+**判定**：
+- `MISSING_BRANCH_LIST`（复杂方法无分支清单注释）→ 流转 `test_writer`，用 `get_code_snippet` 补分支清单 + 对应用例
+- `BRANCH_NOT_MAPPED`（声明分支数 < 真实分支数）→ 流转 `test_writer`，按漏掉的分支补用例
+- 简单方法（complexity<10 且分支<3）无分支清单不判违规（§4.1 允许简单方法省略）
+
+> 本步是「语义质量」里**唯一可机器校验**的项：分支清单是注释，但真实分支来自 MCP 源码，两者做差集即可判定漏测。等价类/边界值的语义正确性仍留模型，但分支覆盖这条硬指标不再靠自觉。
+
 #### 3. SPDX 头自检
 
 测试文件首行必须有：
@@ -301,6 +347,7 @@ for method in all_methods:
 | SPDX 缺失 | 无头 | 流转至 `test_writer` 补 |
 | stub 问题 | 有问题 | 流转至 `test_writer` 修正 |
 | 断言强度违规 | NO_FATAL 唯一断言/空断言/纯 gMock 期望/副作用未断言/返回值未断言 | 流转至 `test_writer` 重写对应用例 Assert 段 |
+| 分支清单违规 | MISSING_BRANCH_LIST / BRANCH_NOT_MAPPED（声明分支 < 真实分支） | 流转至 `test_writer`，用 `get_code_snippet` 补分支清单 + 补用例 |
 | AAA 结构违规 | 缺少 // Arrange / // Act / // Assert 注释（MISSING_AAA） | 流转至 `test_writer` 补 AAA 注释 |
 | 用例数低于下限 | 声明表中 actual < min（BELOW_MIN_CASES） | 流转至 `test_writer` 补用例 |
 | 环境隔离违规 | 硬编码路径/env 未还原/真实外部资源/stub 未清理 | 流转至 `test_writer` 补 mock 或隔离 |
@@ -321,6 +368,7 @@ for method in all_methods:
     "spdx": "pass",
     "stub": "pass",
     "assertion_strength": "pass",
+    "branch_list": "pass",
     "env_isolation": "pass"
   }
 }
@@ -342,6 +390,7 @@ for method in all_methods:
     "assertion_strength": "pass",
     "aaa": "pass",
     "usecase_decl": "pass",
+    "branch_list": "pass",
     "env_isolation": "pass"
   }
 }
@@ -358,3 +407,4 @@ for method in all_methods:
 - 覆盖率门禁规则：必须有 `.ut-inventory.json`，按方法分级（详见 `references/coverage-tiers.md`）；无 inventory 时技能不可运行
 - 不跳过断言强度自检：每用例（`TEST_F` 与 `TEST_P` 均需扫描）至少 2 个有效 `EXPECT_*`（NO_FATAL/NO_THROW/EXPECT_CALL 均不计入）
 - 不跳过环境隔离自检：硬编码绝对路径、`qputenv` 无对应 `qunsetenv`、未 mock 的真实外部资源（QProcess/网络/socket/真实时间）、stub 未 `clear()` 必须检出
+- 不跳过分支清单交叉验证：复杂方法必须有分支清单注释，且声明分支数 ≥ `get_code_snippet` 提取的真实分支数；漏报即流转 `test_writer` 补用例（白盒质量硬门禁）

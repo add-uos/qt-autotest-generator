@@ -351,14 +351,15 @@ MCP 图谱覆盖 95% 的场景，但以下情况图谱信息不足，需用其�
 | **private/protected 区分** | 部分语言的图谱对访问修饰符支持不全 | `get_code_snippet` 读取类声明区域 |
 | **Q_SLOTS/Q_INVOKABLE 检测** | 图谱不存储 Qt 宏属性 | `get_code_snippet` 读取类声明中 Q_SLOTS 块 |
 
-**重要：不使用 LSP。** 图谱是唯一的代码分析来源。LSP 未集成，不降级到文件扫描/LSP。
+**重要：不使用 LSP，也不用 `read`/`grep`/`glob` 直读项目源码。** 图谱是项目源码理解的唯一来源——方法体用 `get_code_snippet`、调用链用 `trace_path`、类与方法用 `search_graph`、IMPORTS/复杂关系用 `query_graph`。LSP 未集成，不降级到文件扫描/LSP；`read`/`grep` 仅限技能自带文件（references/templates/scripts）、inventory/defects JSON、已生成的测试文件。逐文件 `read` 源码会漏传递依赖、漏隐式分支，是低质单测的首要根因（Iron Law #12）。
 
 **判断流程**：
 
 ```
 1. 先用 search_graph / query_graph 获取结构（快，全局视角）
-2. 如果生成的测试代码涉及重载/模板/宏 → 用 get_code_snippet 读源码补充精确签名
-3. 编译失败且错误指向签名不匹配 → 用 get_code_snippet 重新读签名，再编译验证
+2. 需要方法体/签名/分支 → 用 get_code_snippet（不是 read 源文件）
+3. 需要调用链/隐式依赖 → 用 trace_path(direction="outbound", depth=3)
+4. 编译失败且错误指向签名不匹配 → 用 get_code_snippet 重新读签名，再编译验证
 ```
 
 ---

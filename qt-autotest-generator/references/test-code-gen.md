@@ -10,7 +10,7 @@
 
 ## 测试方法论引用（必读）
 
-生成用例前必须先读 `${SKILL_DIR}/references/test-types.md`，按其方法论建模输入空间与组织用例。本节列出**必须遵守的最小清单**，详细方法以 test-types.md 为准。
+生成用例前**必须先读** `${SKILL_DIR}/references/test-types.md`，按其方法论建模输入空间与组织用例。不读 test-types.md 直接生成 → 分支清单/等价类建模缺失，**self_checker §2c 会用 `get_code_snippet` 反查真实源码分支拦下**（MISSING_BRANCH_LIST / BRANCH_NOT_MAPPED），过不了自检。本节列出**必须遵守的最小清单**，详细方法以 test-types.md 为准。
 
 ### 最小清单（在测试文件顶部注释中输出完成情况，未完成不得提交编译验证）
 
@@ -26,6 +26,8 @@
 | 8 | 负面场景（空/越界/类型不符/资源不足）有专门用例 | §6.2 |
 | 9 | 负面用例验证强异常安全（状态未损坏） | §6.3 |
 | 10 | 项目内接口类用 gMock，Qt 类/全局函数/无虚函数类用 stub_ext | §7.5 |
+
+> **#5/#6 是硬门禁**：分支清单必须基于 `get_code_snippet` 取的真实源码分支填写（不凭签名编造），self_checker §2c 会做差集校验；声明分支 < 真实分支即 `BRANCH_NOT_MAPPED` 违规，流转回此处补用例。
 
 **必须读的关键章节**：
 - §1 等价类划分、§2 边界值分析 → 决定用例输入空间
@@ -104,17 +106,32 @@ read("${SKILL_DIR}/templates/cmake-submodule.txt")
 
 `stub_list` 是依赖追踪给的起点，**不能盲信**。生成用例前必须对每个待测方法做以下分析，分析结论落入测试文件顶部注释或 `SetUp()` 实现：
 
-1. **完整阅读待测方法源码**：不只看签名，要看实现。识别所有出向调用、分支、循环、异常路径。复杂方法先在测试文件顶部用注释列出"分支清单 → 用例映射"，确保每条分支至少一个用例。
-2. **识别隐式依赖**（`stub_list` 常漏的，必须逐一排查）：
-   - **路径访问**：硬编码绝对路径字符串（`/usr/...`、`/tmp/...`、`/home/...`）、相对路径拼接、`QStandardPaths::writableLocation`、`QDir::currentPath`、`QCoreApplication::applicationDirPath`、`QDir::home()`
-   - **环境变量**：`getenv`、`qEnvironmentVariable`、`qgetenv`、`QProcessEnvironment::systemEnvironment`
-   - **文件系统**：`QFile`、`QDir`、`QFileInfo`、POSIX `::open`/`::access`/`::stat`/`::mkdir`/`::unlink`、`fopen`
-   - **子进程**：`QProcess::start`、`system`、`popen`
-   - **网络**：`QNetworkAccessManager`、`QTcpSocket`/`QUdpSocket`、`QLocalSocket`、`gethostbyname`
-   - **时间/随机**：`QDateTime::currentDateTime`、`QTime::currentTime`、`QElapsedTimer`、`srand`/`qsrand`、`QRandomGenerator::system` —— 需要确定性结果时必须 mock
-   - **单例/全局状态**：进程内单例、静态成员、`qApp` 全局状态（多用例之间会污染，`TearDown` 必须重置）
+1. **用 MCP 取方法体与调用链（禁止 read 源文件）**：被测方法的实现、签名、出向调用、分支、循环、异常路径**全部从图谱拿**，不 `read` 项目源码文件：
+   ```python
+   # 方法体（含签名、返回类型、函数体全文）—— 不只看签名，要看实现
+   snippet = mcp.get_code_snippet(qualified_name=method.qualified_name)  # qn 必须来自 search_graph 返回
+
+   # 出向调用链（识别分支/循环/异常/emit/隐式依赖）—— depth=3 覆盖传递依赖
+   callees = mcp.trace_path(
+       project=project_name_in_graph,
+       function_name=method.qualified_name,
+       direction="outbound", depth=3, mode="calls"
+   )
+   ```
+   复杂方法（complexity≥10 或 lines≥50）**必须**先在测试文件顶部用注释列出「分支清单 → 用例映射」（来源标注 `get_code_snippet`），确保每条分支至少一个用例。**分支清单不得凭记忆/凭签名编造**——自检会用 `get_code_snippet` 反查真实分支做差集（见 self-checker §2c）。
+2. **用 trace_path 出向链识别隐式依赖（不 grep 源码）**：`stub_list` 是依赖追踪的起点但常漏；隐式依赖**从 §1 的 `trace_path` 返回的 callees 里命中以下终点全限定名**判断，不 `read`/`grep` 源文件。命中即按右栏决策：
+   | 依赖类别 | trace_path 命中的 callee（全限定名片段） | 决策 |
+   |---|---|---|
+   | 路径访问 | `QStandardPaths::writableLocation`、`QDir::currentPath`、`QCoreApplication::applicationDirPath`、`QDir::home` | mock 返回临时目录，或 `SetUp()` 用 `QTemporaryDir` 注入路径 |
+   | 环境变量 | `getenv`、`qEnvironmentVariable`、`qgetenv`、`QProcessEnvironment::systemEnvironment` | `SetUp()` `qputenv` / `TearDown()` `qunsetenv`，或 mock |
+   | 文件系统 | `QFile`、`QDir`、`QFileInfo`、`::open`/`::access`/`::stat`/`::mkdir`/`::unlink`、`fopen` | mock 访问函数或 `QTemporaryDir` 隔离，禁止真实读写 |
+   | 子进程 | `QProcess::start`、`system`、`popen` | 必须 mock，禁止真实启进程 |
+   | 网络 | `QNetworkAccessManager`、`QTcpSocket`/`QUdpSocket`、`QLocalSocket`、`gethostbyname` | 必须 mock，禁止真实网络 |
+   | 时间/随机 | `QDateTime::currentDateTime`、`QTime::currentTime`、`QElapsedTimer`、`srand`/`qsrand`、`QRandomGenerator::system` | 需确定性结果时 mock |
+   | 单例/全局状态 | 进程内单例、静态成员、`qApp` | `TearDown` 重置，避免用例间污染 |
+   > 硬编码路径**字符串字面量**（`/usr/...`、`/tmp/...`）图谱 trace_path 不一定命中——此时**仍不 read 整个源文件**，用 `get_code_snippet` 取方法体后在方法体文本里查字符串即可（`get_code_snippet` 是 MCP 提供的结构化源码片段，不是 `read` 整文件）。
 3. **对每个识别出的依赖决定 mock 策略**：能 mock 的走 `stub.set_lamda`；不能直接 mock 的（如硬编码路径字符串）在 `SetUp()` 用 `QTemporaryDir`/`QTemporaryFile` 构造临时环境并把路径注入被测对象；环境变量在 `SetUp()` 用 `qputenv` 设置、`TearDown()` 用 `qunsetenv` 还原。
-4. **分支覆盖优先于用例数量**：基于源码分支生成用例，按 level/factors 推导的用例数下限不是上限。嵌套 `if`/`switch`/循环边界/异常路径要单独生成用例，**哪怕超出下限也必须补**，避免漏测。
+4. **分支覆盖优先于用例数量**：基于 §1 `get_code_snippet` 取到的真实源码分支生成用例，按 level/factors 推导的用例数下限不是上限。嵌套 `if`/`switch`/循环边界/异常路径要单独生成用例，**哪怕超出下限也必须补**，避免漏测。
 5. **private 方法的间接覆盖**：private 方法不直接 `TEST_F`，但**必须通过调用它的 public/protected 方法覆盖其分支和边界条件**，不得因"private 不可直接测"就跳过其内部逻辑分支。若某 public 方法全部逻辑就是调一个 private，则该 public 的用例必须覆盖 private 的所有分支。
 
 #### 4.1 用例结构
@@ -191,7 +208,7 @@ read("${SKILL_DIR}/templates/cmake-submodule.txt")
 - 为模板类指定具体类型参数（如 `MyTemplate<int>`、`MyTemplate<QString>`）
 - 优先用项目中已有的实例化类型
 
-**stub 选择**（以依赖追踪的 `stub_list` 为起点，结合 4.0 的源码深度分析补齐）：
+**stub 选择**（以依赖追踪的 `stub_list` 为起点，结合 §4.0 §2 的 `trace_path` 出向链补齐）：
 - 继承 QWidget → stub `show`、`hide`、`height`、`width`
 - 继承 QDialog → stub `exec`
 - 虚函数 → `VADDR(Class, method)`
@@ -249,7 +266,7 @@ read("${SKILL_DIR}/templates/cmake-submodule.txt")
 - 不从网络下载模板，只读 `templates/`
 - 测试文件必须有 `SPDX-FileCopyrightText` 和 `SPDX-License-Identifier` 头
 - 不硬耦合测试机：所有路径、环境变量、文件系统、网络、子进程、时间、随机源访问必须 mock 或在 `SetUp()` 中隔离；禁止硬编码测试机绝对路径；禁止依赖测试机特定文件/用户/权限/时区/网络状态；用例必须可在任意干净 CI 环境复现
-- 不盲信 `stub_list`：必须先读待测方法源码识别其**隐式依赖**（路径、env、文件系统、子进程、时间、随机、单例/全局状态），按 4.0 补齐 mock
+- 不盲信 `stub_list`：必须先用 MCP（`trace_path` 出向链 + `get_code_snippet` 方法体）识别待测方法的**隐式依赖**（路径、env、文件系统、子进程、时间、随机、单例/全局状态），按 §4.0 补齐 mock；**不用 `read`/`grep` 直读项目源码文件**
 - 不让测试依赖外部资源：不读写真实文件系统、不连真实数据库、不发真实网络请求、不启动真实子进程、不依赖真实系统时间；一律 mock 或在 `SetUp()` 临时隔离并在 `TearDown()` 清理
 - 不让用例间互相污染：单例/静态成员/全局状态在 `TearDown()` 重置；`stub.clear()` 必须在 `TearDown()` 调用；临时目录/文件必须在 `TearDown()` 释放
 - 不用"不崩溃"或单一布尔作为唯一断言：每个用例至少 2 个 `EXPECT_*` 断言维度；禁止 `EXPECT_NO_FATAL_FAILURE` 或单独 `EXPECT_TRUE(ret)` 作为唯一断言

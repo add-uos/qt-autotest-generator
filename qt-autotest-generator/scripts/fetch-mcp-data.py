@@ -756,7 +756,297 @@ def render_diff_report(diff, project, old_sha, new_sha):
     return "\n".join(lines)
 
 
+# ── extract-branches 子命令（self-checker §2c 分支清单交叉验证） ──────
+#
+# 把 self-checker.md §2c「分支清单交叉验证」从"模型+MCP 手工步骤"固化为脚本：
+#   1. 从 inventory 取目标类的 testable 方法（qn + name + complexity）
+#   2. 对每个方法调 MCP get_code_snippet 拉真实方法体（不 read 源文件，Iron Law #12）
+#   3. extract_branches() 用正则数真实分支（if/else if/switch case/for/while/throw/early return/三元）
+#   4. parse_declared_branches() 解析测试文件顶部声明的分支清单（// B1: ... 格式）
+#   5. cross_check_branches() 做差集 → MISSING_BRANCH_LIST / BRANCH_NOT_MAPPED
+# 模型只消费违规清单决定补什么用例，不自己回读源码数分支。
+#
+# 用法:
+#   python3 fetch-mcp-data.py extract-branches \
+#     --project <name> --test-file autotests/core/test_foo.cpp \
+#     --inventory autotests/.ut-inventory.json [--class Foo] [--json] [-o out.json]
+
+# 分支类型正则（在 strip_cpp_comments_and_strings 之后匹配，避免误数注释/字符串里的关键字）
+BRANCH_PATTERNS = [
+    ("if",      re.compile(r'\bif\s*\(')),
+    ("case",    re.compile(r'\bcase\b\s+[^:]+:')),   # switch case
+    ("default", re.compile(r'\bdefault\s*:')),            # switch default（test-types §4.2 要求覆盖）
+    ("for",     re.compile(r'\bfor\s*\(')),
+    ("while",   re.compile(r'\bwhile\s*\(')),
+    ("throw",   re.compile(r'\bthrow\b')),
+    ("return",  re.compile(r'\breturn\b')),            # 早退 return（末尾 return 在 extract_branches 里剔除）
+    ("ternary", re.compile(r'\w\s*\?\s*\w[^:]*:')),   # 三元 cond ? a : b
+]
+
+# 测试文件顶部声明的分支清单标记：// B1: cond → outcome
+DECLARED_BRANCH_RE = re.compile(r'//\s*B\d+\s*:', re.MULTILINE)
+# 分支清单段落标题：// 分支清单（来源：...MethodName...）
+BRANCH_SECTION_RE = re.compile(
+    r'//\s*分支清单[（(]([^）)]*)[）)]')
+
+
+def strip_cpp_comments_and_strings(code):
+    """去掉 C++ 注释和字符串/字符字面量，避免误数分支。
+
+    注释里的 if、字符串里的 case 不应计入真实分支。
+    保留代码结构与换行，只清空字面量内容。
+    """
+    # 块注释 /* ... */（跨行）
+    code = re.sub(r'/\*.*?\*/', '', code, flags=re.DOTALL)
+    # 行注释 //...
+    code = re.sub(r'//[^\n]*', '', code)
+    # 字符串 "..." （含转义）→ ""
+    code = re.sub(r'"(?:\\.|[^"\\])*"', '""', code)
+    # 字符 '...' → ''
+    code = re.sub(r"'(?:\\.|[^'\\])*'", "''", code)
+    return code
+
+
+def extract_branches(body):
+    """从方法体提取真实分支计数。
+
+    返回 dict: {branch_type: count} + {"total": N}。
+    early return = return 总数 - 1（末尾 return 不算分支），最少 0。
+    body 为空字符串时返回全 0。
+
+    已知漏计（heuristic 限制，需 test_writer 人工补）：
+    - for/while 内的 break/continue（§4.2 要求覆盖，但 break 在 switch 里与 case 重复，难区分）
+    - 短路求值 && / || 的左右分支（§4.2 要求）
+    """
+    counts = {btype: 0 for btype, _ in BRANCH_PATTERNS}
+    counts["total"] = 0
+    if not body:
+        return counts
+    cleaned = strip_cpp_comments_and_strings(body)
+    for btype, pat in BRANCH_PATTERNS:
+        counts[btype] = len(pat.findall(cleaned))
+    # early return：末尾 return 不算分支
+    if counts["return"] > 0:
+        counts["return"] = max(0, counts["return"] - 1)
+    counts["total"] = sum(counts.values())
+    return counts
+
+
+def parse_declared_branches(content, method_name=""):
+    r"""解析测试文件中为某方法声明的分支清单（// B1: ... 格式）。
+
+    定位 "// 分支清单（来源：...method_name...）" 段落，数该段落内的 B\d+ 行。
+    method_name 为空时数全文件声明分支（兜底）。
+    返回声明分支计数（int）。
+    """
+    if not method_name:
+        return len(DECLARED_BRANCH_RE.findall(content))
+    # 定位含 method_name 的分支清单段落（词边界匹配，避免短名子串误匹配）
+    # 如方法 "a" 不应误命中 "来源：Foo::parse" 段落
+    section = None
+    for m in BRANCH_SECTION_RE.finditer(content):
+        if re.search(r'\b' + re.escape(method_name) + r'\b', m.group(1)):
+            start = m.start()
+            # 段落到下一个分支清单标题或文件末结束
+            nxt = BRANCH_SECTION_RE.search(content, m.end())
+            end = nxt.start() if nxt else len(content)
+            section = content[start:end]
+            break
+    if section is None:
+        return 0  # 该方法无声明段落
+    return len(DECLARED_BRANCH_RE.findall(section))
+
+
+def cross_check_branches(real_total, declared_count, is_complex):
+    """差集判定分支清单是否覆盖真实分支。
+
+    - is_complex 且 declared==0 → MISSING_BRANCH_LIST
+    - declared>0 且 declared < real_total → BRANCH_NOT_MAPPED (declared=X actual=Y)
+    - 简单方法 declared==0 → pass（§4.1 允许简单方法省略清单）
+    返回 (rule, severity, message) 或 None。
+    """
+    if is_complex and declared_count == 0:
+        return ("MISSING_BRANCH_LIST", "error", "复杂方法无分支清单注释")
+    # 仅当声明了清单（declared>0）但不完整时判 NOT_MAPPED；
+    # 简单方法无清单（declared==0）允许跳过（§4.1）
+    if declared_count > 0 and declared_count < real_total:
+        return ("BRANCH_NOT_MAPPED", "error",
+                f"declared={declared_count} actual={real_total}")
+    return None
+
+
+def fetch_method_bodies(client, project, methods):
+    """对每个方法调 get_code_snippet 拉方法体。
+
+    methods: [{"qualified_name":..., "name":..., "complexity":...}, ...]
+    返回 {qn: {"body":..., "name":..., "complexity":..., "error"?:...}}。
+    get_code_snippet 返回结构字段名不确定（body/code/source/snippet/implementation），
+    逐一尝试 + 纯字符串兜底。失败的方法 body 为空 + error 记录。
+    """
+    result = {}
+    for m in methods:
+        qn = m.get("qualified_name")
+        if not qn:
+            continue
+        entry = {"body": "", "name": m.get("name", ""),
+                 "complexity": m.get("complexity", 0) or 0}
+        try:
+            snippet = client.call_tool(
+                "get_code_snippet",
+                {"project": project, "qualified_name": qn})
+            body = ""
+            if isinstance(snippet, dict):
+                # 尝试常见字段名（远端/本地提供方可能不同）
+                for key in ("body", "code", "source", "snippet",
+                            "implementation", "text"):
+                    val = snippet.get(key)
+                    if isinstance(val, str) and val:
+                        body = val
+                        break
+            elif isinstance(snippet, str):
+                body = snippet
+            entry["body"] = body
+        except Exception as e:
+            entry["error"] = str(e)
+        result[qn] = entry
+    return result
+
+
+def select_class_methods(inventory, classname):
+    """从 inventory 取目标类的 testable 方法。
+
+    匹配规则：method.class_qn 末段 == classname，或 class_qn 含 classname（命名空间场景）。
+    返回 [{qualified_name, name, complexity, class_qn}, ...]。
+    """
+    methods = []
+    for m in inventory.get("methods", []):
+        if not m.get("testable", True):
+            continue
+        cqn = m.get("class_qn") or ""
+        # class_qn 形如 "ns.Class"；取末段与 classname 比对，也允许整体包含
+        if cqn == classname or cqn.endswith("." + classname) or classname in cqn.split("."):
+            methods.append(m)
+    return methods
+
+
+def run_extract_branches():
+    """extract-branches 子命令入口：MCP 真实源码分支 × 测试文件声明分支 差集校验。"""
+    parser = argparse.ArgumentParser(
+        description="self-checker §2c 分支清单交叉验证："
+                    "MCP get_code_snippet 拉真实源码分支 → 与测试文件声明分支做差集")
+    parser.add_argument("--project", required=True, help="MCP 项目名")
+    parser.add_argument("--test-file", required=True, help="测试文件路径")
+    parser.add_argument("--inventory", required=True,
+                        help=".ut-inventory.json 路径")
+    parser.add_argument("--class", dest="classname", default=None,
+                        help="限定类名；未指定时从 test_<class>.cpp 文件名推断")
+    parser.add_argument("--mcp-url", default=MCP_URL, help="MCP HTTP 端点")
+    parser.add_argument("--json", action="store_true", help="额外打印完整 JSON")
+    parser.add_argument("-o", "--output", default=None, help="写 JSON 到文件")
+    args = parser.parse_args()
+
+    # 推断 classname（PascalCase 惯例：test_calculator.cpp → Calculator）
+    classname = args.classname
+    if not classname:
+        basename = os.path.basename(args.test_file)
+        m = re.match(r'test_(\w+)\.cpp$', basename)
+        if not m:
+            print(f"❌ 无法从文件名推断类名: {basename}，请用 --class 指定",
+                  file=sys.stderr)
+            sys.exit(2)
+        classname = m.group(1)
+        classname = classname[0].upper() + classname[1:]
+
+    # 读测试文件
+    if not os.path.isfile(args.test_file):
+        print(f"❌ 测试文件不存在: {args.test_file}", file=sys.stderr)
+        sys.exit(2)
+    with open(args.test_file, "r", encoding="utf-8") as f:
+        test_content = f.read()
+
+    # 读 inventory，取该类 testable 方法
+    if not os.path.isfile(args.inventory):
+        print(f"❌ inventory 不存在: {args.inventory}", file=sys.stderr)
+        sys.exit(2)
+    with open(args.inventory, "r", encoding="utf-8") as f:
+        inventory = json.load(f)
+    methods = select_class_methods(inventory, classname)
+
+    if not methods:
+        print(f"[BRANCH] {os.path.basename(args.test_file)} | "
+              f"class:{classname} methods:0 | 无可测方法，跳过")
+        if args.output:
+            with open(args.output, "w", encoding="utf-8") as f:
+                json.dump({"file": args.test_file, "class": classname,
+                           "methods": 0, "checked": 0, "violations": []},
+                          f, ensure_ascii=False, indent=2)
+        return
+
+    # 连 MCP 拉方法体
+    client = MCPClient(url=args.mcp_url)
+    print(f"🔗 Connecting to {args.mcp_url}...")
+    client.initialize()
+    print(f"📋 Project: {args.project}  Class: {classname}  Methods: {len(methods)}")
+    bodies = fetch_method_bodies(client, args.project, methods)
+
+    # 交叉验证
+    violations = []
+    checked = 0
+    for qn, info in bodies.items():
+        body = info["body"]
+        name = info["name"]
+        complexity = info.get("complexity", 0)
+        if not body:
+            violations.append({
+                "check": "branch", "severity": "warning",
+                "rule": "SNIPPET_FETCH_FAILED", "method": name,
+                "message": f"get_code_snippet 返回空 body"
+                           + (f": {info.get('error', '')}" if info.get('error') else ""),
+            })
+            continue
+        real = extract_branches(body)
+        real_total = real["total"]
+        declared = parse_declared_branches(test_content, name)
+        is_complex = complexity >= 10 or real_total >= 3
+        res = cross_check_branches(real_total, declared, is_complex)
+        checked += 1
+        if res:
+            rule, sev, msg = res
+            violations.append({
+                "check": "branch", "severity": sev, "rule": rule,
+                "method": name, "message": msg,
+                "declared": declared, "actual": real_total,
+            })
+
+    errors = sum(1 for v in violations if v["severity"] == "error")
+    warnings = sum(1 for v in violations if v["severity"] == "warning")
+    print(f"[BRANCH] {os.path.basename(args.test_file)} | "
+          f"class:{classname} methods:{len(methods)} checked:{checked} | "
+          f"{errors} errors, {warnings} warnings")
+    for i, v in enumerate(violations, 1):
+        tag = "E" if v["severity"] == "error" else "W"
+        print(f"  {tag}{i} branch | {v['rule']} | {v['method']} | {v['message']}")
+
+    out = {"file": args.test_file, "class": classname,
+           "methods": len(methods), "checked": checked,
+           "violations": violations}
+    if args.output:
+        os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
+        with open(args.output, "w", encoding="utf-8") as f:
+            json.dump(out, f, ensure_ascii=False, indent=2)
+        print(f"✅ JSON written to {args.output}")
+    if args.json:
+        print(json.dumps(out, ensure_ascii=False, indent=2))
+
+    sys.exit(1 if errors else 0)
+
+
 def main():
+    # 子命令分流：extract-branches 走独立入口，不碰 inventory 主流程
+    if len(sys.argv) > 1 and sys.argv[1] == "extract-branches":
+        sys.argv.pop(1)  # 移除子命令名，让 run_extract_branches 自己解析参数
+        return run_extract_branches()
+
     parser = argparse.ArgumentParser(
         description="端到端 MCP → .ut-inventory.json 函数重要性探测")
     parser.add_argument("--project", required=True, help="MCP 项目名")

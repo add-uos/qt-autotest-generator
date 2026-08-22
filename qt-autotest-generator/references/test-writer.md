@@ -189,9 +189,6 @@ write_json(inventory_path, inventory)
 
 ```python
 gate = inventory["gate_thresholds"]
-# high: 行90% + 分支80% + 函数100%
-# mid:  行60% + 函数100%
-# low:  行60% + 函数100%（同 mid）
 ```
 
 自检阶段按方法 level 应用对应门禁。详见 `references/self-checker.md` 和 `references/coverage-tiers.md`。
@@ -215,21 +212,21 @@ gate = inventory["gate_thresholds"]
 
 ## MCP 查询策略
 
-Mode 2 的 MCP 查询集中在依赖追踪和测试代码生成阶段：
+Mode 2 的 MCP 查询集中在依赖追踪和测试代码生成阶段。**被测类的实现/签名/调用链/分支/隐式依赖一律走 MCP，禁止 `read`/`grep` 直读项目源码文件**（Iron Law #12）；`read` 只用于技能自带文件、inventory/defects JSON、已生成的测试文件：
 
 | 查询 | 用途 | 阶段 |
 |------|------|------|
-| `trace_path(direction="outbound")` | 出向调用链 | 依赖追踪 |
+| `trace_path(direction="outbound")` | 出向调用链（分支/隐式依赖/emit） | 依赖追踪 + 测试生成 |
 | `query_graph(IMPORTS)` | 补充传递依赖 | 依赖追踪 |
-| `search_graph` | 头文件/符号查找 | 依赖追踪 |
-| `get_code_snippet(qn)` | 读取方法源码/签名 | 测试代码生成 |
+| `search_graph` | 头文件/符号/类与方法查找 | 依赖追踪 |
+| `get_code_snippet(qn)` | 方法体全文（含签名/返回类型/分支） | 测试生成 + 自检反查 |
 
 **查询失败处理**：
 
 | 严重程度 | 处理 |
 |---------|------|
 | 关键（search_graph/trace_path/get_code_snippet） | 硬终止 + 明确错误 |
-| 非关键（query_graph 辅助查询） | 降级 + 警告，用文件读取兜底 |
+| 非关键（query_graph 辅助查询） | 降级 + 警告，改用 `trace_path`+`search_graph` 重新聚合，**不读项目源码文件** |
 
 ## 关键约束
 
