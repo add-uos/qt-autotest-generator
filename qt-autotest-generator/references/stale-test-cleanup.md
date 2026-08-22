@@ -161,10 +161,10 @@ for cls in stale_classes:
 - **usecase_count 实时更新**：清理后重新统计受影响类的用例数
 - **stale 不删用例**：分支切换导致的 stale 只做 CMake 隔离 + 文件头标记，不注释用例
 
-## 与 failure_repairer 的关系
+## 与 failure-repairer 的关系
 
-`failure_repairer.md` §5 仍保留"方法删除的清理"逻辑，作为**兜底**：
+`failure-repairer.md` §5 仍保留"方法删除的清理"逻辑，作为**兜底**：
 - 正常流程：reconcile → stale-test-cleanup 主动清理 → 编译 → 不会遇到方法删除错误
-- 异常流程：若因某些原因 reconcile 未跑（如手动改了测试文件没跑对账），编译失败后 failure_repairer 仍能兜底清理
+- 异常流程：若因某些原因 reconcile 未跑（如手动改了测试文件没跑对账），编译失败后 failure-repairer 仍能兜底清理
 
-两者逻辑一致，**stale-test-cleanup 是主动防线，failure_repairer 是兜底防线**。
+两者逻辑一致，**stale-test-cleanup 是主动防线，failure-repairer 是兜底防线**。

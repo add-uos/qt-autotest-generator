@@ -20,7 +20,7 @@ iter_count = iteration_count.get(classname, 1) + 1
 iteration_count[classname] = iter_count
 
 if iter_count > MAX_ITERATIONS:
-    # 超过上限，强制标红（self_checker Step 0 也会拦截，此处双重保障）
+    # 超过上限，强制标红（self-checker Step 0 也会拦截，此处双重保障）
     class_status[classname].update({
         "status": "failed",
         "failure_reason": "max_iterations_exceeded",

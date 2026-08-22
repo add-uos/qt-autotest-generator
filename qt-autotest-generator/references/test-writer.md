@@ -81,10 +81,10 @@ for method in inventory["methods"]:
         continue  # 自由函数单独收集（见下方 free_functions 列表）
     if class_qn not in testable_classes:
         testable_classes[class_qn] = {
-            "name": class_qn.split(".")[-1],
+            "name": class_qn.rsplit(".", 1)[-1] if "." in class_qn else class_qn,  # 短名（class_qn 为短名时直接用）
             "qualified_name": class_qn,
             "level": method["level"],  # 取该类最高 level
-            "is_gui": class_qn in gui_names,  # methods[].class_qn 是短名，用 classes[].name 匹配
+            "is_gui": (class_qn.rsplit(".", 1)[-1] if "." in class_qn else class_qn) in gui_names,  # class_qn 短名匹配 classes[].name
             "methods": []
         }
     testable_classes[class_qn]["methods"].append(method)
@@ -161,7 +161,7 @@ for c in sorted_classes:
 >
 > 下方伪代码仅作兜底（脚本不可用时）。
 
-**关键**：每类编译通过（build_verifier pass + self_checker pass）后，立即更新 `.ut-inventory.json`：
+**关键**：每类编译通过（build-verifier pass + self-checker pass）后，立即更新 `.ut-inventory.json`：
 
 ```python
 # 1. 扫描测试文件统计用例数

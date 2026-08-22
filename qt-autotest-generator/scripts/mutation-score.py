@@ -627,7 +627,7 @@ def generate_report(results, output_path, project=None, base_sha=None, config=No
         lines.append("## 存活变异体 (测试缺口 — 补强建议)")
         lines.append("")
         lines.append("> Mode 4 只出建议不自动补强。以下存活变异体表示测试未覆盖该变异,")
-        lines.append("> 建议回 Mode 2 用 incremental_updater 补强对应用例。")
+        lines.append("> 建议回 Mode 2 用 incremental-updater 补强对应用例。")
         lines.append("")
         lines.append("| 函数 | 算子 | 行 | 变异描述 |")
         lines.append("|------|------|----|---------|")

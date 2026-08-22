@@ -1,6 +1,6 @@
 # 编译验证
 
-> 前置条件：`test_writer` 已完成目标类（`class_status[classname].status=test_written`（内存变量）），`{test_dir}/<module>/test_<classname>.cpp` 存在。
+> 前置条件：`test-writer.md` 编排流程已完成目标类（`class_status[classname].status=test_written`（内存变量）），`{test_dir}/<module>/test_<classname>.cpp` 存在。
 
 > 通过 mcp_provider 调用知识图谱工具（详见 references/mcp-providers.md）
 
@@ -96,13 +96,13 @@ timeout 120 ./${test_dir}/<module>/test_<classname> --gtest_output=xml:${PROJECT
   "run_result": "pass",        // pass / fail / not_run
   "failure_reason": null,      // null / compile_error / runtime_crash / source_defect_*
   "build_log_excerpt": "...",  // 最小错误日志片段（失败时）
-  "coverage_snapshot": "...",  // 7c 产出的分级覆盖率 JSON 路径或内联对象（供 self_checker 复用）
+  "coverage_snapshot": "...",  // 7c 产出的分级覆盖率 JSON 路径或内联对象（供 self-checker 复用）
   "coverage_gap": [],          // 7b 方法名差集
   "status": "verified"         // verified / failed
 }
 ```
 
-> `verified` 满足条件：`build_result=pass` + `run_result=pass` + 覆盖率快照已产出（7c，lcov 不可用时降级为仅 7b）。门禁达标判定在 `self_checker`。
+> `verified` 满足条件：`build_result=pass` + `run_result=pass` + 覆盖率快照已产出（7c，lcov 不可用时降级为仅 7b）。门禁达标判定在 `self-checker`。
 
 **缺陷闭环**（Mode 5）：类通过验证（`status=verified`）时，若 `{test_dir}/.ut-defects.json` 存在该类的 `open`/`reopened` 缺陷，调 `export-defects.py mark-fixed` 标记修复，形成「发现→修复」闭环：
 
@@ -114,11 +114,11 @@ python3 ${SKILL_DIR}/scripts/export-defects.py mark-fixed \
 
 ### 7. 覆盖率信号（分级覆盖率统计）
 
-产出**三信号**：方法名差集（结构性）+ lcov 数据采集 + 分级覆盖率快照（函数级+行级）。前两项为轻量检查，第三项调用 `scripts/coverage-by-level.py` 产出按 high/mid/low 的真实覆盖率数字，作为 `verified` 的满足条件之一（覆盖率快照必须产出，门禁达标判定在 `self_checker`）。
+产出**三信号**：方法名差集（结构性）+ lcov 数据采集 + 分级覆盖率快照（函数级+行级）。前两项为轻量检查，第三项调用 `scripts/coverage-by-level.py` 产出按 high/mid/low 的真实覆盖率数字，作为 `verified` 的满足条件之一（覆盖率快照必须产出，门禁达标判定在 `self-checker`）。
 
 #### 7a. lcov 数据采集
 
-运行测试后立即采集覆盖率（`self_checker` 第 1b 步依赖此产物）：
+运行测试后立即采集覆盖率（`self-checker` 第 1b 步依赖此产物）：
 
 ```bash
 test_dir=test_dir  # 内存变量
@@ -143,7 +143,7 @@ planned = {m["name"].lower() for m in inventory["methods"]
 coverage_gap = planned - tested
 ```
 
-若 `coverage_gap` 非空 → 触发 `incremental_updater`。
+若 `coverage_gap` 非空 → 触发 `incremental-updater`。
 
 #### 7c. 分级覆盖率统计（调用脚本，满足条件）
 
@@ -173,20 +173,20 @@ python3 ${SKILL_DIR}/scripts/coverage-by-level.py \
 ```
 
 - `by_level.<lv>.pass` = 函数覆盖率达 `gate.function` 且行覆盖率达 `gate.line`（阈值取自 inventory 的 `gate_thresholds`）
-- `uncovered_functions` = FNDA:0 的方法名列表，供 `incremental_updater` 精准补全
+- `uncovered_functions` = FNDA:0 的方法名列表，供 `incremental-updater` 精准补全
 - 脚本依赖 `c++filt`（binutils 自带）；解析 FN/FNDA/DA + demangle 关联 inventory 分级，产出函数级+行级覆盖率
 
-> **注意**：此处只产出覆盖率快照，**不做门禁达标判定**（不因 `pass:false` 阻塞 `verified`）。门禁达标在 `self_checker` 第 1b 步执行——`self_checker` 直接复用此 JSON，避免重复解析 lcov。
+> **注意**：此处只产出覆盖率快照，**不做门禁达标判定**（不因 `pass:false` 阻塞 `verified`）。门禁达标在 `self-checker` 第 1b 步执行——`self-checker` 直接复用此 JSON，避免重复解析 lcov。
 
 ## 后续流程
 
 | build_result | run_result | coverage_gap | coverage_snapshot | 下一阶段 |
 |-------------|-----------|-------------|-------------------|--------|
-| pass | pass | 空 | 已产出 | `self_checker`（复用快照做门禁判定） |
-| pass | pass | 非空 | 已产出 | `self_checker`（自检后若通过 → `incremental_updater`） |
-| pass | pass | - | missing（lcov 不可用） | `self_checker`（降级为仅方法名差集） |
-| fail | - | - | - | `failure_repairer` |
-| pass | fail | - | - | `failure_repairer` |
+| pass | pass | 空 | 已产出 | `self-checker`（复用快照做门禁判定） |
+| pass | pass | 非空 | 已产出 | `self-checker`（自检后若通过 → `incremental-updater`） |
+| pass | pass | - | missing（lcov 不可用） | `self-checker`（降级为仅方法名差集） |
+| fail | - | - | - | `failure-repairer` |
+| pass | fail | - | - | `failure-repairer` |
 
 若 `failure_reason` 含 `source_defect` → 标记该类 `status=failed`，跳过，继续下一类。
 
@@ -197,6 +197,6 @@ python3 ${SKILL_DIR}/scripts/coverage-by-level.py \
 - 编译通过必须接着运行，不跳过运行验证
 - 不超过重试预算：per-error 3 次，总计 10 loops
 - 不忽略 gtest XML 输出：方法名差集从 XML 提取
-- 不跳过 lcov 采集：运行通过后必须采集 filtered.info（lcov 可用时），供 7c 与 self_checker 复用
-- 不自行判定门禁达标：7c 只产出覆盖率快照，`pass:false` 不阻塞 `verified`；达标判定在 `self_checker`
+- 不跳过 lcov 采集：运行通过后必须采集 filtered.info（lcov 可用时），供 7c 与 self-checker 复用
+- 不自行判定门禁达标：7c 只产出覆盖率快照，`pass:false` 不阻塞 `verified`；达标判定在 `self-checker`
 - 不自行宣布"源码缺陷"而不读源码：必须用 `get_code_snippet` 读源码确认

@@ -8,7 +8,7 @@
 
 修复编译/运行失败的测试，在独立重试预算内尝试修复。**先按测试代码问题修**；修不好则判定根因，疑似源码缺陷的**标红交还用户，不修源码**。支持用户显式"修复"和自动检测失败两种触发方式。
 
-当 failure_repairer 完成修复并成功后回到编译验证时，递增 `iteration_count[classname]`（内存变量）（因为这将开始新一轮闭环）。若 `iteration_count[classname]` 已 >= 3（Iron Law #10），不再尝试修复，直接保持 `failed` + `max_iterations_exceeded`。
+当 failure-repairer 完成修复并成功后回到编译验证时，递增 `iteration_count[classname]`（内存变量）（因为这将开始新一轮闭环）。若 `iteration_count[classname]` 已 >= 3（Iron Law #10），不再尝试修复，直接保持 `failed` + `max_iterations_exceeded`。
 
 ## 工作步骤
 

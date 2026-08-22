@@ -15,7 +15,7 @@
 
 **自动触发场景**：
 
-- **最终退出前触发**（所有批次提交完成后，与 Mode 3 覆盖率报告一起产出，只执行一次）。原因：Mode 2 可能有**多笔批次提交**，每笔提交后立即导出会重复且状态不完整；最终退出前导出一次即可反映全部缺陷的完整快照。详见 `test_writer` §9。
+- **最终退出前触发**（所有批次提交完成后，与 Mode 3 覆盖率报告一起产出，只执行一次）。原因：Mode 2 可能有**多笔批次提交**，每笔提交后立即导出会重复且状态不完整；最终退出前导出一次即可反映全部缺陷的完整快照。详见 `test-writer.md` §9。
 
 ## 主入口
 
@@ -79,11 +79,11 @@ Mode 2 闭环中，各子 Agent 在发现或确认缺陷时，通过 `export-def
 
 | 调用时机 | 子命令 | 调用方 |
 |----------|--------|--------|
-| `failure_repairer` §6 标红 | `upsert` | failure_repairer |
-| `build_verifier` 编译期确认源码缺陷 | `upsert --detected-at-stage compile` | build_verifier |
-| `test_code_gen` 私有构造无工厂 | `upsert --type needs_manual` | test_code_gen |
-| `dependency_tracer` 循环依赖 | `upsert --type needs_manual` | dependency_tracer |
-| `build_verifier` 用例通过 | `mark-fixed` | build_verifier |
+| `failure-repairer` §6 标红 | `upsert` | failure-repairer |
+| `build-verifier` 编译期确认源码缺陷 | `upsert --detected-at-stage compile` | build-verifier |
+| `test-code-gen` 私有构造无工厂 | `upsert --type needs_manual` | test-code-gen |
+| `dependency-tracer` 循环依赖 | `upsert --type needs_manual` | dependency-tracer |
+| `build-verifier` 用例通过 | `mark-fixed` | build-verifier |
 | `reconcile` base_sha 漂移 | `_archive_on_sha_change`（脚本内部） | reconcile |
 
 > `.ut-defects.json` 是**本地真相源**，不入 git。Schema 详见 `references/defect-schema.md`。

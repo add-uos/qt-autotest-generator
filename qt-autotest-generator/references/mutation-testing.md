@@ -54,7 +54,7 @@ Mode 4 是**唯一豁免 Iron Law #7（不修源码）的模式**，但受等价
 
 1. **备份先于修改** —— 任何源码写入前必须 `cp` 到 `.mutation_backup`；备份不存在不开始变异
 2. **恢复必有机制** —— `atexit` + `SIGTERM` + `SIGINT` 三重注册恢复函数；进程被 kill 也恢复
-3. **变异不落盘** —— 变异后的源码**绝不 commit、绝不 push**；`code_committer` 在 Mode 4 禁用
+3. **变异不落盘** —— 变异后的源码**绝不 commit、绝不 push**；`code-committer` 在 Mode 4 禁用
 4. **退出必校验** —— 模式结束时强制 `git diff --exit-code`（仅校验被变异过的文件），非空则硬终止 + 警告用户手动恢复
 
 ### 实现机制
@@ -173,7 +173,7 @@ for mutant in mutants:
 ```markdown
 ## 存活变异体 (测试缺口 — 补强建议)
 > Mode 4 只出建议不自动补强。以下存活变异体表示测试未覆盖该变异,
-> 建议回 Mode 2 用 incremental_updater 补强对应用例。
+> 建议回 Mode 2 用 incremental-updater 补强对应用例。
 | 函数 | 算子 | 行 | 变异描述 |
 |------|------|----|---------|
 | Utils::reformatSeparators | ROR | L169 | L169: == -> != |
@@ -190,7 +190,7 @@ git diff --exit-code  # 仅校验被变异过的文件
 
 ### 8.（可选）补强反馈
 
-存活变异体（疑似测试缺口）→ **建议**用户回 Mode 2 用 `incremental_updater` 补强对应用例。
+存活变异体（疑似测试缺口）→ **建议**用户回 Mode 2 用 `incremental-updater` 补强对应用例。
 
 > 这一步**默认只出建议清单不自动改测试**，避免 Mode 4 越权修改 Mode 2 产物。
 
@@ -259,9 +259,9 @@ C++ 语法有大量复合符号，变异算子若不区分会生成无效代码�
 | Iron Law #7 不修源码 | 豁免，由"源码安全四铁律"替代（等价约束） |
 | Iron Law #10 3 轮迭代上限 | **不占用**——Mode 4 有自己的预算（变异体数），不抢 Mode 2 闭环 |
 | Iron Law #11 usecase_count 实时更新 | **不更新**——Mode 4 不产生新用例 |
-| Mode 2 self_checker 覆盖率门禁 | **不干扰**——Mode 4 不改 Mode 2 的 done 判定 |
+| Mode 2 self-checker 覆盖率门禁 | **不干扰**——Mode 4 不改 Mode 2 的 done 判定 |
 | Mode 3 覆盖率采集 | **不污染**——独立 build 目录，`.gcda` 隔离 |
-| code_committer | **禁用**——变异源码绝不提交 |
+| code-committer | **禁用**——变异源码绝不提交 |
 | reconcile | **复用**——Mode 4 启动前对账，确保变异跑在当前代码上 |
 
 **关键定位**：Mode 4 是**只读验证 + 产出建议**的模式——从最终状态看：源码 `git diff` 为空、测试不变、inventory 不变。产出是"有效性报告 + 补强建议清单"，决策权在用户。
@@ -327,7 +327,7 @@ python3 ${SKILL_DIR}/scripts/mutation-score.py \
 |---------|------|------|
 | 概述 | 全局杀死/存活/编译失败/得分 | 得分 ≥85% → 测试有效性达标 |
 | 按函数详情 | 每个方法的得分与判定 | BELOW 的方法需关注 |
-| **存活变异体** | **测试缺口清单** | **回 Mode 2 用 incremental_updater 补强** |
+| **存活变异体** | **测试缺口清单** | **回 Mode 2 用 incremental-updater 补强** |
 | 编译失败变异体 | 不计分母的无效变异 | 无需行动（正常排除） |
 | 按算子统计 | 各算子杀死率 | 某算子存活多 → 该类断言普遍偏弱 |
 
@@ -413,7 +413,7 @@ python3 ${SKILL_DIR}/scripts/mutation-score.py \
 - 优点：保守，宁可得分低点也不把真缺口误判为等价
 - 缺点：真等价变异会拉低得分（如 `i++` → `i+=1` 语义等价）
 
-待积累数据后评估是否引入 test_writer 初判 + 报告标注。
+待积累数据后评估是否引入 test-writer.md 初判 + 报告标注。
 
 ### 目标范围扩展
 

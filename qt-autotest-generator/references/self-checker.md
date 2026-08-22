@@ -1,6 +1,6 @@
 # 自检
 
-> 前置条件：`build_verifier` 已通过目标类（session 中 `status=verified`，`build_result=pass`，`run_result=pass`）。
+> 前置条件：`build-verifier` 已通过目标类（session 中 `status=verified`，`build_result=pass`，`run_result=pass`）。
 
 > 通过 mcp_provider 调用知识图谱工具（详见 references/mcp-providers.md）
 
@@ -50,6 +50,11 @@ if iter_count >= MAX_ITERATIONS:
 >   无声明表标 MISSING_DECL warning
 >
 > 语义检查（断言名实相符、期望值正确性）仍留模型，不固化。
+>
+> **与 test-code-gen 生成后自检门的关系**：test-code-gen 阶段已运行 self-check-structural.py 的
+> 生成期子集（AAA/断言强度/用例计数声明），本阶段运行全量检查（含 SPDX/命名/stub 清理/env 隔离），
+> 覆盖生成期子集并补充其余检查项，不重复但会重跑同一脚本（结果应与生成期一致，如有差异说明
+> 生成期后有变更需关注）。
 
 #### 1. 覆盖率自检（方法名差集 + lcov 函数覆盖率门禁）
 
@@ -78,7 +83,7 @@ coverage_gap = all_method_names - tested_names
 
 ##### 1b. lcov 函数覆盖率门禁（百分比）
 
-复用 `build_verifier` 第 7c 步产出的分级覆盖率快照（`${build_dir}/coverage/${classname}_by_level.json`），避免重复解析 lcov。快照不存在或 stale 时重新调用脚本：
+复用 `build-verifier` 第 7c 步产出的分级覆盖率快照（`${build_dir}/coverage/${classname}_by_level.json`），避免重复解析 lcov。快照不存在或 stale 时重新调用脚本：
 
 - **有 inventory 时**：按方法分级差异化门禁（阈值取自 inventory 的 `gate_thresholds`，详见 `references/coverage-tiers.md`）
 - **无 inventory**：技能不可运行，先执行 Mode 1 生成 inventory
@@ -89,7 +94,7 @@ inventory_path = f"{test_dir}/.ut-inventory.json"
 if not os.path.exists(inventory_path):
     raise FatalError("无 .ut-inventory.json，先执行 Mode 1")
 
-# 复用 build_verifier 7c 的快照；不存在则重新生成
+# 复用 build-verifier 7c 的快照；不存在则重新生成
 snapshot_path = f"build-{test_dir}/coverage/{target_class.name}_by_level.json"
 if not os.path.exists(snapshot_path):
     subprocess.run([
@@ -109,9 +114,9 @@ uncovered_functions = snapshot["uncovered_functions"]
 > 脚本 `scripts/coverage-by-level.py` 解析 FN/FNDA/DA + `c++filt` demangle 关联 inventory 分级，产出函数级+行级覆盖率。门禁阈值取自 inventory 的 `gate_thresholds`，不在 self_checker 内 hardcode。
 
 **判定规则**：
-- `coverage_gap` 非空 → 流转至 `incremental_updater`（传入 `coverage_gap`）
-- 有 inventory 时：high/mid 级方法的函数覆盖率 < 100% 或行覆盖率 < 阈值 → 流转至 `incremental_updater`
-- 无 inventory 时：`pct < threshold` → 流转至 `incremental_updater`（传入 `uncovered_functions`）
+- `coverage_gap` 非空 → 流转至 `incremental-updater`（传入 `coverage_gap`）
+- 有 inventory 时：high/mid 级方法的函数覆盖率 < 100% 或行覆盖率 < 阈值 → 流转至 `incremental-updater`
+- 无 inventory 时：`pct < threshold` → 流转至 `incremental-updater`（传入 `uncovered_functions`）
 - 两者都通过 → 覆盖率自检 pass
 
 
@@ -132,7 +137,7 @@ uncovered_functions = snapshot["uncovered_functions"]
 - **唯一断言禁令**：扫描以 `EXPECT_NO_FATAL_FAILURE(...)` 为**唯一**断言的用例（用例体内无其他有效 `EXPECT_*`）→ 违规，逻辑全错也通过，**最危险**
 - **空断言检测**：用例调用了待测方法但函数体内无任何有效 `EXPECT_*`（只有 `stub.set_lamda`、`EXPECT_CALL` 或纯调用）→ 违规，等于没测
 - **纯 gMock 期望禁令**：用例只有 `EXPECT_CALL`/`ON_CALL` 而无任何传统 `EXPECT_EQ`/`EXPECT_TRUE`/`EXPECT_FALSE` 等断言验证返回值/对象状态 → 违规（gMock 验证了依赖被调用，但未验证 SUT 自身行为）
-- **布尔期望边**：单独 `EXPECT_TRUE(ret);` / `EXPECT_FALSE(ret);` 作唯一有效断言且无注释说明期望分支 → 标记可疑（不强判违规，但流转 test_writer 复核是否对应源码分支期望）
+- **布尔期望边**：单独 `EXPECT_TRUE(ret);` / `EXPECT_FALSE(ret);` 作唯一有效断言且无注释说明期望分支 → 标记可疑（不强判违规，但流转 test-writer.md 复核是否对应源码分支期望）
 - **副作用断言缺失**：方法有写状态/发信号/调下游的副作用（图谱 `trace_path` 出向调用或源码 `emit` 显示），但用例只断言返回值、无 `QSignalSpy.count()` / stub 调用计数 / 对象状态前后对比 → 违规
 - **返回值断言缺失**：方法有返回值（图谱 `get_code_snippet` 返回类型非 `void`）但用例未断言返回值的具体期望值（只断言不崩溃或无任何返回值检查）→ 违规
 
@@ -164,7 +169,7 @@ awk '
   }
 ' "$TEST_FILE"
 
-# 4. 单独 EXPECT_TRUE/EXPECT_FALSE 作唯一有效断言（可疑，流转 test_writer 复核源码分支期望）
+# 4. 单独 EXPECT_TRUE/EXPECT_FALSE 作唯一有效断言（可疑，流转 test-writer.md 复核源码分支期望）
 awk '
   /^TEST_[FP]\(/ { in_block=1; name=$0; bool_only=0; other=0; depth=0; opened=0 }
   in_block {
@@ -206,7 +211,7 @@ for method in all_methods:
     # （与 awk 输出交叉：用例名匹配源码方法名）
 ```
 
-**判定**：任一违规 → 流转至 `test_writer` 重写对应用例的 Assert 段（传入违规用例名 + 违规类型）
+**判定**：任一违规 → 流转至 `test-writer.md` 重写对应用例的 Assert 段（传入违规用例名 + 违规类型）
 
 #### 2c. 分支清单交叉验证（白盒质量门禁，MCP 反查）
 
@@ -248,8 +253,8 @@ for method in all_methods:
 ```
 
 **判定**：
-- `MISSING_BRANCH_LIST`（复杂方法无分支清单注释）→ 流转 `test_writer`，用 `get_code_snippet` 补分支清单 + 对应用例
-- `BRANCH_NOT_MAPPED`（声明分支数 < 真实分支数）→ 流转 `test_writer`，按漏掉的分支补用例
+- `MISSING_BRANCH_LIST`（复杂方法无分支清单注释）→ 流转 `test-writer.md`，用 `get_code_snippet` 补分支清单 + 对应用例
+- `BRANCH_NOT_MAPPED`（声明分支数 < 真实分支数）→ 流转 `test-writer.md`，按漏掉的分支补用例
 - 简单方法（complexity<10 且分支<3）无分支清单不判违规（§4.1 允许简单方法省略）
 
 > 本步是「语义质量」里**唯一可机器校验**的项：分支清单是注释，但真实分支来自 MCP 源码，两者做差集即可判定漏测。等价类/边界值的语义正确性仍留模型，但分支覆盖这条硬指标不再靠自觉。
@@ -285,7 +290,7 @@ for method in all_methods:
   - `"/root/`、`C:\\`（Windows 绝对路径）
   - 例外：`QTemporaryDir`/`QTemporaryFile` 的 `path()` 返回值、`QDir::tempPath()` 产生的临时路径不算违规
 - **用户目录访问**：直接使用 `QDir::homePath()`、`QStandardPaths::writableLocation(...)` 的返回值作为真实读写路径（未 mock、未重定向到临时目录）→ 违规
-- **环境变量未还原**：`qputenv(` 出现但全文件无对应 `qunsetenv(`（计数不平衡）→ 违规（用例间泄漏）。注：bash/grep 仅做文件级计数平衡，per-scope 精确配对交由 test_writer 复核时人工确认
+- **环境变量未还原**：`qputenv(` 出现但全文件无对应 `qunsetenv(`（计数不平衡）→ 违规（用例间泄漏）。注：bash/grep 仅做文件级计数平衡，per-scope 精确配对交由 test-writer.md 复核时人工确认
 - **真实外部资源访问**：未 mock 的 `QProcess::start`、`::system`、`::popen`、`QNetworkAccessManager::get/post`、`QTcpSocket::connectToHost` → 违规
 - **真实时间依赖**：需要确定性结果但未 mock 的 `QDateTime::currentDateTime()`、`QTime::currentTime()`、`QRandomGenerator::system()` → 违规
 - **用例间污染**：单例 `Instance()` 调用但 `TearDown()` 无重置；`stub.set_lamda(` 出现但 `TearDown()` 无 `stub.clear()` → 违规
@@ -305,7 +310,7 @@ qunsetenv_count=$(grep -c 'qunsetenv(' "$TEST_FILE")
 # 真实外部资源
 # 注：此 grep 主要命中静态引用形式（&Class::method）。实例调用形式
 #   proc.start() / nam.get() / nam.post() 受 grep 局限多数漏报，
-#   依赖 test_writer 4.0 手动复核识别；.connectToHost() 与 popen() 因
+#   依赖 test-writer.md §4.0 手动复核识别；.connectToHost() 与 popen() 因
 #   方法名特异性高已纳入；system()/start() 因同名变量误报风险未纳入非限定形式
 grep -nE 'QProcess::start|::system\(|popen\(|QNetworkAccessManager::(get|post)|QTcpSocket::connectToHost|\.connectToHost\(' "$TEST_FILE" \
     | grep -vE 'stub\.set_lamda|__DBG_STUB_INVOKE__' && echo "REAL_EXTERNAL_CALL"
@@ -335,22 +340,22 @@ for method in all_methods:
     # 交叉比对测试文件：external_called 中是否有未出现在 stub.set_lamda(...) 的 → 漏 mock → 违规
 ```
 
-**判定**：任一违规 → 流转至 `test_writer` 修正（传入违规类型 + 行号），补 mock 或改用 `QTemporaryDir`/`qputenv`+`qunsetenv` 隔离
+**判定**：任一违规 → 流转至 `test-writer.md` 修正（传入违规类型 + 行号），补 mock 或改用 `QTemporaryDir`/`qputenv`+`qunsetenv` 隔离
 
 #### 6. 自检结果处理
 
 | 自检项 | 结果 | 处理 |
 |-------|------|------|
-| 方法名差集有缺口 | gap 非空 | 流转至 `incremental_updater`（传入 gap） |
-| lcov 函数覆盖率 < 阈值 | pct < threshold | 流转至 `incremental_updater`（传入 uncovered_functions） |
-| 命名不规范 | 有违规 | 流转至 `test_writer` 修正 |
-| SPDX 缺失 | 无头 | 流转至 `test_writer` 补 |
-| stub 问题 | 有问题 | 流转至 `test_writer` 修正 |
-| 断言强度违规 | NO_FATAL 唯一断言/空断言/纯 gMock 期望/副作用未断言/返回值未断言 | 流转至 `test_writer` 重写对应用例 Assert 段 |
-| 分支清单违规 | MISSING_BRANCH_LIST / BRANCH_NOT_MAPPED（声明分支 < 真实分支） | 流转至 `test_writer`，用 `get_code_snippet` 补分支清单 + 补用例 |
-| AAA 结构违规 | 缺少 // Arrange / // Act / // Assert 注释（MISSING_AAA） | 流转至 `test_writer` 补 AAA 注释 |
-| 用例数低于下限 | 声明表中 actual < min（BELOW_MIN_CASES） | 流转至 `test_writer` 补用例 |
-| 环境隔离违规 | 硬编码路径/env 未还原/真实外部资源/stub 未清理 | 流转至 `test_writer` 补 mock 或隔离 |
+| 方法名差集有缺口 | gap 非空 | 流转至 `incremental-updater`（传入 gap） |
+| lcov 函数覆盖率 < 阈值 | pct < threshold | 流转至 `incremental-updater`（传入 uncovered_functions） |
+| 命名不规范 | 有违规 | 流转至 `test-writer.md` 修正 |
+| SPDX 缺失 | 无头 | 流转至 `test-writer.md` 补 |
+| stub 问题 | 有问题 | 流转至 `test-writer.md` 修正 |
+| 断言强度违规 | NO_FATAL 唯一断言/空断言/纯 gMock 期望/副作用未断言/返回值未断言 | 流转至 `test-writer.md` 重写对应用例 Assert 段 |
+| 分支清单违规 | MISSING_BRANCH_LIST / BRANCH_NOT_MAPPED（声明分支 < 真实分支） | 流转至 `test-writer.md`，用 `get_code_snippet` 补分支清单 + 补用例 |
+| AAA 结构违规 | 缺少 // Arrange / // Act / // Assert 注释（MISSING_AAA） | 流转至 `test-writer.md` 补 AAA 注释 |
+| 用例数低于下限 | 声明表中 actual < min（BELOW_MIN_CASES） | 流转至 `test-writer.md` 补用例 |
+| 环境隔离违规 | 硬编码路径/env 未还原/真实外部资源/stub 未清理 | 流转至 `test-writer.md` 补 mock 或隔离 |
 | 全部通过 | - | 标记 `done`，下一类 |
 
 #### 7. 更新 session
@@ -399,12 +404,12 @@ for method in all_methods:
 ## 关键约束
 
 - 不产出交付文件：自检是内部环节，不写报告不入正文
-- 不修改测试代码：自检只读扫描（测试文件侧 grep/awk + 源码侧图谱查询，不 AST 改写），修正由 `test_writer` / `incremental_updater` 负责
+- 不修改测试代码：自检只读扫描（测试文件侧 grep/awk + 源码侧图谱查询，不 AST 改写），修正由 `test-writer.md` / `incremental-updater` 负责
 - 不修改项目源码
 - 不跳过 GUI 类豁免
 - `qualified_name` 必须从图谱返回值取，不自己拼
-- 不忽略覆盖率门禁：方法名差集为空但覆盖率 < 阈值时，仍必须流转至 `incremental_updater`
+- 不忽略覆盖率门禁：方法名差集为空但覆盖率 < 阈值时，仍必须流转至 `incremental-updater`
 - 覆盖率门禁规则：必须有 `.ut-inventory.json`，按方法分级（详见 `references/coverage-tiers.md`）；无 inventory 时技能不可运行
 - 不跳过断言强度自检：每用例（`TEST_F` 与 `TEST_P` 均需扫描）至少 2 个有效 `EXPECT_*`（NO_FATAL/NO_THROW/EXPECT_CALL 均不计入）
 - 不跳过环境隔离自检：硬编码绝对路径、`qputenv` 无对应 `qunsetenv`、未 mock 的真实外部资源（QProcess/网络/socket/真实时间）、stub 未 `clear()` 必须检出
-- 不跳过分支清单交叉验证：复杂方法必须有分支清单注释，且声明分支数 ≥ `get_code_snippet` 提取的真实分支数；漏报即流转 `test_writer` 补用例（白盒质量硬门禁）
+- 不跳过分支清单交叉验证：复杂方法必须有分支清单注释，且声明分支数 ≥ `get_code_snippet` 提取的真实分支数；漏报即流转 `test-writer.md` 补用例（白盒质量硬门禁）

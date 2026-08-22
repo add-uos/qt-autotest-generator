@@ -44,10 +44,15 @@ callees = codebase_memory_mcp.trace_path(
 |------------|------------|------|
 | 本项目（`file_path` 在 `src/` 下） | 任意 | **不 stub**，但需将该文件所在目录编入 CMake |
 | 外部库 - UI 相关 | `QWidget::show`、`hide`、`height`、`width`、`QDialog::exec` | **stub**（避免 GUI 依赖） |
-| 外部库 - IO 相关 | `QFile::open`、`QDir`、`QSettings`、`QSqlQuery` | **stub**（避免副作用） |
-| 外部库 - 网络相关 | `QNetworkAccessManager` | **stub**（避免真实请求） |
+| 外部库 - IO 相关 | `QFile::open`、`QDir`、`QDir::exists`、`QFileInfo::exists`、`QSettings`、`QSqlQuery` | **stub**（避免副作用） |
+| 外部库 - 子进程 | `QProcess::start`、`::system`、`::popen` | **stub**（禁止真实启进程） |
+| 外部库 - 网络相关 | `QNetworkAccessManager`、`QTcpSocket`、`QUdpSocket`、`QLocalSocket` | **stub**（禁止真实网络） |
 | 外部库 - 定时器 | `QTimer` | **stub**（避免异步行为） |
+| 外部库 - 时间/随机 | `QDateTime::currentDateTime`、`QTime::currentTime`、`QElapsedTimer`、`srand`/`qsrand`、`QRandomGenerator::system` | **stub**（需确定性结果） |
+| 路径访问 | `QStandardPaths::writableLocation`、`QDir::currentPath`、`QCoreApplication::applicationDirPath`、`QDir::home` | **stub** 返回临时目录，或 `SetUp()` 用 `QTemporaryDir` 注入路径 |
+| 环境变量 | `getenv`、`qEnvironmentVariable`、`qgetenv`、`QProcessEnvironment::systemEnvironment` | **stub** 或 `SetUp()` `qputenv` / `TearDown()` `qunsetenv` |
 | 全局函数 | `qPrintable`、`getenv`、`qDebug` | **stub**（按行为） |
+| 单例/全局状态 | 进程内单例、静态成员、`qApp` | **stub** 或 `TearDown` 重置，避免用例间污染 |
 | 其他外部库 | 任意 | 评估是否需要 stub（默认不 stub，编译失败再补） |
 
 ### 4. 收集 CMake 源码目录

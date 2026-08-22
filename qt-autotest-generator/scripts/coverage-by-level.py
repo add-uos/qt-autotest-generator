@@ -28,7 +28,7 @@ coverage-by-level.py — 按 .ut-inventory.json 的 level(high/mid/low) 统计�
       -i autotests/.ut-inventory.json \\
       -c build-autotests/coverage/filtered.info
 
-  # per-class 分级覆盖率（逐类闭环，build_verifier/self_checker 用）
+  # per-class 分级覆盖率（逐类闭环，build-verifier/self-checker 用）
   python3 scripts/coverage-by-level.py \\
       -i autotests/.ut-inventory.json \\
       -c build-autotests/coverage/filtered.info \\
@@ -123,7 +123,7 @@ def main():
     ap.add_argument("-c", "--coverage", required=True, help="lcov coverage.info / filtered.info 路径")
     ap.add_argument("--class", dest="class_name", help="只统计指定类（per-class，逐类闭环用）")
     ap.add_argument("--detail", action="store_true", help="打印每个 high/mid 函数的明细")
-    ap.add_argument("--json", action="store_true", help="输出结构化 JSON（供 self_checker 门禁判定）")
+    ap.add_argument("--json", action="store_true", help="输出结构化 JSON（供 self-checker 门禁判定）")
     ap.add_argument("-o", "--output", help="JSON 写入路径（默认 stdout，与 --json 配合）")
     args = ap.parse_args()
 

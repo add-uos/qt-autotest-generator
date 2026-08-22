@@ -814,7 +814,7 @@ def extract_branches(body):
     early return = return 总数 - 1（末尾 return 不算分支），最少 0。
     body 为空字符串时返回全 0。
 
-    已知漏计（heuristic 限制，需 test_writer 人工补）：
+    已知漏计（heuristic 限制，需 test-writer.md 编排流程人工补）：
     - for/while 内的 break/continue（§4.2 要求覆盖，但 break 在 switch 里与 case 重复，难区分）
     - 短路求值 && / || 的左右分支（§4.2 要求）
     """

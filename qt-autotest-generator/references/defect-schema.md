@@ -297,10 +297,10 @@
 
 | type 值 | type_category | 含义 | 现有 failure_reason 来源 |
 |----------|---------------|------|----------------------|
-| `source_defect_compile` | `compile` | 源码编译缺陷 | `build_verifier.md:65` / `failure_repairer.md:65` |
-| `source_defect_runtime` | `runtime` | 源码运行时缺陷（崩溃/超时） | `build_verifier.md:67` / `failure_repairer.md:71` |
-| `source_defect_logic` | `logic` | 源码逻辑缺陷（断言失败） | `build_verifier.md:69` / `failure_repairer.md:75` |
-| `needs_manual` | `manual` | 需人工介入 | `build_verifier.md:71` / `failure_repairer.md:68,79`、`test_code_gen.md:173`（私有构造无工厂）、`dependency_tracer.md:101`（循环依赖） |
+| `source_defect_compile` | `compile` | 源码编译缺陷 | `build-verifier.md:65` / `failure-repairer.md:65` |
+| `source_defect_runtime` | `runtime` | 源码运行时缺陷（崩溃/超时） | `build-verifier.md:67` / `failure-repairer.md:71` |
+| `source_defect_logic` | `logic` | 源码逻辑缺陷（断言失败） | `build-verifier.md:69` / `failure-repairer.md:75` |
+| `needs_manual` | `manual` | 需人工介入 | `build-verifier.md:71` / `failure-repairer.md:68,79`、`test-code-gen.md:173`（私有构造无工厂）、`dependency-tracer.md:101`（循环依赖） |
 
 ## severity 派生规则
 

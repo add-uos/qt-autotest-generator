@@ -1,10 +1,10 @@
 # 单元测试用例设计方法论
 
-> 本技能 `test_writer` 生成用例的**方法论依据**。生成用例前必须按 §1 §2 §4 建模输入空间与分支，再按 §3 §6 §7 选定组织、覆盖与 stub/mock 方式，最后按 §5 §8 选定异常断言与 fixture 复用。
+> 本技能生成用例的**方法论依据**。生成用例前必须按 §1 §2 §4 建模输入空间与分支，再按 §3 §6 §7 选定组织、覆盖与 stub/mock 方式，最后按 §5 §8 选定异常断言与 fixture 复用。
 >
-> `test_writer.md` 第 4 章只给出"必须遵守的最小清单"，详细方法以本文为准。
+> `test-code-gen.md` §4 只给出"必须遵守的最小清单"与用例数下限表，详细方法以本文为准。
 >
-> 与 self_checker 的关系：self_checker 检查环境隔离与断言强度；本文 §8 §9 列出 self_checker 未覆盖的"用例设计质量"反模式，test_writer 生成前必须自检。
+> 与 self-checker 的关系：self-checker 检查环境隔离与断言强度；本文 §8 §9 列出 self-checker 未覆盖的"用例设计质量"反模式，test-code-gen 生成前必须自检。
 
 ---
 
@@ -24,7 +24,7 @@
 
 | 输入类型 | 有效等价类示例 | 无效等价类示例 |
 |---|---|---|
-| `int n` | `n > 0`、`n == 0`、`n < 0` | `INT_MIN`/`INT_MAX`（溢出风险） |
+| `int n` | `n > 0`、`n == 0`、`n < 0`、`INT_MIN`/`INT_MAX`（极值，溢出风险） | 越界值（若方法有范围约束，如 `n ∈ [0, 100]` 时 `n = -1` 或 `n = 101`） |
 | `QString s` | 非空、纯空白、含 unicode | 空字符串、超长字符串、含 `\0` |
 | 容器 `QList<T>` | 空、单元素、多元素 | — |
 | 指针 `T*` | 非 null | null |
@@ -47,7 +47,7 @@
 
 | 边界类型 | 必测点 |
 |---|---|
-| 闭区间 `[a, b]` | `a-1`、`a`、`a+1`、`b-1`、`b`、`b+1`（前 3 + 后 3 + 越界 2） |
+| 闭区间 `[a, b]` | `a-1`、`a`、`a+1`、`b-1`、`b`、`b+1`（4 边界内 + 2 越界，共 6 点） |
 | 非负区间 `[0, ∞)` | `-1`、`0`、`1`、`INT_MAX` |
 | 长度/计数 | `0`、`1`、`capacity-1`、`capacity`、`capacity+1` |
 | 循环计数 | `i = 0`、`i = n-1`、`i = n`（越界）、`n = 1`、`n = INT_MAX` |
@@ -66,7 +66,7 @@
 |---|---|
 | 大小 | 空 `QList<>{}`、单元素、N 元素 |
 | 索引 | `0`、`size-1`、`size`（越界） |
-| 迭代器 | `begin()`、`end()`、`++end()` |
+| 迭代器 | `begin()`、`end()`（不得解引用/自增） |
 
 ### 2.4 时间/日期边界
 
@@ -142,20 +142,20 @@ INSTANTIATE_TEST_SUITE_P(
 
 要点：
 - `INSTANTIATE_TEST_SUITE_P` 第一参数是前缀，最终用例名为 `BasicCases/ParseReturnsExpected/0`、`/1`、…
-- 命名仍可读，self_checker 不会因 `/` 分隔判违规
+- 命名仍可读，self-checker 不会因 `/` 分隔判违规
 - `ParseCase` 必须放测试文件顶部、fixture 之前
 - 一组参数 + 多用例（如同时 `ParseReturnsExpected` 和 `ParseUpdatesErrorState`）会形成 N×M 笛卡尔积，注意控制用例总数
 
 ### 3.4 Test Fixture 复用策略
 
-#### 3.4.1 默认 fixture（test_writer 主路径）
+#### 3.4.1 默认 fixture（本技能主路径）
 
 `{ClassName}Test : public ::testing::Test`，每用例独立实例，`SetUp()` 构造对象 + 设置 stub，`TearDown()` 析构 + `stub.clear()`。这是 `google-test-base.cpp` 模板的默认形态。**Fixture 类名禁止携带轮数/批次号**（如 `R18`、`Round2`、`Batch3`），只允许 `{ClassName}Test` 或其派生（如 `{ClassName}Test_LoggedIn`）。
 
 #### 3.4.2 共享 SetUp（SetUpTestSuite）
 
 - 用于**全 suite 共享且只设一次**的资源：QCoreApplication 初始化、单例状态预置、配置文件创建
-- 不得放用例间需要重置的状态（会污染，self_checker 5b 判违规）
+- 不得放用例间需要重置的状态（会污染，self-checker 5b 判违规）
 
 #### 3.4.3 派生 fixture
 
@@ -194,18 +194,20 @@ protected:
 4. **分支清单**写入测试文件顶部注释，格式：
 
 ```cpp
-// 分支清单（来源：MyClass::parse(QString)）
+// 分支清单（来源：MyClass::parse(QString, int*, bool*)）
 // B1: input.isEmpty()           → return false
 // B2: !input.contains('=')      → return false
 // B3: parts.size() > 2          → return false
 // B4: ok 且 value 解析成功       → return true, *out = value
+// B5: parts[0].isEmpty()（如 "=1"）→ return false
 //
 // 用例映射：
 // - Parse_EmptyInput_ReturnsFalse           → B1
 // - Parse_NoEquals_ReturnsFalse              → B2
 // - Parse_TooManyEquals_ReturnsFalse         → B3
 // - Parse_ValidInput_ReturnsTrueAndValue      → B4
-// - Parse_BoundaryInput_ReturnsExpected /* TEST_P */ → B1+B2+B3 边界 + B4
+// - Parse_EmptyKey_ReturnsFalse               → B5
+// - Parse_BoundaryInput_ReturnsExpected /* TEST_P */ → B1+B2+B3+B5 边界 + B4
 ```
 
 ### 4.2 必检分支类型
@@ -225,7 +227,7 @@ protected:
 
 - ❌ 只读签名不读实现，漏掉"边界外边界"（如 `if (n > 0 && n != 10)` 漏 `n=10`）
 - ❌ 分支清单仅写注释不映射到用例名，无法对账
-- ❌ 用例数下限（level/factors 推导）够了就停，漏掉的分支用 self_checker 也查不出（self_checker 不查分支覆盖）
+- ❌ 用例数下限（level/factors 推导）够了就停，漏掉的分支用 self-checker 也查不出（self-checker 不查分支覆盖）
 
 ---
 
@@ -259,7 +261,7 @@ try {
 }
 ```
 
-或用 `testing::Throws`（gMock ≥ 1.10）一步匹配类型 + message：
+或用 `testing::Throws`（gMock ≥ 1.12）一步匹配类型 + message：
 
 ```cpp
 EXPECT_THAT(
@@ -292,7 +294,7 @@ EXPECT_EQ(obj->lastErrorString(), QString("not found"));
 | 异常源 | 必测点 |
 |---|---|
 | 显式 `throw` | 每个 throw 一用例 |
-| 调用会抛的 STL/Qt API | `QList::at()` 越界、`std::stoi` 非法数字、`QString::mid(-1, 0)` 行为 |
+| 调用会抛的 STL API | `std::vector::at()` 越界（`std::out_of_range`）、`std::stoi` 非法数字（`std::invalid_argument`）、`std::map::at()` 越界 |
 | 资源分配失败 | 通常不测（难以构造），但循环内 `new` 应有 try/catch 验证 |
 
 ### 5.5 反模式
@@ -319,7 +321,7 @@ EXPECT_EQ(obj->lastErrorString(), QString("not found"));
 | 类型 | 示例 |
 |---|---|
 | 空输入 | `""`、`QList<>{}`、`nullptr` |
-| 越界 | `list.at(size)`、`s.mid(-1, 0)` |
+| 越界 | `list[size]`（越界）、`s.mid(-1, 0)` |
 | 类型不匹配 | `toInt("abc")`、`QDate::fromString("xyz")` |
 | 重复操作 | 重复登录、重复注册、重复 init |
 | 资源不足 | mock `QFile::write` 返回 -1（磁盘满）、mock `new` 抛 `bad_alloc` |
@@ -410,11 +412,11 @@ TEST_F(ManagerTest, Save_CallsStorageExactlyOnce) {
     MockStorage storage;
     Manager mgr(&storage);  // 依赖注入
 
-    EXPECT_CALL(storage, save("cfg.txt", QByteArray("data")))
+    EXPECT_CALL(storage, save(QString("cfg.txt"), QByteArray("data")))
         .Times(1)
         .WillOnce(::testing::Return(true));
 
-    EXPECT_TRUE(mgr.persist("cfg.txt", "data"));
+    EXPECT_TRUE(mgr.persist(QString("cfg.txt"), QByteArray("data")));
 }
 ```
 
@@ -447,7 +449,7 @@ ON_CALL(storage, load(::testing::_))
 |---|---|
 | `_` | 任意 |
 | `Eq(v)` / `v` | 等于 |
-| `StrEq(s)` | `std::string`/`QString` 等于 |
+| `StrEq(s)` | `std::string` 等于（**不支持 QString**；QString 应用 `Eq(QString(...))`） |
 | `StartsWith(p)` | 前缀 |
 | `Contains(x)` | 包含 |
 | `IsNull()` | 指针为 null |
@@ -478,7 +480,7 @@ ON_CALL(storage, load(::testing::_))
 └─ 否（Qt/第三方/全局函数）→ stub_ext
 ```
 
-### 7.7 切换 gMock 时 test_writer 必须做的
+### 7.7 切换 gMock 时 test-code-gen 必须做的
 
 测试文件顶部 include：
 ```cpp
@@ -488,13 +490,13 @@ gMock 模板示例见 `templates/stub-patterns.cpp` 第 17-19 节。
 
 ---
 
-## 8. 最小用例设计清单（test_writer 必须遵守）
+## 8. 最小用例设计清单（test-code-gen.md 必须遵守）
 
-生成每个类的测试前，test_writer 必须在测试文件顶部注释中输出以下清单的"完成情况"，未完成项不得提交 build_verifier：
+生成每个类的测试前，必须在测试文件顶部注释中输出以下清单的"完成情况"，未完成项不得提交 build-verifier：
 
 | # | 检查项 | 来源 |
 |---|---|---|
-| 1 | 公开方法已列出，每个方法 ≥ 1 用例 | test_writer §4 |
+| 1 | 公开方法已列出，每个方法 ≥ 1 用例 | test-code-gen.md §4 |
 | 2 | 每个输入维度按等价类划分，每类 ≥ 1 用例 | §1 |
 | 3 | 每个等价类的边界值显式覆盖 | §2 |
 | 4 | 同质多组输入用 `TEST_P` 参数化 | §3.2 |
@@ -511,7 +513,7 @@ gMock 模板示例见 `templates/stub-patterns.cpp` 第 17-19 节。
 
 | # | 反模式 | 修正 |
 |---|---|---|
-| A1 | `EXPECT_NO_FATAL_FAILURE` 作为唯一断言 | §5.5 / test_writer §4.1 |
+| A1 | `EXPECT_NO_FATAL_FAILURE` 作为唯一断言 | §5.5 / test-code-gen.md §4.1 |
 | A2 | 边界值不显式覆盖，只测"中间值" | §2.5 |
 | A3 | 等价类未划分，凭直觉喂输入 | §1.3 |
 | A4 | 同质多组输入复制粘贴 N 个 `TEST_F` | §3.2 → 改 `TEST_P` |

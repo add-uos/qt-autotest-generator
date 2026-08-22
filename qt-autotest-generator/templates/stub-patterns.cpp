@@ -215,7 +215,7 @@ stub.set_lamda(&QObject::objectName, [](QObject *self) -> QString {
 //
 // 重要：计数器/顺序容器必须是【测试夹具成员】（非 static/全局），在 SetUp() 中
 // reset、TearDown() 中 stub.clear()。禁止用 static/全局变量——会跨用例污染，
-// self_checker 5b 会判违规（"用例间污染"）。
+// self-checker 5b 会判违规（"用例间污染"）。
 //
 // 夹具示例（16b/16c/16d 依赖此结构）：
 // class MyClassTest : public ::testing::Test {
@@ -304,7 +304,7 @@ EXPECT_EQ(obj->itemAt(0), QString("item1"));      // 内容验证
 // 注入。两者【禁止】对同一目标方法混用（test-types §7.5 反模式 A9）。
 //
 // 使用 gMock 的测试文件顶部必须 #include <gmock/gmock.h>（google-test-base.cpp 默认
-// 只 include gtest/gtest.h，gMock include 由 test_writer 按需追加）。
+// 只 include gtest/gtest.h，gMock include 由生成流程按需追加）。
 
 // 17. Mock 类定义（gMock）
 //

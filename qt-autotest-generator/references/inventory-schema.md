@@ -32,12 +32,12 @@
     {
       "qualified_name": "project.src.MyClass.methodA",
       "name": "methodA",
-      "class_qn": "project.src.MyClass",
+      "class_qn": "MyClass",
       "file_path": "src/lib/ui/myclass.cpp",
       "access": "public",
       "level": "high",
       "score": 5,
-      "factors": ["dbus_slot", "complexity_ge_8"],
+      "factors": ["dbus_slot", "complexity:25"],
       "source": "auto",
       "testable": true,
       "usecase_count": 3
@@ -45,7 +45,7 @@
     {
       "qualified_name": "project.src.MyClass.~MyClass",
       "name": "~MyClass",
-      "class_qn": "project.src.MyClass",
+      "class_qn": "MyClass",
       "file_path": "src/lib/ui/myclass.cpp",
       "access": "public",
       "level": "low",
@@ -73,7 +73,7 @@
     {
       "qualified_name": "project.src.FileManager.deleteFile",
       "name": "deleteFile",
-      "class_qn": "project.src.FileManager",
+      "class_qn": "FileManager",
       "suggested_level": "mid",
       "reason": "方法名含 delete",
       "review_status": "pending"
@@ -132,7 +132,7 @@
 |------|------|------|
 | `qualified_name` | string | 图谱全限定名（必须来自图谱返回，禁止自己拼） |
 | `name` | string | 方法名 |
-| `class_qn` | string \| null | 所属类的全限定名；自由函数为 null |
+| `class_qn` | string \| null | 所属类短名（如 `ApplicationAdaptor`）；自由函数为 null。由 `scan-inventory.py` 产出，Mode 2 匹配时与 `classes[].name` 比对 |
 | `file_path` | string | 源文件路径（相对项目根） |
 | `access` | string | `"public"` / `"protected"` / `"private"` |
 | `level` | string \| null | `"high"` / `"mid"` / `"low"` / `null`（exempt 时为 null） |
@@ -160,7 +160,7 @@
 |------|------|------|
 | `qualified_name` | string | 方法全限定名 |
 | `name` | string | 方法名 |
-| `class_qn` | string | 所属类全限定名 |
+| `class_qn` | string | 所属类短名（与 methods[].class_qn 一致） |
 | `suggested_level` | string | 建议级别（默认 mid） |
 | `reason` | string | 建议原因 |
 | `review_status` | string | `"pending"` / `"confirmed"` |

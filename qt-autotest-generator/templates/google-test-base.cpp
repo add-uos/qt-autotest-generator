@@ -4,7 +4,7 @@
 // 用例计数声明（self-check-structural 验证此块）：
 // | method | level | factors | min | actual |
 // |--------|-------|---------|-----|--------|
-// | method1 | high | complexity_ge_20 | 3 | ? |
+// | method1 | high | complexity:25 | 3 | ? |
 // | method2 | mid  | - | 2 | ? |
 // ─── 生成后填入 actual 列，低于 min 即违规 ───
 //
@@ -21,8 +21,8 @@
 // 10. stub_ext vs gMock 选择正确: [ ]
 
 #include <gtest/gtest.h>
-// #include <QCoreApplication>  // GUI 类需要此 include，由 test_writer 按需取消注释
-// #include <gmock/gmock.h>     // gMock 需要此 include，由 test_writer 按需追加
+// #include <QCoreApplication>  // GUI 类需要此 include，由生成流程按需取消注释
+// #include <gmock/gmock.h>     // gMock 需要此 include，由生成流程按需追加
 #include "stubext.h"
 #include "{header_file}"
 
@@ -34,7 +34,7 @@ class {ClassName}Test : public ::testing::Test {
 protected:
     static void SetUpTestSuite() {
         // GUI 类用 QCoreApplication，不用 QApplication（避免 X11/Wayland 崩溃）
-        // 非 GUI 类此函数可省略，由 test_writer 按需删除
+        // 非 GUI 类此函数可省略，由生成流程按需删除
         {SetUpTestSuite}
     }
 

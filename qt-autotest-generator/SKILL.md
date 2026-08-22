@@ -81,7 +81,7 @@ Mode 2 的子步骤按需读取：
 |--------|------|--------|
 | 过时测试清理 | `references/stale-test-cleanup.md` | diff 报告含 removed 方法时 |
 | 框架搭建 | `references/framework-builder.md` | `{test_dir}/` 不存在时 |
-| 类准备 | `references/inventory.md` | 方法分级入表，`test_writer` §4 从中提取待测类（schema 见 `references/inventory-schema.md`） |
+| 类准备 | `references/inventory.md` | 方法分级入表，`test-writer.md` §4 从中提取待测类（schema 见 `references/inventory-schema.md`） |
 | 依赖追踪 | `references/dependency-tracer.md` | 读 inventory 的 is_gui、MCP trace_path 出向、stub 决策、CMake 目录（MCP 详见 `references/codebase-memory-guide.md`） |
 | 测试代码生成 | `references/test-code-gen.md` | 逐类闭环第 2 步 |
 | 编译验证 | `references/build-verifier.md` | 逐类闭环第 3 步 |
@@ -117,7 +117,7 @@ Mode 4 **临时修改源码**（注入变异体），受"源码安全四铁律"�
 
 ## Mode 5 · 源码缺陷导出与统计（可选增强）
 
-1. **持久化**（Mode 2 闭环中实时发生）：`failure_repairer` 标红时调 `export-defects.py upsert` 落盘到 `{test_dir}/.ut-defects.json`；`build_verifier` 编译期确认源码缺陷提前预记录；通过验证时调 `mark-fixed` 闭环
+1. **持久化**（Mode 2 闭环中实时发生）：`failure-repairer` 标红时调 `export-defects.py upsert` 落盘到 `{test_dir}/.ut-defects.json`；`build-verifier` 编译期确认源码缺陷提前预记录；通过验证时调 `mark-fixed` 闭环
 2. **导出**：Mode 2 全部批次提交完成后，最终退出前统一导出（或用户单独触发）：`Read` `references/defect-exporter.md` → 调用 `scripts/export-defects.py export`
 3. 产出：`defects.json`（机读）+ `defects-summary.md`（人读标红清单，md 内链接跳转源码行）
 
