@@ -229,7 +229,7 @@ for method in all_methods:
 > # stdout 摘要 + 违规清单
 > ```
 >
-> 脚本核心逻辑（`extract_branches` / `parse_declared_branches` / `cross_check_branches`）为纯函数，单元测试见 `scripts/tests/test_extract_branches.py`（68 用例，含端到端冲烟）。下方伪代码仅作原理说明（脚本不可用时兑底）。
+> 脚本核心逻辑（`extract_branches` / `parse_declared_branches` / `cross_check_branches`）为纯函数，下方伪代码仅作原理说明（脚本不可用时兑底）。
 
 ```python
 # 对每个 testable 方法（§1a 的 all_methods），用 MCP 取真实方法体

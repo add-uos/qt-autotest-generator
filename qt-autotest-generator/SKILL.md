@@ -162,7 +162,6 @@ Mode 5 **不跑测试、不编译、不改测试代码、不改源码**（与 Mo
 | 过时测试清理 | `scripts/stale-test-cleanup.py`（reconcile 后主动清理，不等编译报错） |
 | 分支清单交叉验证 | `scripts/fetch-mcp-data.py extract-branches`（self-checker §2c，MCP `get_code_snippet` 反查真实分支做差集） |
 | 缺陷数据文件 | `.ut-defects.json`（本地，不入 git） |
-| 单元测试 | `scripts/tests/test_extract_branches.py`（extract-branches 纯函数 + 端到端冲烟，68 用例，`python3 -m unittest tests.test_extract_branches`） |
 
 ---
 

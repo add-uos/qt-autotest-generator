@@ -10,3 +10,6 @@ __pycache__/
 
 # Mode 4 变异测试记录（本地存储，不入 git）
 .ut-mutation.json
+
+# stub-ext 由 run-ut.sh 从 templates/stub-ext/ 同步（构建产物，不入 git）
+3rdparty/stub/

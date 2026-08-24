@@ -11,7 +11,7 @@ sample-qt-project/
 │   └── calculator.cpp        # 示例 Qt 类实现
 ├── CMakeLists.txt             # 项目根 CMake（含 BUILD_TESTS 开关）
 ├── autotests/                 # 技能生成的测试框架
-│   ├── 3rdparty/stub/         # stub-ext（templates/stub-ext/ 的冻结副本，见下文）
+│   ├── 3rdparty/              # 构建时由 run-ut.sh 从 templates/stub-ext/ 同步（不随附）
 │   ├── cmake/UnitTestUtils.cmake
 │   ├── run-ut.sh              # 构建+运行+覆盖率一键脚本
 │   ├── CMakeLists.txt          # 测试根 CMake
@@ -26,15 +26,14 @@ sample-qt-project/
 
 > 构建产物（`build-autotests/`）、gtest 运行输出（`.results/`）、运行态缺陷记录（`.ut-defects.json`）均为本地生成、**不入 git**，见 `sample-qt-project/.gitignore`。本仓库只随附可读的 curated 示例产物（`.ut-inventory.json` 与 `mode5-export-example/`）。
 
-## stub-ext 副本说明
+## stub-ext 说明
 
-`autotests/3rdparty/stub/` 是 `templates/stub-ext/` 的**字节级冻结副本**。保留副本（而非运行时从 templates 复制）是为了让 `sample-qt-project/` 可被独立复制后直接构建运行。更新 stub-ext 时两处必须同步，发布前运行校验：
+`autotests/3rdparty/stub/` **不随附**——为避免与 `templates/stub-ext/` 重复导致漂移，示例构建时自动同步：
 
-```bash
-bash scripts/check-stub-sync.sh
-```
+- `run-ut.sh` 步骤 1 自动从 `templates/stub-ext/` 复制到 `autotests/3rdparty/stub/`
+- 手动构建前执行：`cp -r <skill>/templates/stub-ext/ autotests/3rdparty/stub/`
 
-退出码 `0` 表示一致；`1` 表示存在漂移（脚本会打印差异与修复命令）。
+`3rdparty/stub/` 为构建产物，已 gitignore。
 
 ## Mode 5 导出产物示例
 

@@ -109,6 +109,21 @@ step_1_prepare_build_env() {
     fi
     mkdir -p "$BUILD_DIR"
     mkdir -p "$REPORT_DIR"
+
+    # Sync stub-ext from skill templates (example keeps no vendored copy, avoids drift)
+    STUB_SRC="$SCRIPT_DIR/../../../templates/stub-ext"
+    STUB_DST="$SCRIPT_DIR/3rdparty/stub"
+    if [ -d "$STUB_SRC" ]; then
+        rm -rf "$STUB_DST"
+        mkdir -p "$STUB_DST"
+        cp -r "$STUB_SRC/." "$STUB_DST/"
+        print_info "Synced stub-ext from skill templates"
+    else
+        print_error "stub-ext source not found: $STUB_SRC"
+        print_error "Manual copy: cp -r <skill>/templates/stub-ext/ autotests/3rdparty/stub/"
+        exit 1
+    fi
+
     print_success "Build environment prepared"
 }
 

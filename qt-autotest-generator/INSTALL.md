@@ -153,13 +153,3 @@ undefined reference to stub_ext::freeWrapper
 ```
 
 解决：确认 `{test_dir}/3rdparty/stub/stub-shadow.cpp` 已编入 test target（CMakeLists 检查）。
-
-## 维护（发布前检查）
-
-示例项目 `examples/sample-qt-project/autotests/3rdparty/stub/` 是 `templates/stub-ext/` 的冻结副本（为保证示例可独立复制后直接构建运行）。更新 stub-ext 后两处必须同步，发布前运行校验：
-
-```bash
-bash scripts/check-stub-sync.sh
-```
-
-退出码 `0` 表示一致；`1` 表示存在漂移（脚本会打印差异与修复命令）；`2` 表示目录缺失。

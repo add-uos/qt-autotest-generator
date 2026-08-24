@@ -17,9 +17,9 @@ test_extract_branches.py — fetch-mcp-data.py extract-branches 子命令的单�
   6. fetch_method_bodies             — mock client，多字段名兜底 + 失败处理
 
 运行:
-  cd scripts && python3 -m unittest tests.test_extract_branches -v
-  # 或直接：
-  python3 tests/test_extract_branches.py
+  python3 doc/scripts/test_extract_branches.py
+  # 或：
+  cd doc/scripts && python3 -m unittest test_extract_branches -v
 
 零第三方依赖，仅用标准库 unittest（与技能 requirements.txt 一致）。
 fetch-mcp-data.py 文件名含连字符无法 import，用 importlib 动态加载。
@@ -37,8 +37,9 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 # ── 动态加载 fetch-mcp-data.py（文件名含连字符，不能直接 import） ──
+# 本文件位于仓库 doc/scripts/，被测脚本在 qt-autotest-generator/scripts/fetch-mcp-data.py
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-_FETCH_PATH = os.path.join(_SCRIPT_DIR, os.pardir, "fetch-mcp-data.py")
+_FETCH_PATH = os.path.join(_SCRIPT_DIR, os.pardir, os.pardir, "qt-autotest-generator", "scripts", "fetch-mcp-data.py")
 _spec = importlib.util.spec_from_file_location("fetch_mcp_data", _FETCH_PATH)
 fetch_mcp_data = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(fetch_mcp_data)
