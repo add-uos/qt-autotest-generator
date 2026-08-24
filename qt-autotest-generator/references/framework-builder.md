@@ -28,8 +28,9 @@ test_dir = test_dir  # "autotests" 或 "tests"
 ├── 3rdparty/stub/       # stub-ext（从 templates/stub-ext/ 复制）
 ├── cmake/               # CMake 工具脚本
 ├── .gitignore            # 忽略构建产物和临时状态
-├── run-ut.sh            # 测试运行脚本
-└── run-ut.sh            # 测试运行脚本
+├── run-ut.sh            # 一键测试运行脚本（编译→运行→覆盖率→汇总）
+├── gen-ut-summary.py    # 轻量摘要生成器（解析 gtest XML + lcov summary）
+└── lsan_suppressions.txt # LSan 抑制文件（Qt/DTK 框架误报）
 ```
 
 ### 3. 复制 stub-ext
@@ -49,16 +50,31 @@ bash ${SKILL_DIR}/scripts/generate-cmake-utils.sh
 TEST_DIR=tests bash ${SKILL_DIR}/scripts/generate-cmake-utils.sh
 ```
 
-### 5. 生成测试运行脚本 + 报告生成器
-
-bash ${SKILL_DIR}/scripts/generate-runner.sh
-```
-
-生成 `{test_dir}/run-ut.sh`。脚本通过环境变量 `TEST_DIR` 接收目录名（默认 `autotests`）：
+### 5. 生成测试运行脚本 + 摘要生成器 + LSan 抑制文件
 
 ```bash
-TEST_DIR=tests bash ${SKILL_DIR}/scripts/generate-runner.sh
+TEST_DIR=${test_dir} bash ${SKILL_DIR}/scripts/generate-runner.sh
 ```
+
+一次性生成三个文件：
+
+| 文件 | 作用 |
+|------|------|
+| `{test_dir}/run-ut.sh` | 一键脚本：cmake(项目根) → make → 直接执行 gtest 二进制(per-target XML) → lcov 采集 → genhtml → 调 gen-ut-summary.py |
+| `{test_dir}/gen-ut-summary.py` | 轻量摘要生成器：解析 gtest XML + lcov summary，输出 `ut-summary.json`（**不重跑测试**） |
+| `{test_dir}/lsan_suppressions.txt` | LSan 抑制文件：抑制 Qt6 DBus / 事件循环等框架级误报泄漏 |
+
+脚本通过环境变量 `TEST_DIR` 接收目录名（默认 `autotests`）。
+
+**run-ut.sh 关键设计**：
+- **cmake 源指向项目根**（`cmake $PROJECT_ROOT`），而非 `{test_dir}` 目录——确保 `CMAKE_SOURCE_DIR` = 项目根，使 `src/CMakeLists.txt` 中 `${CMAKE_SOURCE_DIR}/src/*.cpp` 正确解析业务源码
+- **直接执行 gtest 二进制**（`./binary --gtest_output=xml:`），不依赖 ctest——避免 `gtest_discover_tests` 注册失效时 0 tests 的问题；每个目标独立 `report_<target>.xml`
+- **step_6 调 gen-ut-summary.py**（轻量解析），**不**调 `collect-coverage-report.py`——后者会重跑测试 + 重做 lcov，与 step_4/step_5 重复
+- **ASAN/LSan**：`ASAN_OPTIONS=detect_leaks=1` + `LSAN_OPTIONS=suppressions=lsan_suppressions.txt`，并收集 `asan*.log`
+- **CMAKE_SAFETYTEST_ARG**：传入 `CMAKE_SAFETYTEST_ARG_ON` 满足公司安全测试规范
+- **headless**：`QT_QPA_PLATFORM=offscreen` 适配 CI 无显示环境
+- **`--from-step`** 断点续跑、`--parallel` 并行编译
+- **覆盖率 extract 模式**：从 `.ut-inventory.json` 动态读取业务源码目录（默认 `*/src/*`），每个模式单引号包裹防止 shell glob 展开
 
 ### 6. 生成 {test_dir}/CMakeLists.txt
 
@@ -136,7 +152,7 @@ build-{test_dir}/
 
 **绝不**忽略 `{test_dir}/` 本身（测试代码应纳入版本控制），只忽略构建产物和临时状态文件。
 
-### 10. 验证框架编译
+### 11. 验证框架编译
 
 test_dir = test_dir  # "autotests" 或 "tests"
 
@@ -150,7 +166,7 @@ cmake --build . -j$(nproc)
 
 若失败 → 分析错误 → 修 CMakeLists → 重试（max 10 loops）。
 
-### 11. 更新内存变量
+### 12. 更新内存变量
 
 记录 `qt_version` 到内存变量。
 
