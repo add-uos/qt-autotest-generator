@@ -8,6 +8,8 @@
 
 确认知识图谱 MCP 已就绪、目标项目已索引、索引处于 ready 状态。**失败即硬终止**，不降级 LSP，不继续后续阶段。
 
+> 系统级依赖（CMake ≥ 3.16、Qt5/Qt6、Google Test、lcov、c++filt、git、支持 C++17 的 gcc/g++）清单见 `requirements.txt`（纯声明文件，无 pip 包）。本阶段聚焦 MCP 门禁，系统依赖由后续编译步骤隐式校验（缺失时 cmake/build 报错即定位）。
+
 ## 工作步骤
 
 ### 0. 验证项目类型

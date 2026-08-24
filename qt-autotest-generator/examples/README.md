@@ -1,33 +1,44 @@
 # 示例项目
 
-本目录包含一个示例 Qt 项目，展示 qt-autotest-generator 的典型产物。
+> **定位**：本目录是面向人类的可运行演示，展示 qt-autotest-generator 的典型产物与目录布局。Agent 运行时**不读取**本目录——技能自带资源在 `templates/` / `references/` / `scripts/`，本目录仅作参考。
 
 ## 目录结构
 
 ```
 sample-qt-project/
 ├── src/
-│   ├── CMakeLists.txt
-│   └── calculator.h          # 示例 Qt 类（仅头文件，内联实现）
+│   ├── calculator.h          # 示例 Qt 类声明
+│   └── calculator.cpp        # 示例 Qt 类实现
 ├── CMakeLists.txt             # 项目根 CMake（含 BUILD_TESTS 开关）
 ├── autotests/                 # 技能生成的测试框架
-│   ├── 3rdparty/stub/         # stub-ext（从 templates/stub-ext/ 复制）
+│   ├── 3rdparty/stub/         # stub-ext（templates/stub-ext/ 的冻结副本，见下文）
 │   ├── cmake/UnitTestUtils.cmake
-│   ├── run-ut.sh
+│   ├── run-ut.sh              # 构建+运行+覆盖率一键脚本
 │   ├── CMakeLists.txt          # 测试根 CMake
-│   ├── .ut-inventory.json       # inventory 分级表示例
-│   ├── .results/              # gtest XML 输出
+│   ├── .ut-inventory.json       # inventory 分级表示例（Mode 1 产物）
 │   └── core/
 │       ├── CMakeLists.txt     # 模块 CMake
 │       └── test_calculator.cpp # 生成的测试文件
-└── build-autotests/           # Mode 5 导出产物示例（非构建产物）
+└── mode5-export-example/      # Mode 5 导出产物示例（人工查阅）
     ├── defects.json           # 机读缺陷清单
     └── defects-summary.md     # 人读标红清单（md 内链接跳转源码行）
 ```
 
+> 构建产物（`build-autotests/`）、gtest 运行输出（`.results/`）、运行态缺陷记录（`.ut-defects.json`）均为本地生成、**不入 git**，见 `sample-qt-project/.gitignore`。本仓库只随附可读的 curated 示例产物（`.ut-inventory.json` 与 `mode5-export-example/`）。
+
+## stub-ext 副本说明
+
+`autotests/3rdparty/stub/` 是 `templates/stub-ext/` 的**字节级冻结副本**。保留副本（而非运行时从 templates 复制）是为了让 `sample-qt-project/` 可被独立复制后直接构建运行。更新 stub-ext 时两处必须同步，发布前运行校验：
+
+```bash
+bash scripts/check-stub-sync.sh
+```
+
+退出码 `0` 表示一致；`1` 表示存在漂移（脚本会打印差异与修复命令）。
+
 ## Mode 5 导出产物示例
 
-`build-autotests/` 目录存放 Mode 5（源码缺陷导出）的示例产物，**不是**构建中间产物：
+`mode5-export-example/` 存放 Mode 5（源码缺陷导出）的示例产物：
 
 - `defects.json`：机读缺陷清单（`scripts/export-defects.py export` 产出）
 - `defects-summary.md`：人读标红清单，Markdown 内链接可跳转源码行
