@@ -43,6 +43,8 @@
 
 ## 工作步骤
 
+> ⚠️ **VADDR 使用禁令（Iron Law #13）**：禁止对 Qt 内置类（QWidget/QDialog/QTimer/QPixmap/QApplication/QScreen/QCursor 等）使用 VADDR 宏。Qt6 中大量方法有重载，`&ClassName::method` 无法消歧导致编译错误。Qt 类方法一律用 `static_cast<RetType(ClassName::*)(Params...)>(&ClassName::methodName)` 消歧。VADDR 仅限项目内部确认无重载的方法。
+
 ### 1. 读取函数源码（含签名）
 
 从图谱获取每个待测方法的完整源码：
@@ -83,12 +85,12 @@ read("${SKILL_DIR}/templates/cmake-submodule.txt")
 - `{header_file}` → 目标类头文件路径（相对项目根）
 - `{ClassName}` → 类名
 - `{TestCases}` → 生成的测试用例。**每个 TEST_F 必须包含 `// Arrange` / `// Act` / `// Assert` 三段注释**（self-check-structural 会验证，缺少报 MISSING_AAA 违规）。模板文件中已有强制注释说明。
-- `{SPDX_YEAR}` → 当前年份（如 2025），由本流程在生成时填入。**示例中不得硬编码年份，一律用 `{SPDX_YEAR}` 占位**
+- `{SPDX_YEAR}` → 当前年份（如 2025），由本流程在生成时填入, 用'date +%Y'获取。**示例中不得硬编码年份，一律用 `{SPDX_YEAR}` 占位**
 
 **占位符说明**：
 - `{BranchList}` → 分支清单 + 用例映射注释块（test-types §4.1 要求，复杂方法必须落，简单方法可省）；插入位置：`{Namespace}` 之前、`#include` 之后
 - `{Namespace}` / `{NamespaceEnd}` → 命名空间开闭（若有）。若类在命名空间 `namespace X { namespace Y { ... } }` 内，则 `{Namespace}` = `namespace X { namespace Y {`，`{NamespaceEnd}` = `}} // namespace X::Y`；无命名空间则两者均为空
-- `{SetUpTestSuite}` → GUI 类填 QCoreApplication 初始化代码；非 GUI 类删除 SetUpTestSuite/TearDownTestSuite 整个函数
+- `{SetUpTestSuite}` → GUI 类填 QApplication 初始化代码（配合 `QT_QPA_PLATFORM=offscreen`）；非 GUI 类删除 SetUpTestSuite/TearDownTestSuite 整个函数
 - `{SetUpObject}` → 非 GUI 类填 `obj = new {ClassName}()`；GUI 类填空或 helper 构造
 - `{TearDownObject}` → 非 GUI 类填 `delete obj`；GUI 类填空
 - `{SetUpStubs}` → dependency-tracer 产出的 stub 初始化代码
@@ -187,7 +189,7 @@ read("${SKILL_DIR}/templates/cmake-submodule.txt")
 - **禁止在 Fixture 类名和用例名中携带轮数/批次号**（如 `R18`、`Round2`、`Batch3`），轮数是内部调度概念，不属于测试命名
 
 **GUI 类特殊处理**（`is_gui=true`）：
-- `SetUpTestSuite()` 用 `QCoreApplication`，**不用** `QApplication`（避免 X11/Wayland 崩溃）
+- `SetUpTestSuite()` 用 `QApplication`（QWidget 子类需要 QApplication 才能正常工作），配合 `QT_QPA_PLATFORM=offscreen` 运行避免 X11/Wayland 崩溃
 - 不直接实例化 GUI 类，通过 helper 或信号槽测试状态
 - 若无可测方法（除构造函数外），生成最小占位测试
 
@@ -213,8 +215,9 @@ read("${SKILL_DIR}/templates/cmake-submodule.txt")
 **stub 选择与落地**（依赖分类与决策矩阵以 `dependency-tracer.md` §3 为准；以下为落地规则与补充决策）：
 - 继承 QWidget → stub `show`、`hide`、`height`、`width`
 - 继承 QDialog → stub `exec`
-- 虚函数 → `VADDR(Class, method)`
-- 重载 → `static_cast<Ret (Class::*)(Params)>(&Class::method)`
+- **Qt 类方法（含虚函数）→ `static_cast<Ret (Class::*)(Params)>(&Class::method)`** — **禁止 VADDR**，Qt 类方法几乎都有重载风险
+- **项目内部非虚非重载方法 → `VADDR(Class, method)`** — 仅在确认无重载时可用
+- **项目内部重载方法 → `static_cast<Ret (Class::*)(Params)>(&Class::method)`**
 - 外部依赖 → 按预期行为 stub
 - **环境隔离落地**：按 §4.0 §2 补充依赖类别 + `dependency-tracer.md` §3 决策矩阵执行 stub；路径/文件系统/环境变量/子进程/网络/时间随机/单例/全局状态的处理方式见 `dependency-tracer.md` §3
 
@@ -254,7 +257,7 @@ read("${SKILL_DIR}/templates/cmake-submodule.txt")
 - 不编译或运行测试（编译验证由后续阶段负责）
 - 不直接为 private 方法写 `TEST_F`：private 方法通过调用它的 public/protected 方法**间接覆盖**，必须覆盖其内部分支与边界
 - `qualified_name` 必须从图谱返回值取，不自己拼
-- 不跳过 GUI 特殊处理（GUI 类用 `QCoreApplication`，不直接实例化）
+- 不跳过 GUI 特殊处理（GUI 类用 `QApplication` + `QT_QPA_PLATFORM=offscreen`，不直接实例化）
 - 不修改已有 CMake 代码，只 APPEND `add_subdirectory`
 - 不修改项目源码
 - 不从网络下载模板，只读 `templates/`

@@ -1,48 +1,49 @@
 // ==================== 常用 Stub 模式 ====================
 
 // 1. UI 显示/隐藏（QWidget, QDialog）
-stub.set_lamda(&QWidget::show, [](QWidget *) {
+// ⚠️ Qt 类方法禁止用 VADDR（Iron Law #13），一律用 static_cast 消歧
+stub.set_lamda(static_cast<void(QWidget::*)()>(&QWidget::show), [](QWidget *) {
     __DBG_STUB_INVOKE__
 });
 
-stub.set_lamda(&QWidget::hide, [](QWidget *) {
+stub.set_lamda(static_cast<void(QWidget::*)()>(&QWidget::hide), [](QWidget *) {
     __DBG_STUB_INVOKE__
 });
 
 // 对话框执行
-stub.set_lamda(VADDR(QDialog, exec), [] {
+stub.set_lamda(static_cast<int(QDialog::*)()>(&QDialog::exec), []() -> int {
     __DBG_STUB_INVOKE__
     return QDialog::Accepted;  // 或 QDialog::Rejected
 });
 
-// 2. QWidget 尺寸和位置
-stub.set_lamda(&QWidget::height, [](QWidget *) -> int {
+// 2. QWidget 尺寸和位置（const 方法需 const 限定符）
+stub.set_lamda(static_cast<int(QWidget::*)()const>(&QWidget::height), [](QWidget *) -> int {
     __DBG_STUB_INVOKE__
     return 600;  // Mock 高度
 });
 
-stub.set_lamda(&QWidget::width, [](QWidget *) -> int {
+stub.set_lamda(static_cast<int(QWidget::*)()const>(&QWidget::width), [](QWidget *) -> int {
     __DBG_STUB_INVOKE__
     return 800;  // Mock 宽度
 });
 
-stub.set_lamda(&QWidget::x, [](QWidget *) -> int {
+stub.set_lamda(static_cast<int(QWidget::*)()const>(&QWidget::x), [](QWidget *) -> int {
     __DBG_STUB_INVOKE__
     return 100;  // Mock X 坐标
 });
 
-stub.set_lamda(&QWidget::y, [](QWidget *) -> int {
+stub.set_lamda(static_cast<int(QWidget::*)()const>(&QWidget::y), [](QWidget *) -> int {
     __DBG_STUB_INVOKE__
     return 200;  // Mock Y 坐标
 });
 
-// 3. QWidget 边距和内容区域
-stub.set_lamda(&QWidget::contentsMargins, [](QWidget *) -> QMargins {
+// 3. QWidget 边距和内容区域（const 方法）
+stub.set_lamda(static_cast<QMargins(QWidget::*)()const>(&QWidget::contentsMargins), [](QWidget *) -> QMargins {
     __DBG_STUB_INVOKE__
     return QMargins(10, 10, 10, 10);
 });
 
-stub.set_lamda(&QWidget::contentsRect, [](QWidget *) -> QRect {
+stub.set_lamda(static_cast<QRect(QWidget::*)()const>(&QWidget::contentsRect), [](QWidget *) -> QRect {
     __DBG_STUB_INVOKE__
     return QRect(0, 0, 800, 600);
 });
@@ -54,7 +55,12 @@ QSignalSpy spy(obj, &{ClassName}::{SignalName});
 EXPECT_EQ(spy.count(), 1);
 EXPECT_EQ(spy.at(0).at(0).toInt(), expected);
 
-// 5. 虚函数（使用 VADDR 宏）
+// 5. 项目内部虚函数（使用 VADDR 宏）
+// ⚠️ VADDR 禁止用于 Qt 内置类方法（Iron Law #13）！
+//   Qt 类方法有重载风险，一律用 static_cast 消歧（见第 6 节）。
+//   VADDR 仅限项目内部确认无重载的方法。
+//
+// 正确用法（项目内部类，确认无重载）：
 stub.set_lamda(VADDR({ClassName}, {MethodName}), []() {
     __DBG_STUB_INVOKE__
 });
@@ -76,7 +82,14 @@ stub.set_lamda(
     }
 );
 
-// 6. 重载函数（使用 static_cast）
+// ❌ 错误用法（Qt 类用 VADDR → 编译失败）：
+// stub.set_lamda(VADDR(QWidget, show), ...);     // QWidget::show 有重载歧义
+// stub.set_lamda(VADDR(QTimer, start), ...);    // QTimer::start 有 3 个重载
+
+// 6. Qt 类方法 / 重载函数（使用 static_cast 消歧）
+// ⚠️ 所有 Qt 内置类方法必须用 static_cast，禁止 VADDR（Iron Law #13）
+//
+// 项目内部重载方法也用此模式：
 stub.set_lamda(
     static_cast<int ({ClassName}::*)(int, int)>(&{ClassName}::{MethodName}),
     []({ClassName} *self, int a, int b) -> int {
@@ -93,8 +106,16 @@ stub.set_lamda(
     }
 );
 
-// 7. 外部依赖
-stub.set_lamda(&ExternalClass::method, [](ExternalClass *self, QString param) {
+// Qt 类常见 static_cast 示例：
+// QTimer::start (3 个重载: int / chrono / void)
+// stub.set_lamda(static_cast<void(QTimer::*)(int)>(&QTimer::start), ...);
+// QPixmap::scaled (2 个重载: int,int / QSize)
+// stub.set_lamda(static_cast<QPixmap(QPixmap::*)(int,int,Qt::AspectRatioMode,Qt::TransformationMode)const>(&QPixmap::scaled), ...);
+// QWidget::update (4+ 个重载)
+// stub.set_lamda(static_cast<void(QWidget::*)()>(&QWidget::update), ...);
+
+// 7. 外部依赖（项目内部类可用 VADDR；Qt/第三方类用 static_cast）
+stub.set_lamda(static_cast<bool(ExternalClass::*)(QString)>(&ExternalClass::method), [](ExternalClass *self, QString param) -> bool {
     __DBG_STUB_INVOKE__
     EXPECT_EQ(param, "expected");
     return true;
@@ -108,105 +129,106 @@ stub.set_lamda(qPrintable, [](const QString &str) -> const char* {
     return mockResult.toLocal8Bit().constData();
 });
 
-// 8. 文件操作（QFile）
-stub.set_lamda(&QFile::open, [](QFile *self, QIODevice::OpenMode mode) -> bool {
+// 8. 文件操作（QFile）— static_cast 消歧
+stub.set_lamda(static_cast<bool(QFile::*)(QIODevice::OpenMode)>(&QFile::open), [](QFile *self, QIODevice::OpenMode mode) -> bool {
     __DBG_STUB_INVOKE__
     return true;  // Mock 打开成功
 });
 
-stub.set_lamda(&QFile::readAll, [](QFile *self) -> QByteArray {
+stub.set_lamda(static_cast<QByteArray(QFile::*)()>(&QFile::readAll), [](QFile *self) -> QByteArray {
     __DBG_STUB_INVOKE__
     return "mock content";
 });
 
-stub.set_lamda(&QFile::write, [](QFile *self, const QByteArray &data) -> qint64 {
+stub.set_lamda(static_cast<qint64(QFile::*)(const QByteArray&)>(&QFile::write), [](QFile *self, const QByteArray &data) -> qint64 {
     __DBG_STUB_INVOKE__
     return data.size();  // Mock 写入成功
 });
 
-stub.set_lamda(&QFile::close, [](QFile *self) -> void {
+stub.set_lamda(static_cast<void(QFile::*)()>(&QFile::close), [](QFile *self) -> void {
     __DBG_STUB_INVOKE__
 });
 
-// 9. 目录操作（QDir）
-stub.set_lamda(&QDir::exists, [](QDir *self) -> bool {
+// 9. 目录操作（QDir）— static_cast 消歧
+stub.set_lamda(static_cast<bool(QDir::*)()const>(&QDir::exists), [](QDir *self) -> bool {
     __DBG_STUB_INVOKE__
     return true;
 });
 
-stub.set_lamda(&QDir::entryList, [](QDir *self) -> QStringList {
+stub.set_lamda(static_cast<QStringList(QDir::*)()const>(&QDir::entryList), [](QDir *self) -> QStringList {
     __DBG_STUB_INVOKE__
     return {"file1.txt", "file2.txt"};
 });
 
-// 10. 事件处理
-stub.set_lamda(&QObject::eventFilter, [](QObject *self, QObject *watched, QEvent *event) -> bool {
+// 10. 事件处理 — static_cast 消歧
+stub.set_lamda(static_cast<bool(QObject::*)(QObject*,QEvent*)>(&QObject::eventFilter), [](QObject *self, QObject *watched, QEvent *event) -> bool {
     __DBG_STUB_INVOKE__
     return false;  // 不拦截事件
 });
 
-stub.set_lamda(&QWidget::keyPressEvent, [](QWidget *self, QKeyEvent *event) {
+stub.set_lamda(static_cast<void(QWidget::*)(QKeyEvent*)>(&QWidget::keyPressEvent), [](QWidget *self, QKeyEvent *event) {
     __DBG_STUB_INVOKE__
     // Mock 键盘事件处理
 });
 
-stub.set_lamda(&QWidget::mousePressEvent, [](QWidget *self, QMouseEvent *event) {
+stub.set_lamda(static_cast<void(QWidget::*)(QMouseEvent*)>(&QWidget::mousePressEvent), [](QWidget *self, QMouseEvent *event) {
     __DBG_STUB_INVOKE__
     // Mock 鼠标事件处理
 });
 
-// 11. 网络请求（QNetworkReply）
-stub.set_lamda(&QNetworkReply::readAll, [](QNetworkReply *self) -> QByteArray {
+// 11. 网络请求（QNetworkReply）— static_cast 消歧
+stub.set_lamda(static_cast<QByteArray(QNetworkReply::*)()>(&QNetworkReply::readAll), [](QNetworkReply *self) -> QByteArray {
     __DBG_STUB_INVOKE__
     return "mock network response";
 });
 
-stub.set_lamda(&QNetworkReply::error, [](QNetworkReply *self) -> QNetworkReply::NetworkError {
+stub.set_lamda(static_cast<QNetworkReply::NetworkError(QNetworkReply::*)()const>(&QNetworkReply::error), [](QNetworkReply *self) -> QNetworkReply::NetworkError {
     __DBG_STUB_INVOKE__
     return QNetworkReply::NoError;
 });
 
-// 12. 定时器（QTimer）
-stub.set_lamda(&QTimer::start, [](QTimer *self, int msec) {
+// 12. 定时器（QTimer）— static_cast 消歧
+// ⚠️ QTimer::start 在 Qt6 中有 3 个重载 (int / chrono / void)
+stub.set_lamda(static_cast<void(QTimer::*)(int)>(&QTimer::start), [](QTimer *self, int msec) {
     __DBG_STUB_INVOKE__
 });
 
-stub.set_lamda(&QTimer::stop, [](QTimer *self) {
+stub.set_lamda(static_cast<void(QTimer::*)()>(&QTimer::stop), [](QTimer *self) {
     __DBG_STUB_INVOKE__
 });
 
-// 13. 数据库（QSqlQuery）
-stub.set_lamda(&QSqlQuery::exec, [](QSqlQuery *self, const QString &query) -> bool {
+// 13. 数据库（QSqlQuery）— static_cast 消歧
+stub.set_lamda(static_cast<bool(QSqlQuery::*)(const QString&)>(&QSqlQuery::exec), [](QSqlQuery *self, const QString &query) -> bool {
     __DBG_STUB_INVOKE__
     return true;
 });
 
-stub.set_lamda(&QSqlQuery::next, [](QSqlQuery *self) -> bool {
+stub.set_lamda(static_cast<bool(QSqlQuery::*)()>(&QSqlQuery::next), [](QSqlQuery *self) -> bool {
     __DBG_STUB_INVOKE__
     return false;  // Mock 没有更多数据
 });
 
-// 14. 设置（QSettings）
-stub.set_lamda(&QSettings::value, [](QSettings *self, const QString &key) -> QVariant {
+// 14. 设置（QSettings）— static_cast 消歧
+stub.set_lamda(static_cast<QVariant(QSettings::*)(const QString&)const>(&QSettings::value), [](QSettings *self, const QString &key) -> QVariant {
     __DBG_STUB_INVOKE__
     return "mock value";
 });
 
-stub.set_lamda(&QSettings::setValue, [](QSettings *self, const QString &key, const QVariant &value) {
+stub.set_lamda(static_cast<void(QSettings::*)(const QString&,const QVariant&)>(&QSettings::setValue), [](QSettings *self, const QString &key, const QVariant &value) {
     __DBG_STUB_INVOKE__
 });
 
-// 15. 其他常用函数
-stub.set_lamda(&QObject::deleteLater, [](QObject *self) {
+// 15. 其他常用函数 — static_cast 消歧
+stub.set_lamda(static_cast<void(QObject::*)()>(&QObject::deleteLater), [](QObject *self) {
     __DBG_STUB_INVOKE__
 });
 
-stub.set_lamda(&QObject::parent, [](QObject *self) -> QObject* {
+stub.set_lamda(static_cast<QObject*(QObject::*)()const>(&QObject::parent), [](QObject *self) -> QObject* {
     __DBG_STUB_INVOKE__
     return nullptr;
 });
 
-stub.set_lamda(&QObject::objectName, [](QObject *self) -> QString {
+stub.set_lamda(static_cast<QString(QObject::*)()const>(&QObject::objectName), [](QObject *self) -> QString {
     __DBG_STUB_INVOKE__
     return "mock object";
 });
@@ -234,7 +256,7 @@ stub.set_lamda(&QObject::objectName, [](QObject *self) -> QString {
 // };
 
 // 16a. 参数断言：在 stub lambda 内 EXPECT_EQ 验证传入参数
-stub.set_lamda(&ExternalClass::save, [](ExternalClass *self, const QString &path, const QByteArray &data) -> bool {
+stub.set_lamda(static_cast<bool(ExternalClass::*)(const QString&,const QByteArray&)>(&ExternalClass::save), [](ExternalClass *self, const QString &path, const QByteArray &data) -> bool {
     __DBG_STUB_INVOKE__
     EXPECT_EQ(path, QString("expected_dir/file.txt"));   // 验证传入路径（用期望字符串，勿硬编码绝对路径，否则 5b 误报）
     EXPECT_EQ(data, QByteArray("expected content"));     // 验证传入内容
@@ -245,7 +267,7 @@ stub.set_lamda(&ExternalClass::save, [](ExternalClass *self, const QString &path
 // call_count 为夹具成员，SetUp() 已 reset 为 0；lambda 用 [this] 捕获夹具成员
 // （此处用 ExternalClass::flush 示范，避免与 #15 的 deleteLater 重复 stub 同一方法；
 //   真实使用时按待测方法实际调用的下游选目标，勿对同一方法重复 set_lamda）
-stub.set_lamda(&ExternalClass::flush, [this](ExternalClass *self) {
+stub.set_lamda(static_cast<void(ExternalClass::*)()>(&ExternalClass::flush), [this](ExternalClass *self) {
     __DBG_STUB_INVOKE__
     ++call_count;  // 每次 stub 命中自增（夹具成员，每用例自动重置）
 });
@@ -253,11 +275,11 @@ stub.set_lamda(&ExternalClass::flush, [this](ExternalClass *self) {
 
 // 16c. 调用顺序验证（多个 stub 的命中顺序）
 // call_order 为夹具成员，SetUp() 已 clear
-stub.set_lamda(&ClassA::step1, [this](ClassA *self) {
+stub.set_lamda(static_cast<void(ClassA::*)()>(&ClassA::step1), [this](ClassA *self) {
     __DBG_STUB_INVOKE__
     call_order << "step1";
 });
-stub.set_lamda(&ClassB::step2, [this](ClassB *self, int x) -> int {
+stub.set_lamda(static_cast<int(ClassB::*)(int)>(&ClassB::step2), [this](ClassB *self, int x) -> int {
     __DBG_STUB_INVOKE__
     call_order << "step2";
     return x * 2;
@@ -269,7 +291,7 @@ stub.set_lamda(&ClassB::step2, [this](ClassB *self, int x) -> int {
 
 // 16d. 未调用验证：确保某依赖未被触发（正常路径不应走到 error 分支）
 // forbidden_count 为夹具成员，SetUp() 已 reset 为 0
-stub.set_lamda(&Logger::error, [this](Logger *self, const QString &msg) {
+stub.set_lamda(static_cast<void(Logger::*)(const QString&)>(&Logger::error), [this](Logger *self, const QString &msg) {
     __DBG_STUB_INVOKE__
     ++forbidden_count;
 });
@@ -435,5 +457,37 @@ TEST_F(ManagerTest, Load_DefaultConfig_ReturnsCached) {
 //     FRIEND_TEST(MyClassTest, TestPrivateMethod);  // 需在源码中添加
 //     ...
 // };
+
+// ==================== 21. 访问 private 方法（ACCESS_PRIVATE_FUN / ACCESS_PRIVATE_FIELD） ====================
+//
+// 场景：被测方法内部调用 private/protected 方法，需要 stub 或直接调用测试。
+// 使用 templates/stub-ext/addr_pri.h 提供的宏获取 private 成员地址。
+//
+// ⚠️ ACCESS_PRIVATE_* 宏必须放在 #include "myclass.h" 之前（依赖模板显式实例化）。
+//
+// 21a. 调用 private 方法（通过 ACCESS_PRIVATE_FUN 获取函数指针后直接调用）
+// 在 #include "myclass.h" 之前：
+//   ACCESS_PRIVATE_FUN(MyClass, void(MyClass::*)(int), privateMethod)
+//
+// 在测试代码中调用：
+//   call_private_fun::MyClassprivateMethod(*obj, 42);
+//   // 等价于 obj->privateMethod(42)
+
+// 21b. 获取 private 方法函数指针（用于 stub）
+//   auto addr = get_private_fun::MyClassprivateMethod();
+//   stub.set_lamda(addr, [](MyClass *self, int arg) {
+//       __DBG_STUB_INVOKE__
+//   });
+
+// 21c. 访问 private 成员变量（ACCESS_PRIVATE_FIELD）
+// 在 #include "myclass.h" 之前：
+//   ACCESS_PRIVATE_FIELD(MyClass, int, m_count)
+//
+// 在测试代码中读取/写入：
+//   EXPECT_EQ(access_private_field::MyClassm_count(*obj), 0);
+//   access_private_field::MyClassm_count(*obj) = 42;  // 写入
+//   EXPECT_EQ(access_private_field::MyClassm_count(*obj), 42);
+
+// ==================== Private 访问模式结束 ====================
 
 // ==================== Stub 模式结束 ====================

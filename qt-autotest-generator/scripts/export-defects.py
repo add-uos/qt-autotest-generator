@@ -342,17 +342,17 @@ def _render_md_table(defects_list, report_dir_rel="."):
         evidence = _truncate(d.get("evidence", ""), 60)
         suggestion = _truncate(d.get("suggestion", ""), 40)
 
-        # 用例链接到测试文件
+        # 用例链接到测试文件（从报告目录回溯到项目根）
         if test_file:
-            case_cell = f"[{case}](./{test_file})"
+            case_cell = f"[{case}]({report_dir_rel}{test_file})"
         else:
             case_cell = case
 
         # 文件:行 链接到源码
         if fpath and fline:
-            file_cell = f"[{fpath}:{fline}](./{fpath}#L{fline})"
+            file_cell = f"[{fpath}:{fline}]({report_dir_rel}{fpath}#L{fline})"
         elif fpath:
-            file_cell = f"[{fpath}](./{fpath})"
+            file_cell = f"[{fpath}]({report_dir_rel}{fpath})"
         else:
             file_cell = fpath
 
@@ -411,8 +411,25 @@ def cmd_export(args):
     fixed_count = len(fixed_list)
 
     # ── 3. 生成 Markdown ──
+    # 项目名：取知识图谱节点路径最后一段
+    if project and project.startswith("home-uos-service-codebase-repos-"):
+        project_display = project[len("home-uos-service-codebase-repos-"):]
+    elif project:
+        project_display = Path(project).name if "/" in project else project
+    else:
+        project_display = "(unknown)"
+
+    # 报告目录相对项目根的深度，用于修正链接
+    project_dir = Path(args.project_dir).resolve() if args.project_dir else Path(".").resolve()
+    try:
+        rel = report_dir.resolve().relative_to(project_dir)
+        depth = len(rel.parts)  # e.g. build-autotests → depth=1
+        report_dir_rel = "../" * depth
+    except ValueError:
+        report_dir_rel = ""
+
     md_lines = []
-    md_lines.append(f"# 源码缺陷清单 · {project}")
+    md_lines.append(f"# 源码缺陷清单 · {project_display}")
     md_lines.append("")
     md_lines.append(f"> 基线: {base_sha} · 生成: {timestamp}")
     md_lines.append("")
@@ -440,7 +457,7 @@ def cmd_export(args):
     if high_open:
         md_lines.append("| 类 | 方法 | 用例 | 文件:行 | 类型 | 证据 | 建议 |")
         md_lines.append("|----|------|------|---------|------|------|------|")
-        md_lines.append(_render_md_table(high_open))
+        md_lines.append(_render_md_table(high_open, report_dir_rel))
     else:
         md_lines.append("无")
     md_lines.append("")
@@ -451,7 +468,18 @@ def cmd_export(args):
     if mid_open:
         md_lines.append("| 类 | 方法 | 用例 | 文件:行 | 类型 | 证据 | 建议 |")
         md_lines.append("|----|------|------|---------|------|------|------|")
-        md_lines.append(_render_md_table(mid_open))
+        md_lines.append(_render_md_table(mid_open, report_dir_rel))
+    else:
+        md_lines.append("无")
+    md_lines.append("")
+
+    # 低危
+    md_lines.append(f"## 🟢 低危 ({len(low_open)})")
+    md_lines.append("")
+    if low_open:
+        md_lines.append("| 类 | 方法 | 用例 | 文件:行 | 类型 | 证据 | 建议 |")
+        md_lines.append("|----|------|------|---------|------|------|------|")
+        md_lines.append(_render_md_table(low_open, report_dir_rel))
     else:
         md_lines.append("无")
     md_lines.append("")
@@ -548,8 +576,9 @@ def main():
 
     # ── export ──
     p_ex = sub.add_parser("export", help="批量导出 defects.json + defects-summary.md")
-    p_ex.add_argument("--defects", required=True, help=".ut-defects.json 路径")
-    p_ex.add_argument("--report-dir", required=True, help="报告输出目录")
+    p_ex.add_argument("--project-dir", default=None, help="项目根目录（用于解析相对路径）")
+    p_ex.add_argument("--defects", "--defects-file", required=True, help=".ut-defects.json 路径（--defects-file 为向后兼容别名）")
+    p_ex.add_argument("--report-dir", "--output-dir", required=True, help="报告输出目录（--output-dir 为向后兼容别名）")
     p_ex.add_argument("--inventory", default=None, help=".ut-inventory.json 路径（预留）")
 
     args = ap.parse_args()

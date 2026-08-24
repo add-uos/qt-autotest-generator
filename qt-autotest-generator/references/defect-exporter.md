@@ -21,9 +21,8 @@
 
 ```bash
 python3 ${SKILL_DIR}/scripts/export-defects.py export \
-  --project-dir ${PROJECT_PATH} \
-  --defects-file {test_dir}/.ut-defects.json \
-  --output-dir ${REPORT_DIR} \
+  --defects {test_dir}/.ut-defects.json \
+  --report-dir ${REPORT_DIR} \
   [--inventory {test_dir}/.ut-inventory.json]
 ```
 
@@ -31,10 +30,12 @@ python3 ${SKILL_DIR}/scripts/export-defects.py export \
 
 | 参数 | 必选 | 默认值 | 说明 |
 |------|------|--------|------|
-| `--project-dir` | ✓ | — | 项目根目录 |
-| `--defects-file` | | `{test_dir}/.ut-defects.json` | 缺陷记录本地真相源路径 |
-| `--output-dir` | | `build-ut` | 报告输出目录名（相对项目根） |
-| `--inventory` | | 自动探测 | `.ut-inventory.json` 路径，用于补 `method_level` / `severity` |
+| `--defects` | ✓ | — | 缺陷记录本地真相源路径（`.ut-defects.json`） |
+| `--report-dir` | ✓ | — | 报告输出目录 |
+| `--inventory` | | `None`（预留） | `.ut-inventory.json` 路径，用于补 `method_level` / `severity`（当前未生效，预留接口） |
+| `--project-dir` | | `None` | 项目根目录。指定后：(1) Markdown 链接自动加 `../` 前缀回溯到项目根（如 `../src/foo.cpp`）；(2) 项目名从知识图谱节点 ID 剥离前缀（如 `home-uos-service-codebase-repos-deepin-picker` → `deepin-picker`）。不指定时链接用 `./` 前缀，项目名原样输出 |
+| `--defects-file` | | — | `--defects` 的别名（向后兼容） |
+| `--output-dir` | | — | `--report-dir` 的别名（向后兼容） |
 
 ## 工作步骤
 
@@ -58,8 +59,8 @@ python3 ${SKILL_DIR}/scripts/export-defects.py export \
 
 调用 `export` 子命令，产出两个文件：
 
-- `{output_dir}/defects.json` — 机器读快照（完整缺陷数组 + 统计摘要）
-- `{output_dir}/defects-summary.md` — 人读标红清单（Markdown 表格）
+- `{report_dir}/defects.json` — 机器读快照（完整缺陷数组 + 统计摘要）
+- `{report_dir}/defects-summary.md` — 人读标红清单（Markdown 表格）
 
 ### 4. 打印统计摘要
 

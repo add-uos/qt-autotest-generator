@@ -24,8 +24,11 @@ python3 ${SKILL_DIR}/scripts/collect-coverage-report.py \
   --build-dir build-ut \
   --test-target build-ut/tests/${test_binary} \
   --report-dir build-ut \
-  --inventory ${test_dir}/.ut-inventory.json
+  --inventory ${test_dir}/.ut-inventory.json \
+  --timeout 300
 ```
+
+> 多目标项目可改用 `--test-targets build-ut/tests/test_a,build-ut/tests/test_b` 一次采集多个 gtest 二进制的覆盖率。
 
 **参数说明**：
 
@@ -33,12 +36,14 @@ python3 ${SKILL_DIR}/scripts/collect-coverage-report.py \
 |------|------|--------|------|
 | `project_dir` | ✓ | — | 项目根目录 |
 | `--build-dir` | | 自动探测 | 构建目录名（相对项目根），自动探测 `build-ut` / `build-autotests` / `build` |
-| `--test-target` | | 自动探测 | gtest 可执行文件路径（相对项目根），自动探测 `build*/tests/*test*` |
+| `--test-target` | | 自动探测 | 单个 gtest 可执行文件路径（相对 build-dir），默认自动探测 |
 | `--report-dir` | | = build-dir | 报告输出目录名（相对项目根） |
 | `--inventory` | | 自动探测 | `.ut-inventory.json` 路径，自动探测 `autotests/.ut-inventory.json` 或 `tests/.ut-inventory.json` |
 | `--skip-build` | | false | 跳过编译，直接运行测试采集覆盖率 |
 | `--build-type` | | Debug | CMAKE_BUILD_TYPE（需 Debug 以启用覆盖率插桩） |
 | `--cmake-extra` | | [] | 额外传给 cmake 的参数 |
+| `--test-targets` | | None | 多个 gtest 可执行文件，逗号分隔（相对 build-dir 或绝对路径） |
+| `--timeout` | | 300 | 单个测试目标的超时秒数 |
 
 **最简用法**（自动探测所有路径）：
 

@@ -9,6 +9,7 @@
   "version": 1,
   "project": "home-user-project-name",
   "base_sha": "abc1234",
+  "qt_version": "6",
   "gate_thresholds": {
     "high": { "line": 90, "branch": 80, "function": 100 },
     "mid": { "line": 60, "branch": 0, "function": 100 },
@@ -91,6 +92,7 @@
 | `version` | int | Schema 版本，当前 1 |
 | `project` | string | 图谱中的项目标识 |
 | `base_sha` | string | 生成时的 Git base SHA（对账用） |
+| `qt_version` | string \| null | Qt 目标版本（如 `"5"` / `"6"` / `"6.8"`），Mode 1 建表时由 framework-builder 检测写入；null 表示未检测 |
 | `gate_thresholds` | object | 三级覆盖率门禁阈值 |
 | `scope_rules` | array | 文件模式规则，每条 `{pattern, scope, reason?}`：`scope` 为 `"exempt"`/`"normal"`；`reason` 可选，供人读 |
 | `classes` | array | 类级画像：**只列 GUI 类**（`is_gui=true`），不在列表中的类隐含 `is_gui=false` |
@@ -124,7 +126,7 @@
 > Mode 2 匹配时用 `name`（短名）与 `methods[].class_qn` 比对，不用 `qualified_name`（全限定名格式不同）。
 
 > `is_gui` 是**环境约束**（怎么测不死），与 `methods[].level` 的**重要性分级**（测多严）正交：
-> GUI 类决定 QCoreApplication、不直接实例化、CMake 链 Widgets 三处特殊处理，避免 X11/Wayland 下 segfault。
+> GUI 类决定 QApplication（+QT_QPA_PLATFORM=offscreen）、不直接实例化、CMake 链 Widgets 三处特殊处理，避免 X11/Wayland 下 segfault。
 
 ### methods 条目
 

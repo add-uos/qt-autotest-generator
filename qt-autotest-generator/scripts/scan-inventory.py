@@ -211,7 +211,8 @@ def load_mcp_dump(path: str) -> dict:
 
 def build_inventory(mcp_data: dict, project_name: str, base_sha: str,
                     gate_thresholds: dict | None = None,
-                    project_root: str = "") -> dict:
+                    project_root: str = "",
+                    qt_version: str | None = None) -> dict:
     """Build .ut-inventory.json from pre-fetched MCP data.
 
     Args:
@@ -525,6 +526,7 @@ def build_inventory(mcp_data: dict, project_name: str, base_sha: str,
         "project": project_name,
         "project_root": project_root,
         "base_sha": base_sha,
+        "qt_version": qt_version,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "scan_stats": stats,
         "gate_thresholds": gate_thresholds if gate_thresholds is not None else DEFAULT_GATE_THRESHOLDS,
@@ -638,6 +640,7 @@ def main():
     parser.add_argument("--output", required=True, help="输出 JSON 路径")
     parser.add_argument("--mcp-dump", help="预采集的 MCP 数据 JSON 文件")
     parser.add_argument("--base-sha", default="unknown", help="Git base SHA")
+    parser.add_argument("--qt-version", default=None, help="Qt 目标版本 (5/6/6.8)")
     parser.add_argument("--summary", action="store_true", help="同时输出 Markdown 摘要")
     args = parser.parse_args()
 
@@ -651,7 +654,8 @@ def main():
     inventory = build_inventory(mcp_data, args.project, args.base_sha,
                                 project_root=str(Path(args.output).resolve().parent.parent)
                                 if Path(args.output).resolve().parent.name == 'autotests'
-                                else str(Path(args.output).resolve().parent))
+                                else str(Path(args.output).resolve().parent),
+                                qt_version=args.qt_version)
 
     # 写 JSON
     with open(args.output, 'w', encoding='utf-8') as f:

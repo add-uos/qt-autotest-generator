@@ -237,4 +237,5 @@ Mode 2 的 MCP 查询集中在依赖追踪和测试代码生成阶段。**被测
 - 单类失败不阻塞其他类
 - 每类通过后必须更新 `.ut-inventory.json` 的 `usecase_count`
 - 迭代上限 3 轮
-- 只 commit 不 push
+- 不跳过 GUI 特殊处理（GUI 类用 `QApplication` + `QT_QPA_PLATFORM=offscreen`，不直接实例化）
+- VADDR 宏禁止用于 Qt 内置类方法（重载歧义导致编译错误），Qt 类一律用 static_cast 消歧（Iron Law #13）

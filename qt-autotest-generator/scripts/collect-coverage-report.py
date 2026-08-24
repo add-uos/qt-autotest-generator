@@ -62,20 +62,38 @@ def run_capture(cmd, **kw):
 
 def find_test_target(build_dir):
     """Find the gtest binary under build_dir (common patterns)."""
-    candidates = list(Path(build_dir).glob("tests/*test*"))
-    candidates += list(Path(build_dir).glob("autotests/*test*"))
-    # Also look for a single test binary directly
+    targets = find_test_targets(build_dir)
+    return targets[0] if targets else None
+
+
+def find_test_targets(build_dir):
+    """Find ALL gtest executables under build_dir (common patterns).
+
+    Returns a sorted list of absolute paths to executable test binaries.
+    """
+    seen = set()
+    candidates = []
+
+    def _add(p):
+        p = Path(p).resolve()
+        if p not in seen and p.is_file() and os.access(str(p), os.X_OK):
+            seen.add(p)
+            candidates.append(str(p))
+
+    # Common directory patterns
+    for pattern in ("tests/*test*", "autotests/*test*"):
+        for p in Path(build_dir).glob(pattern):
+            _add(p)
+
+    # Recursive: *-test executables
     for p in sorted(Path(build_dir).rglob("*-test")):
-        if p.is_file() and os.access(p, os.X_OK):
-            candidates.append(p)
+        _add(p)
+
+    # Recursive: test_* executables
     for p in sorted(Path(build_dir).rglob("test_*")):
-        if p.is_file() and os.access(p, os.X_OK):
-            candidates.append(p)
-    # Filter: executable, not directory
-    candidates = [c for c in candidates if c.is_file() and os.access(c, os.X_OK)]
-    if candidates:
-        return str(candidates[0])
-    return None
+        _add(p)
+
+    return sorted(candidates)
 
 
 def parse_gtest_xml(xml_path):
@@ -161,7 +179,11 @@ def main():
     ap.add_argument("--build-dir", default=None,
                     help="构建目录名（相对项目根），默认自动探测 build-ut / build-autotests / build")
     ap.add_argument("--test-target", default=None,
-                    help="gtest 可执行文件路径（相对 build-dir），默认自动探测")
+                    help="gtest 可执行文件路径（相对 build-dir），默认自动探测（单个）")
+    ap.add_argument("--test-targets", default=None,
+                    help="多个 gtest 可执行文件，逗号分隔（相对 build-dir 或绝对路径）")
+    ap.add_argument("--timeout", type=int, default=300,
+                    help="单个测试目标的超时秒数（默认 300）")
     ap.add_argument("--report-dir", default=None,
                     help="报告输出目录名（相对项目根），默认与 build-dir 相同")
     ap.add_argument("--inventory", default=None,
@@ -199,22 +221,43 @@ def main():
                 inventory_path = str(project / candidate)
                 break
 
-    test_target = args.test_target
-    if not test_target:
-        found = find_test_target(str(build_dir))
-        if found:
-            test_target = found
-        else:
-            ap.error(f"未找到 gtest 可执行文件于 {build_dir}，请用 --test-target 指定")
+    # ── 确定测试目标列表 ──
+    test_targets_abs = []  # list of (abs_path, name)
 
-    target_name = Path(test_target).name
-    # Resolve: if not absolute, treat as relative to project root
-    if not Path(test_target).is_absolute():
-        test_target_abs = str(project / test_target)
+    if args.test_targets:
+        # --test-targets (plural, comma-separated) takes precedence
+        for t in args.test_targets.split(","):
+            t = t.strip()
+            if not t:
+                continue
+            if not Path(t).is_absolute():
+                t_abs = str(project / t)
+            else:
+                t_abs = t
+            if not os.path.isfile(t_abs):
+                ap.error(f"测试目标不存在: {t_abs}")
+            test_targets_abs.append((t_abs, Path(t_abs).name))
+    elif args.test_target:
+        # --test-target (singular, backward compat)
+        t = args.test_target
+        if not Path(t).is_absolute():
+            t_abs = str(project / t)
+        else:
+            t_abs = t
+        if not os.path.isfile(t_abs):
+            ap.error(f"测试目标不存在: {t_abs}")
+        test_targets_abs.append((t_abs, Path(t_abs).name))
     else:
-        test_target_abs = test_target
-    if not os.path.isfile(test_target_abs):
-        ap.error(f"测试目标不存在: {test_target_abs}")
+        # Auto-detect ALL test targets
+        found = find_test_targets(str(build_dir))
+        if not found:
+            ap.error(f"未找到 gtest 可执行文件于 {build_dir}，请用 --test-target 或 --test-targets 指定")
+        for f in found:
+            test_targets_abs.append((str(Path(f).resolve()), Path(f).name))
+
+    # For backward compat / single-target display
+    target_name = test_targets_abs[0][1]
+    is_multi = len(test_targets_abs) > 1
 
     print(f"\n{'='*60}")
     print(f"Mode 3 · 覆盖率采集与汇总")
@@ -222,7 +265,11 @@ def main():
     print(f"  项目:      {project}")
     print(f"  构建目录:  {build_dir}")
     print(f"  报告目录:  {report_dir}")
-    print(f"  测试目标:  {test_target_abs}")
+    if is_multi:
+        names = ", ".join(n for _, n in test_targets_abs)
+        print(f"  测试目标:  {names}  ({len(test_targets_abs)} 个)")
+    else:
+        print(f"  测试目标:  {test_targets_abs[0][0]}")
     print(f"  inventory: {inventory_path or '(无)'}")
 
     # ── Step 1: 编译 ──
@@ -240,21 +287,26 @@ def main():
         print(f"\n── Step 1: 跳过编译 (--skip-build) ──")
 
     # ── Step 2: 运行测试 + gtest XML ──
-    print(f"\n── Step 2: 运行测试 ──")
+    print(f"\n── Step 2: 运行测试 ({len(test_targets_abs)} 个目标) ──")
     xml_dir = report_dir / "report"
     xml_dir.mkdir(parents=True, exist_ok=True)
-    xml_path = xml_dir / f"report_{target_name}.xml"
 
     env = os.environ.copy()
     env["ASAN_OPTIONS"] = env.get("ASAN_OPTIONS", "detect_leaks=1")
+    env["QT_QPA_PLATFORM"] = env.get("QT_QPA_PLATFORM", "offscreen")
 
-    p = run_capture(
-        [test_target_abs, f"--gtest_output=xml:{xml_path}"],
-        timeout=300, env=env,
-    )
-    test_exit_code = p.returncode
-    if test_exit_code != 0:
-        print(f"  ⚠ 测试退出码 {test_exit_code}（部分用例失败）")
+    worst_exit_code = 0
+    for t_abs, t_name in test_targets_abs:
+        xml_path = xml_dir / f"report_{t_name}.xml"
+        print(f"  运行 {t_name} ...")
+        p = run_capture(
+            [t_abs, f"--gtest_output=xml:{xml_path}"],
+            timeout=args.timeout, env=env,
+        )
+        if p.returncode != 0:
+            print(f"  ⚠ {t_name} 退出码 {p.returncode}（部分用例失败）")
+            worst_exit_code = max(worst_exit_code, p.returncode)
+    test_exit_code = worst_exit_code
 
     # ── Step 3: lcov 采集 ──
     print(f"\n── Step 3: lcov 采集 ──")
@@ -315,10 +367,12 @@ def main():
     lcov_data = parse_lcov_summary(str(coverage_info))
 
     # 6c. 组装
+    target_names = [n for _, n in test_targets_abs]
     summary = {
         "project": project.name,
         "build_dir": build_dir_name,
-        "test_target": target_name,
+        "test_target": target_names[0],  # backward compat alias
+        "test_targets": target_names,
         "test_cases": {
             "total": total,
             "passed": passed,
@@ -341,10 +395,8 @@ def main():
     with open(summary_path, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2, ensure_ascii=False)
 
-    print(f"\n{'='*60}")
-    print(f"✅ 完成! 报告已写入 {report_dir}")
-    print(f"{'='*60}")
-    print(f"  gtest XML:     {xml_path}")
+    xml_files = sorted(glob.glob(str(xml_dir / "*.xml")))
+    print(f"\n  gtest XML ({len(xml_files)} 文件): {xml_dir}")
     print(f"  lcov HTML:     {cov_html}")
     print(f"  汇总 JSON:     {summary_path}")
     if tiered_data:
@@ -352,7 +404,9 @@ def main():
 
     # Print summary
     tc = summary["test_cases"]
-    print(f"\n  用例: {tc['total']} 总 / {tc['passed']} 通过 / {tc['failed']} 失败")
+    if is_multi:
+        print(f"\n  目标 ({len(test_targets_abs)}): {', '.join(target_names)}")
+    print(f"  用例: {tc['total']} 总 / {tc['passed']} 通过 / {tc['failed']} 失败")
     if "line_coverage" in summary:
         print(f"  行覆盖率:     {summary['line_coverage']['coverage']}")
     if "function_coverage" in summary:

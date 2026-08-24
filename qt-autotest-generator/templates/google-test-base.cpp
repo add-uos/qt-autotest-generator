@@ -21,7 +21,8 @@
 // 10. stub_ext vs gMock 选择正确: [ ]
 
 #include <gtest/gtest.h>
-// #include <QCoreApplication>  // GUI 类需要此 include，由生成流程按需取消注释
+// #include <QApplication>       // GUI 类需要此 include，由生成流程按需取消注释
+// #include <QCoreApplication>    // 非 GUI 类需要此 include，由生成流程按需取消注释
 // #include <gmock/gmock.h>     // gMock 需要此 include，由生成流程按需追加
 #include "stubext.h"
 #include "{header_file}"
@@ -33,7 +34,7 @@
 class {ClassName}Test : public ::testing::Test {
 protected:
     static void SetUpTestSuite() {
-        // GUI 类用 QCoreApplication，不用 QApplication（避免 X11/Wayland 崩溃）
+        // GUI 类用 QApplication（QWidget 子类需要 QApplication），配合 QT_QPA_PLATFORM=offscreen 避免 X11/Wayland 崩溃
         // 非 GUI 类此函数可省略，由生成流程按需删除
         {SetUpTestSuite}
     }
