@@ -320,13 +320,6 @@ def cmd_mark_fixed(args):
 
 # ───────────────────────── 子命令: export ─────────────────────────
 
-def _truncate(text, max_len):
-    """截断文本."""
-    if not text:
-        return ""
-    s = str(text)
-    return s if len(s) <= max_len else s[:max_len] + "…"
-
 
 def _render_md_table(defects_list, report_dir_rel="."):
     """渲染缺陷列表为 Markdown 表格行."""
@@ -339,8 +332,8 @@ def _render_md_table(defects_list, report_dir_rel="."):
         fpath = d.get("file_path", "")
         fline = d.get("file_line", "")
         cat = d.get("type_category", "")
-        evidence = _truncate(d.get("evidence", ""), 60)
-        suggestion = _truncate(d.get("suggestion", ""), 40)
+        evidence = d.get("evidence", "")
+        suggestion = d.get("suggestion", "")
 
         # 用例链接到测试文件（从报告目录回溯到项目根）
         if test_file:

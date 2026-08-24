@@ -138,35 +138,6 @@ class TestArchiveOnShaChange:
         assert "v2" in data["history"]
 
 
-# ── _truncate ─────────────────────────────────────────────────────────
-
-class TestTruncate:
-    def test_normal_truncate(self, export_defects):
-        assert export_defects._truncate("hello world", 5) == "hello…"
-
-    def test_short_text_unchanged(self, export_defects):
-        assert export_defects._truncate("hi", 10) == "hi"
-
-    def test_exact_length(self, export_defects):
-        assert export_defects._truncate("abc", 3) == "abc"
-
-    def test_empty_string(self, export_defects):
-        assert export_defects._truncate("", 10) == ""
-
-    def test_none_returns_empty(self, export_defects):
-        assert export_defects._truncate(None, 10) == ""
-
-    def test_zero_max_len(self, export_defects):
-        assert export_defects._truncate("text", 0) == "…"
-
-    def test_non_string_input(self, export_defects):
-        assert export_defects._truncate(123, 5) == "123"
-
-    def test_negative_max_len(self, export_defects):
-        """max_len<0 时 s[:max_len] 切片仍有效（Python 负索引），追加省略号。"""
-        assert export_defects._truncate("abc", -1) == "ab…"
-
-
 # ── _render_md_table / _render_fixed_table ────────────────────────────
 
 class TestRenderMdTable:
@@ -186,10 +157,12 @@ class TestRenderMdTable:
         out = export_defects._render_md_table(defects)
         assert isinstance(out, str)
 
-    def test_long_evidence_truncated(self, export_defects):
+    def test_long_evidence_full(self, export_defects):
+        """evidence 不再截断，保留原文."""
         defects = [{"evidence": "x" * 100}]
         out = export_defects._render_md_table(defects)
-        assert "…" in out
+        assert "x" * 100 in out
+        assert "…" not in out
 
 
 class TestRenderFixedTable:
