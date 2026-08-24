@@ -179,6 +179,41 @@ def _is_unary_op(line, idx, op):
     return False
 
 
+# 指针声明启发式：C++ 类型关键字 + Qt 常见大写开头的类型
+_CPP_TYPE_KEYWORDS = frozenset({
+    'int', 'char', 'void', 'bool', 'float', 'double', 'long', 'short',
+    'unsigned', 'signed', 'const', 'static', 'volatile', 'auto',
+    'wchar_t', 'size_t', 'ssize_t', 'int8_t', 'int16_t', 'int32_t', 'int64_t',
+    'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t',
+})
+
+
+def _is_pointer_decl(line, op_idx):
+    """检查 op_idx 处的 * 是否为指针声明或解引用 (非算术乘法)."""
+    before = line[:op_idx].rstrip()
+    after_char = line[op_idx + 1:op_idx + 2] if op_idx + 1 < len(line) else ''
+
+    # * 后面紧跟标识符/下划线/多级* → 指针声明
+    if after_char and (after_char.isalpha() or after_char == '_' or after_char == '*'):
+        last_word = re.search(r'\b(\w+)\s*$', before)
+        if last_word:
+            word = last_word.group(1)
+            # 类型关键字 或 大写开头（如 DBusNotify, QWidget）
+            if word in _CPP_TYPE_KEYWORDS or (word[0].isupper() and not word.isupper()):
+                return True
+            # 单字母类型: T, U 等模板参数
+            if len(word) == 1 and word.isupper():
+                return True
+
+    # 解引用: *expr — 前面是 ) 或标识符且不是类型
+    # 但难以与乘法区分 (a * b), 只跳过明确模式
+    # 模式: (Type *) 强转 / new Type *
+    if before.endswith(')') or 'new ' in before:
+        return True
+
+    return False
+
+
 def generate_aor_mutants(lines, func_start, func_end):
     mutants = []
     for i in range(func_start, func_end):
@@ -204,6 +239,9 @@ def generate_aor_mutants(lines, func_start, func_end):
                     continue
                 # 跳过指针成员访问 -> (变异 - 会产生 +> 无效代码)
                 if op == '-' and after == '>':
+                    continue
+                # 跳过指针声明/解引用 * (Bug #5)
+                if op == '*' and _is_pointer_decl(line, op_idx):
                     continue
             for repl in replacements:
                 new_line = line.replace(op, repl, 1)
@@ -282,15 +320,22 @@ def generate_lor_mutants(lines, func_start, func_end):
 
 def generate_crc_mutants(lines, func_start, func_end):
     mutants = []
-    int_pattern = re.compile(r'\b(\d+)\b')
+    # Bug #11: 识别一元负号，-N 作为整体常量
+    int_pattern = re.compile(r'(?<!\w)-?(\d+)(?!\w)')
     for i in range(func_start, func_end):
         line = lines[i]
         for m in int_pattern.finditer(line):
-            val = int(m.group(1))
+            full_match = m.group(0)   # 可能含前导 -
+            val = int(full_match)
             pos = m.start()
             prefix = line[:pos]
             if prefix.count('"') % 2 == 1:
                 continue
+            # 跳过负号是二元减法 (如 a - 5) 而非一元负号 (如 -5)
+            if full_match.startswith('-') and prefix.rstrip():
+                last_char = prefix.rstrip()[-1]
+                if last_char not in '([{,;=<>!&|?:*/%+-~^':
+                    continue  # 二元减法，跳过
             if val == 0:
                 replacements = [1, -1]
             elif val == 1:
@@ -347,7 +392,7 @@ def generate_rvf_mutants(lines, func_start, func_end):
 # 函数定位 (正则; 生产环境可换 MCP get_code_snippet)
 # ═══════════════════════════════════════════════════════════════
 
-def find_function_range(lines, function_name):
+def find_function_range(lines, function_name, source_file=""):
     """在源码中找到函数的行范围 (0-indexed, 半开区间 [start, end))"""
     short_name = function_name.split('::')[-1] if '::' in function_name else function_name
     class_name = function_name.split('::')[0] if '::' in function_name else None
@@ -361,8 +406,17 @@ def find_function_range(lines, function_name):
         if not in_func and re.search(r'\b' + re.escape(short_name) + r'\s*\(', line):
             # 注意: \bstringIsDigit\s*\( 不会匹配 stringIsDigitPro( 因为 Pro 在中间
             if class_name and class_name not in line and i > 0:
-                if class_name not in lines[max(0, i - 1)]:
-                    continue
+                # Bug #6: 放宽 class_name 检查 — 搜索多行上下文 (含 .h 内联方法)
+                context_lines = 10
+                found = False
+                for j in range(max(0, i - context_lines), i):
+                    if class_name in lines[j]:
+                        found = True
+                        break
+                if not found:
+                    # .h 文件中的内联方法: 跳过 class_name 检查
+                    if not source_file.endswith('.h'):
+                        continue
             in_func = True
             func_start = i
             brace_depth = 0
@@ -439,13 +493,27 @@ def compile_and_test(source_file, mutant_lines, build_dir, test_target,
         if rc != 0:
             return 'compile_failed', stderr[-500:] if stderr else stdout[-500:]
 
-        # 4. 定位测试二进制 (cmake --build 输出在 build_dir/tests/ 下)
-        test_exe = os.path.join(build_dir, 'tests', test_target)
-        if not os.path.exists(test_exe):
-            # 备选: 可能在 build_dir 直接下
-            test_exe = os.path.join(build_dir, test_target)
-        if not os.path.exists(test_exe):
-            return 'compile_failed', 'Test executable not found: {}'.format(test_exe)
+        # 4. 定位测试二进制 (多路径搜索 + 递归兜底)
+        test_exe = ''
+        search_paths = [
+            os.path.join(build_dir, 'tests', test_target),
+            os.path.join(build_dir, 'autotests', 'src', test_target),
+            os.path.join(build_dir, test_target),
+        ]
+        for candidate in search_paths:
+            if os.path.exists(candidate):
+                test_exe = os.path.abspath(candidate)
+                break
+        if not test_exe:
+            # 递归搜索
+            for root, dirs, files in os.walk(build_dir):
+                if test_target in files:
+                    candidate = os.path.join(root, test_target)
+                    if os.access(candidate, os.X_OK):
+                        test_exe = os.path.abspath(candidate)
+                        break
+        if not test_exe:
+            return 'test_not_found', 'Test executable not found: {} in {}'.format(test_target, build_dir)
         # 转绝对路径, 避免 subprocess cwd=build_dir 导致相对路径叠加
         test_exe = os.path.abspath(test_exe)
 
@@ -508,8 +576,32 @@ def run_mutation_testing(source_file, function_name, func_start, func_end,
             unique_mutants.append(m)
 
     if len(unique_mutants) > max_mutants:
-        print("  变异体 {} 个, 截断为 {} 个".format(len(unique_mutants), max_mutants))
-        unique_mutants = unique_mutants[:max_mutants]
+        # Bug #8: 分层截断 (stratified) — 按算子类型均匀分配配额
+        by_op = defaultdict(list)
+        for m in unique_mutants:
+            by_op[m['operator']].append(m)
+        operator_order = ['AOR', 'ROR', 'LOR', 'CRC', 'RVF']
+        per_op_quota = max(1, max_mutants // len(operator_order))
+        sampled = []
+        remaining_quota = max_mutants
+        for op in operator_order:
+            if op in by_op and remaining_quota > 0:
+                quota = min(per_op_quota, remaining_quota, len(by_op[op]))
+                sampled.extend(by_op[op][:quota])
+                remaining_quota -= quota
+        # 余量分配给剩余算子
+        if remaining_quota > 0:
+            existing_ids = {m['id'] for m in sampled}
+            for op in operator_order:
+                if op in by_op:
+                    for m in by_op[op]:
+                        if m['id'] not in existing_ids and remaining_quota > 0:
+                            sampled.append(m)
+                            existing_ids.add(m['id'])
+                            remaining_quota -= 1
+        unique_mutants = sampled
+        print("  变异体 {} 个, 截断为 {} 个 (分层采样)".format(
+            len(seen_ids), max_mutants))
     else:
         print("  变异体: {} 个".format(len(unique_mutants)))
 
@@ -523,6 +615,7 @@ def run_mutation_testing(source_file, function_name, func_start, func_end,
     killed = 0
     survived = 0
     compile_failed = 0
+    test_not_found = 0
 
     for i, mutant in enumerate(unique_mutants):
         mutated_lines = apply_mutation(lines, mutant)
@@ -546,6 +639,9 @@ def run_mutation_testing(source_file, function_name, func_start, func_end,
         elif status == 'survived':
             survived += 1
             marker = 'SURVIVED'
+        elif status == 'test_not_found':
+            test_not_found += 1
+            marker = 'NOTFOUND'
         else:
             compile_failed += 1
             marker = 'CFAIL  '
@@ -556,8 +652,8 @@ def run_mutation_testing(source_file, function_name, func_start, func_end,
     total_valid = killed + survived
     score = round(killed / total_valid * 100, 1) if total_valid > 0 else 0
 
-    print("\n  结果: killed={}, survived={}, compile_failed={}".format(
-        killed, survived, compile_failed))
+    print("\n  结果: killed={}, survived={}, compile_failed={}, test_not_found={}".format(
+        killed, survived, compile_failed, test_not_found))
     print("  变异得分: {}/{} = {:.1f}% (阈值 {:.0f}%)".format(
         killed, total_valid, score, THRESHOLD))
     if total_valid > 0:
@@ -574,6 +670,7 @@ def run_mutation_testing(source_file, function_name, func_start, func_end,
         'killed': killed,
         'survived': survived,
         'compile_failed': compile_failed,
+        'test_not_found': test_not_found,
         'mutation_score': score,
         'threshold': THRESHOLD,
         'details': results,
@@ -599,6 +696,7 @@ def generate_report(results, output_path, project=None, base_sha=None, config=No
     lines.append("| 变异体总数 | {} |".format(sum(r['total_mutants'] for r in results)))
     lines.append("| 编译成功 | {} |".format(total_killed + total_survived))
     lines.append("| 编译失败 | {} |".format(sum(r['compile_failed'] for r in results)))
+    lines.append("| 测试目标未找到 | {} |".format(sum(r.get('test_not_found', 0) for r in results)))
     lines.append("| 杀死 (Killed) | {} |".format(total_killed))
     lines.append("| 存活 (Survived) | {} |".format(total_survived))
     lines.append("| **变异得分** | **{:.1f}%** (阈值 {:.0f}%) |".format(overall_score, THRESHOLD))
@@ -656,7 +754,7 @@ def generate_report(results, output_path, project=None, base_sha=None, config=No
     # 按算子统计
     lines.append("## 按算子统计")
     lines.append("")
-    by_op = defaultdict(lambda: {'killed': 0, 'survived': 0, 'compile_failed': 0})
+    by_op = defaultdict(lambda: {'killed': 0, 'survived': 0, 'compile_failed': 0, 'test_not_found': 0})
     for r in results:
         for d in r['details']:
             by_op[d['operator']][d['status']] += 1
@@ -694,6 +792,7 @@ def generate_report(results, output_path, project=None, base_sha=None, config=No
             "killed": total_killed,
             "survived": total_survived,
             "compile_failed": sum(r['compile_failed'] for r in results),
+            "test_not_found": sum(r.get('test_not_found', 0) for r in results),
             "mutation_score": overall_score,
             "verdict": "PASS" if overall_score >= THRESHOLD else "BELOW_THRESHOLD"
         },
@@ -735,8 +834,8 @@ def main():
                         help='inventory 模式: 对所有 high 级 testable 方法跑变异')
     parser.add_argument('--build-dir', required=True,
                         help='构建目录 (需已 cmake 配置)')
-    parser.add_argument('--test-target', required=True,
-                        help='GTest 测试 target 名 (如 deepin-calculator-test)')
+    parser.add_argument('--test-target', default=None,
+                        help='GTest 测试 target 名 (如 deepin-calculator-test); inventory 模式可省略，自动推断 test_<小写类名>')
     parser.add_argument('--gtest-filter', default=None,
                         help='GTest 过滤器 (如 *stringIsDigit*), 加速只跑相关用例')
     parser.add_argument('--max-mutants', type=int, default=20,
@@ -775,7 +874,17 @@ def main():
             inv = json.load(f)
         for m in inv.get('methods', []):
             if m.get('level') == 'high' and m.get('testable'):
-                targets.append((m['file'], m['qualified_name']))
+                # Bug #1: inventory 字段名为 file_path，非 file
+                src_rel = m.get('file_path', m.get('file', ''))
+                source_abs = os.path.join(_PROJECT_DIR, src_rel) if src_rel and not os.path.isabs(src_rel) else (src_rel or '')
+                # Bug #2: qualified_name 点分隔 → Class::Method
+                qn = m.get('qualified_name', '')
+                parts = qn.split('.')
+                if len(parts) >= 2:
+                    class_method = '{}::{}'.format(parts[-2], parts[-1])
+                else:
+                    class_method = qn
+                targets.append((source_abs, class_method))
         print("[Mode 4] inventory 模式: {} 个 high 级方法".format(len(targets)))
     else:
         parser.error("需要 --source + --function (直接模式) 或 --inventory + --all-high (inventory 模式)")
@@ -800,10 +909,21 @@ def main():
             print("  跳过: 源文件不存在: {}".format(source_file))
             continue
 
+        # Bug #7: inventory 模式自动推断 test_target
+        current_test_target = args.test_target
+        if not current_test_target:
+            # 从 Class::Method 推断 test_<小写类名>
+            if '::' in func_name:
+                class_part = func_name.split('::')[0]
+                current_test_target = 'test_' + class_part[0].lower() + class_part[1:]
+            else:
+                current_test_target = args.test_target  # None → 后续会报错
+            print("  推断测试目标: {} → {}".format(func_name, current_test_target))
+
         with open(source_file) as f:
             lines = f.readlines()
 
-        func_start, func_end = find_function_range(lines, func_name)
+        func_start, func_end = find_function_range(lines, func_name, source_file)
 
         if func_start < 0 or func_end < 0:
             print("  跳过: 未找到函数 {} 在 {}".format(func_name, source_file))
@@ -811,7 +931,7 @@ def main():
 
         result = run_mutation_testing(
             source_file, func_name, func_start, func_end,
-            args.build_dir, args.test_target,
+            args.build_dir, current_test_target,
             args.gtest_filter, args.max_mutants
         )
         all_results.append(result)

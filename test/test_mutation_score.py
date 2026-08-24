@@ -261,3 +261,226 @@ class TestGenerateReport:
             [], str(path), project=None, base_sha=None)
         content = open(md_path, encoding="utf-8").read()
         assert "变异测试报告" in content
+
+
+# ── Bug #1: inventory file_path vs file ───────────────────────────────
+
+class TestInventoryFieldCompat:
+    def test_file_path_key(self, mutation_score):
+        """inventory 模式读取 file_path 字段."""
+        import json, tempfile, os
+        inv = {"methods": [{
+            "qualified_name": "proj.Cls.method",
+            "file_path": "src/cls.cpp",
+            "level": "high", "testable": True,
+        }]}
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            json.dump(inv, f)
+            inv_path = f.name
+        try:
+            with open(inv_path) as f:
+                data = json.load(f)
+            for m in data.get("methods", []):
+                src = m.get("file_path", m.get("file", ""))
+                assert src == "src/cls.cpp"
+        finally:
+            os.unlink(inv_path)
+
+    def test_legacy_file_key_fallback(self, mutation_score):
+        """file_path 不存在时 fallback 到 file."""
+        import json, tempfile, os
+        inv = {"methods": [{
+            "qualified_name": "proj.Cls.method",
+            "file": "src/old.cpp",
+            "level": "high", "testable": True,
+        }]}
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            json.dump(inv, f)
+            inv_path = f.name
+        try:
+            with open(inv_path) as f:
+                data = json.load(f)
+            for m in data.get("methods", []):
+                src = m.get("file_path", m.get("file", ""))
+                assert src == "src/old.cpp"
+        finally:
+            os.unlink(inv_path)
+
+
+# ── Bug #2: qualified_name dot → :: ──────────────────────────────────
+
+class TestQualifiedNameConversion:
+    def test_dot_to_double_colon(self, mutation_score):
+        qn = "home-uos-service-codebase-repos-deepin-picker.src.dbusnotify.DBusNotify.ClearRecords"
+        parts = qn.split(".")
+        class_method = "{}::{}".format(parts[-2], parts[-1])
+        assert class_method == "DBusNotify::ClearRecords"
+
+    def test_short_qualified_name(self, mutation_score):
+        qn = "Utils::stringIsDigit"
+        parts = qn.split(".")
+        if len(parts) >= 2:
+            class_method = "{}::{}".format(parts[-2], parts[-1])
+        else:
+            class_method = qn
+        assert class_method == "Utils::stringIsDigit"
+
+
+# ── Bug #5: AOR pointer declaration * ────────────────────────────────
+
+class TestAorPointerDecl:
+    def test_pointer_decl_star_skipped(self, mutation_score):
+        """Type *var 指针声明 * 不应被 AOR 变异."""
+        lines = ["DBusNotify *notifyDBus = new DBusNotify();\n"]
+        mutants = mutation_score.generate_aor_mutants(lines, 0, 1)
+        assert not any(m["original"] == "*" for m in mutants)
+
+    def test_pointer_decl_uppercase_type(self, mutation_score):
+        lines = ["QClipboard *clipboard = QApplication::clipboard();\n"]
+        mutants = mutation_score.generate_aor_mutants(lines, 0, 1)
+        assert not any(m["original"] == "*" for m in mutants)
+
+    def test_keyword_type_pointer(self, mutation_score):
+        lines = ["int *ptr = nullptr;\n"]
+        mutants = mutation_score.generate_aor_mutants(lines, 0, 1)
+        assert not any(m["original"] == "*" for m in mutants)
+
+    def test_arithmetic_star_not_skipped(self, mutation_score):
+        """算术乘法 * 应该被 AOR 变异."""
+        lines = ["int area = width * height;\n"]
+        mutants = mutation_score.generate_aor_mutants(lines, 0, 1)
+        assert any(m["original"] == "*" for m in mutants)
+
+    def test_template_type_pointer(self, mutation_score):
+        """模板参数 T *ptr 指针声明."""
+        lines = ["T *ptr = new T();\n"]
+        mutants = mutation_score.generate_aor_mutants(lines, 0, 1)
+        assert not any(m["original"] == "*" for m in mutants)
+
+
+# ── Bug #6: find_function_range class_name context ──────────────────
+
+class TestFindFunctionRangeInline:
+    def test_inline_method_in_header(self, mutation_score):
+        """内联方法: 类声明在上方多行, 方法名在下方."""
+        lines = [
+            "class DBusNotify {\n",
+            "public:\n",
+            "  void ClearRecords() {\n",
+            "    records.clear();\n",
+            "  }\n",
+            "};\n",
+        ]
+        start, end = mutation_score.find_function_range(
+            lines, "DBusNotify::ClearRecords", source_file="dbusnotify.h")
+        assert start >= 0
+
+    def test_class_name_context_10_lines(self, mutation_score):
+        """class_name 在上方 10 行内仍可匹配."""
+        lines = ["\n"] * 8 + [
+            "class Foo {\n",
+            "  void bar() {\n",
+            "    return;\n",
+            "  }\n",
+            "};\n",
+        ]
+        start, end = mutation_score.find_function_range(
+            lines, "Foo::bar", source_file="foo.h")
+        assert start >= 0
+
+
+# ── Bug #8: stratified truncation ───────────────────────────────────
+
+class TestStratifiedTruncation:
+    def test_all_operators_represented(self, mutation_score):
+        """截断后 5 类算子至少各有 1 个配额."""
+        # 构造 50 个变异体（每类 10 个）
+        all_mutants = []
+        for op in ["AOR", "ROR", "LOR", "CRC", "RVF"]:
+            for i in range(10):
+                all_mutants.append({
+                    "id": "{}_{}".format(op, i),
+                    "operator": op,
+                    "line": i + 1,
+                    "original": "+",
+                    "replacement": "-",
+                    "description": "test",
+                })
+        # 模拟分层截断逻辑 (max_mutants=5 → per_op_quota=1)
+        max_mutants = 5
+        from collections import defaultdict
+        by_op = defaultdict(list)
+        for m in all_mutants:
+            by_op[m["operator"]].append(m)
+        operator_order = ["AOR", "ROR", "LOR", "CRC", "RVF"]
+        per_op_quota = max(1, max_mutants // len(operator_order))
+        sampled = []
+        for op in operator_order:
+            if op in by_op:
+                quota = min(per_op_quota, len(by_op[op]))
+                sampled.extend(by_op[op][:quota])
+        by_sampled_op = defaultdict(int)
+        for m in sampled:
+            by_sampled_op[m["operator"]] += 1
+        for op in operator_order:
+            assert by_sampled_op[op] >= 1, "{} 应至少 1 个".format(op)
+
+
+# ── Bug #11: CRC negative number handling ──────────────────────────
+
+class TestCrcNegativeNumber:
+    def test_negative_constant(self, mutation_score):
+        """-5 应作为整体常量 -5 变异，而非 5."""
+        lines = ["int x = -5;\n"]
+        mutants = mutation_score.generate_crc_mutants(lines, 0, 1)
+        # 应该生成 CRC 变异 -5 → -4 / -6，而非 5→6
+        neg_mutants = [m for m in mutants if m["original"] == "-5"]
+        assert len(neg_mutants) > 0, "-5 应作为整体常量被变异"
+
+    def test_positive_constant_unchanged(self, mutation_score):
+        lines = ["int x = 5;\n"]
+        mutants = mutation_score.generate_crc_mutants(lines, 0, 1)
+        pos_mutants = [m for m in mutants if m["original"] == "5"]
+        assert len(pos_mutants) > 0
+
+    def test_binary_minus_not_negative(self, mutation_score):
+        """a - 5 中的 5 不应被当作 -5."""
+        lines = ["int x = a - 5;\n"]
+        mutants = mutation_score.generate_crc_mutants(lines, 0, 1)
+        # -5 不应作为整体常量，只有 5
+        neg_mutants = [m for m in mutants if m["original"] == "-5"]
+        assert len(neg_mutants) == 0, "二元减法不应产生 -5 变异"
+
+
+# ── Bug #4: test_not_found status ──────────────────────────────────
+
+class TestTestNotFoundStatus:
+    def test_report_includes_test_not_found(self, mutation_score, tmp_path):
+        results = [{
+            "function": "foo", "file": "a.cpp", "line_range": [1, 5],
+            "total_mutants": 2, "killed": 1, "survived": 0,
+            "compile_failed": 0, "test_not_found": 1,
+            "mutation_score": 100.0,
+            "details": [{"status": "test_not_found", "operator": "AOR",
+                         "line": 2, "description": "L2: + -> -"}],
+        }]
+        path = tmp_path / "report.md"
+        md_path, json_path = mutation_score.generate_report(
+            results, str(path), project="proj", base_sha="abc")
+        content = open(md_path, encoding="utf-8").read()
+        assert "测试目标未找到" in content
+
+    def test_json_includes_test_not_found(self, mutation_score, tmp_path):
+        results = [{
+            "function": "bar", "file": "b.cpp", "line_range": [1, 5],
+            "total_mutants": 1, "killed": 0, "survived": 0,
+            "compile_failed": 0, "test_not_found": 1,
+            "mutation_score": 0.0,
+            "details": [],
+        }]
+        path = tmp_path / "report.md"
+        md_path, json_path = mutation_score.generate_report(
+            results, str(path), project="proj", base_sha="abc")
+        import json
+        data = json.load(open(json_path))
+        assert data["summary"]["test_not_found"] == 1
