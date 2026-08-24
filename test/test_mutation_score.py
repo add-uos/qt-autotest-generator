@@ -460,7 +460,7 @@ class TestTestNotFoundStatus:
             "function": "foo", "file": "a.cpp", "line_range": [1, 5],
             "total_mutants": 2, "killed": 1, "survived": 0,
             "compile_failed": 0, "test_not_found": 1,
-            "mutation_score": 100.0,
+            "mutation_score": 100.0, "verdict": "PASS",
             "details": [{"status": "test_not_found", "operator": "AOR",
                          "line": 2, "description": "L2: + -> -"}],
         }]
@@ -475,7 +475,7 @@ class TestTestNotFoundStatus:
             "function": "bar", "file": "b.cpp", "line_range": [1, 5],
             "total_mutants": 1, "killed": 0, "survived": 0,
             "compile_failed": 0, "test_not_found": 1,
-            "mutation_score": 0.0,
+            "mutation_score": 0.0, "verdict": "NO_MUTANTS",
             "details": [],
         }]
         path = tmp_path / "report.md"
@@ -484,3 +484,126 @@ class TestTestNotFoundStatus:
         import json
         data = json.load(open(json_path))
         assert data["summary"]["test_not_found"] == 1
+        assert data["functions"][0]["test_not_found"] == 1
+
+
+# ── NEW: _is_template_bracket ────────────────────────────────────────
+
+class TestIsTemplateBracket:
+    def test_qlist_template_lt(self, mutation_score):
+        """QList<int> 的 < 是模板，不应被 ROR 变异."""
+        line = "  QList<int> list;\n"
+        idx = line.index('<')
+        assert mutation_score._is_template_bracket(line, idx, '<') is True
+
+    def test_std_vector_template_lt(self, mutation_score):
+        """std::vector<int> 的 < 是模板."""
+        line = "  std::vector<int> vec;\n"
+        idx = line.index('<')
+        assert mutation_score._is_template_bracket(line, idx, '<') is True
+
+    def test_comparison_lt_with_space(self, mutation_score):
+        """a < b (有空格) 的 < 是比较运算符."""
+        line = "  if (a < b) {\n"
+        idx = line.index('<')
+        assert mutation_score._is_template_bracket(line, idx, '<') is False
+
+    def test_comparison_gt_with_space(self, mutation_score):
+        """x > 0 的 > 是比较运算符."""
+        line = "  if (x > 0) {\n"
+        idx = line.index('>')
+        assert mutation_score._is_template_bracket(line, idx, '>') is False
+
+    def test_template_close_gt(self, mutation_score):
+        """QList<int> 的 > 是模板闭括号."""
+        line = "  QList<int> list;\n"
+        idx = line.index('>')
+        assert mutation_score._is_template_bracket(line, idx, '>') is True
+
+    def test_include_directive(self, mutation_score):
+        """#include <header> 的 < 是预处理指令."""
+        line = "#include <QWidget>\n"
+        idx = line.index('<')
+        assert mutation_score._is_template_bracket(line, idx, '<') is True
+
+    def test_static_cast_template(self, mutation_score):
+        """static_cast<int> 的 < 是模板."""
+        line = "  auto x = static_cast<int>(val);\n"
+        idx = line.index('<')
+        assert mutation_score._is_template_bracket(line, idx, '<') is True
+
+    def test_qt_namespace_comparison(self, mutation_score):
+        """Qt < 5 (版本比较) 不应被误判为模板."""
+        line = "  if (Qt < 5) {\n"
+        idx = line.index('<')
+        assert mutation_score._is_template_bracket(line, idx, '<') is False
+
+    def test_short_uppercase_var_comparison(self, mutation_score):
+        """X < Y (大写变量比较) 不应被误判为模板."""
+        line = "  if (X < Y) {\n"
+        idx = line.index('<')
+        assert mutation_score._is_template_bracket(line, idx, '<') is False
+
+    def test_set_as_variable_comparison(self, mutation_score):
+        """set < value (变量名 set 与 std::set 消歧) 不应误判."""
+        line = "  if (set < value) {\n"
+        idx = line.index('<')
+        assert mutation_score._is_template_bracket(line, idx, '<') is False
+
+    def test_non_bracket_op_returns_false(self, mutation_score):
+        """<= 和 != 不是尖括号，总是返回 False."""
+        line = "  if (a <= b) {\n"
+        idx = line.index('<')
+        assert mutation_score._is_template_bracket(line, idx, '<=') is False
+
+    def test_ror_skips_template_brackets(self, mutation_score):
+        """ROR 不应为模板 < > 生成变异体."""
+        lines = ["  QList<int> list;\n"]
+        mutants = mutation_score.generate_ror_mutants(lines, 0, 1)
+        assert len(mutants) == 0
+
+    def test_ror_produces_comparison_mutants(self, mutation_score):
+        """ROR 应为比较运算符 < > 生成变异体."""
+        lines = ["  if (a < b) {\n"]
+        mutants = mutation_score.generate_ror_mutants(lines, 0, 1)
+        assert len(mutants) > 0
+
+
+# ── NEW: _is_pointer_decl dereference detection ─────────────────────
+
+class TestPointerDereference:
+    def test_return_deref(self, mutation_score):
+        """return *ptr 解引用 * 不应被 AOR 变异."""
+        lines = ["  return *ptr;\n"]
+        mutants = mutation_score.generate_aor_mutants(lines, 0, 1)
+        assert not any(m["original"] == "*" for m in mutants)
+
+    def test_assign_deref(self, mutation_score):
+        """x = *ptr 解引用 * 不应被 AOR 变异."""
+        lines = ["  x = *ptr;\n"]
+        mutants = mutation_score.generate_aor_mutants(lines, 0, 1)
+        assert not any(m["original"] == "*" for m in mutants)
+
+    def test_delete_deref(self, mutation_score):
+        """delete *ptr 解引用 * 不应被 AOR 变异."""
+        lines = ["  delete *ptr;\n"]
+        mutants = mutation_score.generate_aor_mutants(lines, 0, 1)
+        assert not any(m["original"] == "*" for m in mutants)
+
+    def test_paren_deref(self, mutation_score):
+        """(*ptr) 解引用 * 不应被 AOR 变异."""
+        lines = ["  x = (*ptr);\n"]
+        mutants = mutation_score.generate_aor_mutants(lines, 0, 1)
+        assert not any(m["original"] == "*" for m in mutants)
+
+    def test_multiply_not_confused(self, mutation_score):
+        """a * b 乘法仍应被 AOR 变异."""
+        lines = ["  result = count * factor;\n"]
+        mutants = mutation_score.generate_aor_mutants(lines, 0, 1)
+        assert any(m["original"] == "*" for m in mutants)
+
+    def test_for_loop_multiply(self, mutation_score):
+        """for 循环内 n*2 乘法仍应被 AOR 变异."""
+        lines = ["  for (int i=0; i<n*2; i++) {\n"]
+        mutants = mutation_score.generate_aor_mutants(lines, 0, 1)
+        assert any(m["original"] == "*" for m in mutants)

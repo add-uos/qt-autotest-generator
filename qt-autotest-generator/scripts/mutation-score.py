@@ -211,6 +211,16 @@ def _is_pointer_decl(line, op_idx):
     if before.endswith(')') or 'new ' in before:
         return True
 
+    # 解引用: = *ptr / return *ptr / (*ptr) 等模式
+    # * 前面是 = 或 return 或 ( , 且 * 后面紧跟标识符
+    if after_char and (after_char.isalpha() or after_char == '_'):
+        before_rstrip = before.rstrip()
+        if before_rstrip and before_rstrip[-1] in '=,;(':
+            return True
+        # return *ptr / = *ptr
+        if re.search(r'\b(return|throw|delete)\s*$', before_rstrip):
+            return True
+
     return False
 
 
@@ -257,6 +267,67 @@ def generate_aor_mutants(lines, func_start, func_end):
     return mutants
 
 
+def _is_template_bracket(line, op_idx, op):
+    """检查 op_idx 处的 < 或 > 是否为 C++ 模板尖括号 (非关系运算符)."""
+    if op not in ('<', '>'):
+        return False
+
+    # 跳过 #include 行 (预处理器指令不含关系运算)
+    stripped = line.lstrip()
+    if stripped.startswith('#'):
+        return True
+
+    if op == '<':
+        # 模板开括号: Type<...> — < 紧跟在大写标识符或模板参数后
+        before = line[:op_idx]
+        # Type< — < 前紧跟标识符字符 (字母/数字/_)
+        if op_idx > 0 and before[-1] not in ' \t(,;=!&|?:+*/%~^':
+            # 前面是标识符的一部分, 检查是否像模板类型名
+            last_word = re.search(r'\b([A-Z]\w*)\s*$', before)
+            if last_word:
+                return True
+            # 也检查小写模板: std::vector<, qobject_cast<
+            last_word2 = re.search(r'\b(\w+)\s*$', before)
+            if last_word2:
+                word = last_word2.group(1)
+                # 已知模板模式: std::, Qt模板, cast类
+                if word in ('vector', 'map', 'set', 'list', 'pair', 'deque',
+                            'array', 'tuple', 'optional', 'variant',
+                            'shared_ptr', 'unique_ptr', 'weak_ptr',
+                            'function', 'reference_wrapper',
+                            'qobject_cast', 'qvariant_cast', 'qdbus_cast',
+                            'static_cast', 'dynamic_cast', 'reinterpret_cast', 'const_cast'):
+                    return True
+                # 以 Q 开头的 Qt 类型: QList, QMap, QDBus...
+                if word.startswith('Q') and len(word) > 1 and word[1].isupper():
+                    return True
+                # std:: 命名空间
+                if before.rstrip().endswith('::'):
+                    return True
+
+    if op == '>':
+        # 模板闭括号: 检查行内是否有未闭合的模板 <
+        before = line[:op_idx]
+        depth = 0
+        j = 0
+        while j < len(before):
+            c = before[j]
+            if c == '<' and j > 0:
+                # < 是模板开括号的条件: 前面是标识符字符
+                prev = before[j-1] if j > 0 else ''
+                if prev.isalnum() or prev == '_' or prev == ':':
+                    depth += 1
+                    j += 1
+                    continue
+            elif c == '>' and depth > 0:
+                depth -= 1
+            j += 1
+        if depth > 0:
+            return True
+
+    return False
+
+
 def generate_ror_mutants(lines, func_start, func_end):
     mutants = []
     for i in range(func_start, func_end):
@@ -268,6 +339,9 @@ def generate_ror_mutants(lines, func_start, func_end):
                 continue
             op_idx = line.find(op)
             if op_idx < 0:
+                continue
+            # 跳过 C++ 模板尖括号 < > (Bug NEW-2)
+            if _is_template_bracket(line, op_idx, op):
                 continue
             after = line[op_idx + len(op):op_idx + len(op) + 1] if op_idx + len(op) < len(line) else ''
             before_char = line[op_idx - 1] if op_idx > 0 else ''
@@ -287,14 +361,14 @@ def generate_ror_mutants(lines, func_start, func_end):
             for repl in replacements:
                 new_line = line.replace(op, repl, 1)
                 if new_line != line:
-                        mutants.append({
-                            'id': 'ROR_{}_{}_{}'.format(i, op, repl),
-                            'line': i + 1,
-                            'operator': 'ROR',
-                            'original': op,
-                            'replacement': repl,
-                            'description': 'L{}: {} -> {}'.format(i + 1, op, repl),
-                        })
+                    mutants.append({
+                        'id': 'ROR_{}_{}_{}'.format(i, op, repl),
+                        'line': i + 1,
+                        'operator': 'ROR',
+                        'original': op,
+                        'replacement': repl,
+                        'description': 'L{}: {} -> {}'.format(i + 1, op, repl),
+                    })
     return mutants
 
 
@@ -654,13 +728,19 @@ def run_mutation_testing(source_file, function_name, func_start, func_end,
 
     print("\n  结果: killed={}, survived={}, compile_failed={}, test_not_found={}".format(
         killed, survived, compile_failed, test_not_found))
-    print("  变异得分: {}/{} = {:.1f}% (阈值 {:.0f}%)".format(
-        killed, total_valid, score, THRESHOLD))
     if total_valid > 0:
+        print("  变异得分: {}/{} = {:.1f}% (阈值 {:.0f}%)".format(
+            killed, total_valid, score, THRESHOLD))
         verdict = 'PASS' if score >= THRESHOLD else 'BELOW_THRESHOLD'
         print("  判定: {} ({})".format(
             verdict,
             '有效性达标' if score >= THRESHOLD else '存活变异体过多,建议补强测试'))
+    else:
+        verdict = 'NO_MUTANTS'
+        if compile_failed > 0 or test_not_found > 0:
+            print("  变异得分: N/A (所有变异体编译失败或测试目标未找到)")
+        else:
+            print("  变异得分: N/A (无可变异算子 — 函数无运算符/常量/返回值)")
 
     return {
         'function': function_name,
@@ -672,6 +752,7 @@ def run_mutation_testing(source_file, function_name, func_start, func_end,
         'compile_failed': compile_failed,
         'test_not_found': test_not_found,
         'mutation_score': score,
+        'verdict': verdict,
         'threshold': THRESHOLD,
         'details': results,
     }
@@ -707,7 +788,7 @@ def generate_report(results, output_path, project=None, base_sha=None, config=No
     lines.append("| 函数 | 变异体 | 杀死 | 存活 | 编译失败 | 得分 | 判定 |")
     lines.append("|------|--------|------|------|---------|------|------|")
     for r in results:
-        verdict = 'PASS' if r['mutation_score'] >= THRESHOLD else 'BELOW'
+        verdict = r.get('verdict', 'PASS' if r['mutation_score'] >= THRESHOLD else 'BELOW')
         lines.append("| {} | {} | {} | {} | {} | {:.1f}% | {} |".format(
             r['function'], r['total_mutants'],
             r['killed'], r['survived'], r['compile_failed'],
@@ -808,8 +889,9 @@ def generate_report(results, output_path, project=None, base_sha=None, config=No
             "killed": r['killed'],
             "survived": r['survived'],
             "compile_failed": r['compile_failed'],
+            "test_not_found": r.get('test_not_found', 0),
             "mutation_score": r['mutation_score'],
-            "verdict": "PASS" if r['mutation_score'] >= THRESHOLD else "BELOW_THRESHOLD",
+            "verdict": r.get('verdict', 'PASS' if r['mutation_score'] >= THRESHOLD else 'BELOW_THRESHOLD'),
             "details": r['details']
         }
         mutation_json["functions"].append(func_data)
@@ -832,6 +914,10 @@ def main():
                         help='inventory 模式: .ut-inventory.json 路径')
     parser.add_argument('--all-high', action='store_true',
                         help='inventory 模式: 对所有 high 级 testable 方法跑变异')
+    parser.add_argument('--all-mid', action='store_true',
+                        help='inventory 模式: 对所有 mid 级 testable 方法跑变异')
+    parser.add_argument('--all-low', action='store_true',
+                        help='inventory 模式: 对所有 low 级 testable 方法跑变异')
     parser.add_argument('--build-dir', required=True,
                         help='构建目录 (需已 cmake 配置)')
     parser.add_argument('--test-target', default=None,
@@ -868,26 +954,41 @@ def main():
         for fn in (f.strip() for f in args.function.split(',')):
             targets.append((source_abs, fn))
         print("[Mode 4] 直接模式: {}::{}".format(args.source, args.function))
-    elif args.inventory and args.all_high:
+    elif args.inventory and (args.all_high or args.all_mid or args.all_low):
         # inventory 模式
+        level_filter = []
+        if args.all_high:
+            level_filter.append('high')
+        if args.all_mid:
+            level_filter.append('mid')
+        if args.all_low:
+            level_filter.append('low')
         with open(args.inventory) as f:
             inv = json.load(f)
         for m in inv.get('methods', []):
-            if m.get('level') == 'high' and m.get('testable'):
+            if m.get('level') in level_filter and m.get('testable'):
                 # Bug #1: inventory 字段名为 file_path，非 file
                 src_rel = m.get('file_path', m.get('file', ''))
                 source_abs = os.path.join(_PROJECT_DIR, src_rel) if src_rel and not os.path.isabs(src_rel) else (src_rel or '')
-                # Bug #2: qualified_name 点分隔 → Class::Method
+                # Bug #2: qualified_name 点分隔 → Class::Method 或 函数名
                 qn = m.get('qualified_name', '')
                 parts = qn.split('.')
                 if len(parts) >= 2:
-                    class_method = '{}::{}'.format(parts[-2], parts[-1])
+                    # 判断 parts[-2] 是类名还是文件名
+                    # 类名: 首字母大写且含小写 (如 DBusNotify, CPickerManager)
+                    # 文件名: 全小写 (如 cpickermanager, main)
+                    candidate_class = parts[-2]
+                    if candidate_class[0].isupper() and not candidate_class.isupper():
+                        class_method = '{}::{}'.format(candidate_class, parts[-1])
+                    else:
+                        # 自由函数: 只用函数名
+                        class_method = parts[-1]
                 else:
                     class_method = qn
                 targets.append((source_abs, class_method))
-        print("[Mode 4] inventory 模式: {} 个 high 级方法".format(len(targets)))
+        print("[Mode 4] inventory 模式: {} 个 {} 级方法".format(len(targets), '+'.join(level_filter)))
     else:
-        parser.error("需要 --source + --function (直接模式) 或 --inventory + --all-high (inventory 模式)")
+        parser.error("需要 --source + --function (直接模式) 或 --inventory + --all-high/mid/low (inventory 模式)")
 
     if not targets:
         print("[Mode 4] 无目标函数")
@@ -912,12 +1013,33 @@ def main():
         # Bug #7: inventory 模式自动推断 test_target
         current_test_target = args.test_target
         if not current_test_target:
-            # 从 Class::Method 推断 test_<小写类名>
             if '::' in func_name:
                 class_part = func_name.split('::')[0]
-                current_test_target = 'test_' + class_part[0].lower() + class_part[1:]
+                # 尝试多种命名约定: test_ClassName, test_classname, test_className
+                candidates = ['test_' + class_part,
+                              'test_' + class_part.lower(),
+                              'test_' + class_part[0].lower() + class_part[1:]]
             else:
-                current_test_target = args.test_target  # None → 后续会报错
+                # 自由函数: 从源文件名推断 test_target
+                basename = os.path.splitext(os.path.basename(source_file))[0]
+                candidates = ['test_' + basename[0].upper() + basename[1:],
+                              'test_' + basename.lower(),
+                              'test_' + basename]
+            # 按候选列表逐个检查是否存在
+            current_test_target = None
+            for c in candidates:
+                for search_dir in [os.path.join(args.build_dir, 'autotests', 'src'),
+                                   os.path.join(args.build_dir, 'tests'),
+                                   args.build_dir]:
+                    if os.path.exists(os.path.join(search_dir, c)):
+                        current_test_target = c
+                        break
+                if current_test_target:
+                    break
+            if not current_test_target:
+                # 所有候选都不存在, 跳过此函数
+                print("  跳过: {} — 无法推断测试目标 (候选: {} 均不存在)".format(func_name, ', '.join(candidates)))
+                continue
             print("  推断测试目标: {} → {}".format(func_name, current_test_target))
 
         with open(source_file) as f:
