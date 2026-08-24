@@ -65,8 +65,11 @@ import urllib.error
 from pathlib import Path
 
 # ── 配置 ──
+#
+# 优先级：环境变量 > 代码默认值
+# - QTAG_MCP_URL: 远端 MCP HTTP 端点（覆盖默认值）
 
-MCP_URL = "http://10.8.12.80:13626/mcp"
+MCP_URL = os.environ.get("QTAG_MCP_URL", "http://10.8.12.80:13626/mcp")
 
 # 服务端 DBus Adaptor — 契约级测试目标，其 public 方法 → dbus_slot (+3)
 DBUS_ADAPTOR_BASES = ["QDBusAbstractAdaptor"]

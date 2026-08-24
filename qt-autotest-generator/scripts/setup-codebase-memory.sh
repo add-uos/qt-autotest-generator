@@ -47,7 +47,7 @@ readonly CBM_AUTO_INDEX="true"
 readonly CBM_AUTO_WATCH="true"
 readonly CBM_AUTO_INDEX_LIMIT="50000"
 readonly CBM_GH_OWNER_REPO="DeusData/codebase-memory-mcp"
-readonly CBM_INSTALL_URL="https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/install.sh"
+readonly CBM_INSTALL_URL="${QTAG_CBM_INSTALL_URL:-https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/install.sh}"
 
 # 可被参数覆盖
 CBM_SOURCE_DIR=""        # --source 指定的源码目录

@@ -13,6 +13,22 @@ compatibility:
     - name: codebase-memory-mcp
       min_version: "0.8.0"
       purpose: "本地代码知识图谱，毫秒级类结构分析与依赖追踪；硬门禁，无图谱不执行"
+  env_vars:
+    - name: QTAG_MCP_URL
+      default: "http://10.8.12.80:13626/mcp"
+      description: "远端 MCP HTTP 端点，fetch-mcp-data.py 使用"
+    - name: QTAG_CBM_INSTALL_URL
+      default: "https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/install.sh"
+      description: "codebase-memory-mcp 安装脚本 URL，内网可设为镜像"
+    - name: QTAG_PROXY
+      default: "http://proxy02.uniontech.com:3128"
+      description: "HTTP/HTTPS 代理地址"
+    - name: QTAG_GIT_EMAIL
+      default: "autotest@uniontech.com"
+      description: "自动提交 git 回退邮箱"
+    - name: CBM_INSTALL_SHA256
+      default: ""
+      description: "install.sh SHA256 校验值，设置后启用完整性校验"
 ---
 
 # Qt Autotest Generator

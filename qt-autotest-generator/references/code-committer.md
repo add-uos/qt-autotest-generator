@@ -69,7 +69,7 @@ git status --porcelain
 ```bash
 cd "$PROJECT_PATH"
 git config user.name >/dev/null 2>&1 || git config user.name "qt-autotest-generator"
-git config user.email >/dev/null 2>&1 || git config user.email "autotest@uniontech.com"
+git config user.email >/dev/null 2>&1 || git config user.email "${QTAG_GIT_EMAIL:-autotest@uniontech.com}"
 ```
 
 仅在未配置时写入默认值，不覆盖用户已有配置。

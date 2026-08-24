@@ -114,8 +114,9 @@ qmake --version  # 或 qmake6 --version
 ## GitHub 网络受限时设置代理
 
 ```bash
-export https_proxy=http://proxy02.uniontech.com:3128
-export http_proxy=http://proxy02.uniontech.com:3128
+# 设置代理（按实际环境修改）
+export https_proxy="${QTAG_PROXY:-http://proxy02.uniontech.com:3128}"
+export http_proxy="${QTAG_PROXY:-http://proxy02.uniontech.com:3128}"
 ```
 
 远端 codebase-memory-mcp 若走公网同样受此代理影响；本地 codebase-memory-mcp 不受影响。
@@ -153,3 +154,13 @@ undefined reference to stub_ext::freeWrapper
 ```
 
 解决：确认 `{test_dir}/3rdparty/stub/stub-shadow.cpp` 已编入 test target（CMakeLists 检查）。
+
+## 环境变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `QTAG_MCP_URL` | `http://10.8.12.80:13626/mcp` | 远端 MCP HTTP 端点，`fetch-mcp-data.py` 使用 |
+| `QTAG_CBM_INSTALL_URL` | GitHub 官方 install.sh | codebase-memory-mcp 安装脚本 URL，内网可设为镜像 |
+| `QTAG_PROXY` | `http://proxy02.uniontech.com:3128` | HTTP/HTTPS 代理地址 |
+| `QTAG_GIT_EMAIL` | `autotest@uniontech.com` | 自动提交 git 回退邮箱 |
+| `CBM_INSTALL_SHA256` | _(空)_ | install.sh SHA256 校验值，设置后启用完整性校验 |

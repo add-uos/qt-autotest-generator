@@ -53,7 +53,9 @@ if file_exists(inventory_path):
         #   - file_overrides 整体保留；review_queue confirmed 条目保留
         #   - 产出 -diff.md 报告供人工复核
         head = current_git_sha()
-        subprocess.run([
+        # QTAG_MCP_URL: 可选环境变量，覆盖远端 MCP HTTP 端点默认值
+        mcp_url = os.environ.get("QTAG_MCP_URL")
+        cmd = [
             "python3", f"{skill_dir}/scripts/fetch-mcp-data.py",
             "--project", project_name,
             "--file-pattern", file_pattern or "src/**",
@@ -62,7 +64,10 @@ if file_exists(inventory_path):
             "--incremental",
             "--existing", inventory_path,    # 旧 inventory（即当前文件）
             "--summary",
-        ], check=True)
+        ]
+        if mcp_url:
+            cmd.extend(["--mcp-url", mcp_url])
+        subprocess.run(cmd, check=True)
         # 脚本产出：inventory_path（base_sha=head）+ inventory-diff.md + inventory-summary.md
         return
 # 否则 → 全量建表（Step 3）
