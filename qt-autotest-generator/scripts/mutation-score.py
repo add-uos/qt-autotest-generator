@@ -41,6 +41,7 @@ import shutil
 import atexit
 import signal
 import subprocess
+import time
 from collections import defaultdict
 from datetime import datetime
 
@@ -64,13 +65,20 @@ def _relative_path(abs_path, base_dir):
 
 def _restore_on_exit():
     """铁律 #2: 进程退出/被kill时恢复所有未恢复的源码"""
+    restored = False
     for backup_path, source_file in _PENDING_RESTORES:
         if os.path.exists(backup_path):
             try:
                 shutil.move(backup_path, source_file)
+                restored = True
                 print("  [RESTORE] 恢复 {} <- {}".format(source_file, backup_path))
             except Exception as e:
                 print("  [RESTORE ERROR] {} : {}".format(source_file, e))
+    if restored:
+        # Bug #16: 崩溃/中断路径无法重编, 构建树可能残留变异体二进制,
+        # 必须提示用户手动重建, 否则后续测试/覆盖率全部被污染
+        print("  [WARN] 异常退出恢复: 构建产物可能仍含变异体, "
+              "请执行: touch <被变异源码> && cmake --build <build_dir> 重建")
 
 
 atexit.register(_restore_on_exit)
@@ -224,15 +232,72 @@ def _is_pointer_decl(line, op_idx):
     return False
 
 
-def generate_aor_mutants(lines, func_start, func_end):
+def mask_comments(lines):
+    """Bug #17 修复: 把注释区域替换为等长空格, 供变异算子匹配.
+
+    处理 // 行注释与 /* */ 块注释; 字符串/字符字面量内的注释符不算注释.
+    掩码行与原行等长且代码部分位置完全一致, 因此算子在掩码行上
+    记录的列号可直接用于原始行的精确替换 (见 apply_mutation).
+    此前 ROR/LOR/CRC 完全不跳注释, 会产生"变异注释"的永存活伪变异体
+    (如 CScreenshotWidget::wheelEvent 的 10 个全部存活均为注释代码).
+    """
+    masked = []
+    in_block = False
+    for line in lines:
+        buf = list(line)
+        i, n = 0, len(line)
+        in_str = in_chr = False
+        while i < n:
+            c = line[i]
+            nxt = line[i + 1] if i + 1 < n else ''
+            if in_block:
+                if c == '*' and nxt == '/':
+                    buf[i] = buf[i + 1] = ' '
+                    i += 2
+                    in_block = False
+                    continue
+                buf[i] = ' '
+                i += 1
+                continue
+            if in_str or in_chr:
+                if c == '\\':
+                    i += 2
+                    continue
+                if in_str and c == '"':
+                    in_str = False
+                elif in_chr and c == "'":
+                    in_chr = False
+                i += 1
+                continue
+            if c == '"':
+                in_str = True
+                i += 1
+                continue
+            if c == "'":
+                in_chr = True
+                i += 1
+                continue
+            if c == '/' and nxt == '/':
+                for j in range(i, n):
+                    buf[j] = ' '
+                break
+            if c == '/' and nxt == '*':
+                buf[i] = buf[i + 1] = ' '
+                i += 2
+                in_block = True
+                continue
+            i += 1
+        masked.append(''.join(buf))
+    return masked
+
+
+def generate_aor_mutants(lines, func_start, func_end, masked=None):
     mutants = []
+    masked = masked if masked is not None else mask_comments(lines)
     for i in range(func_start, func_end):
-        line = lines[i]
+        line = masked[i]  # Bug #17: 注释区已置空, 匹配安全
         for op, replacements in AOR_MAP.items():
             if op not in line:
-                continue
-            stripped = line.strip()
-            if stripped.startswith('//') or stripped.startswith('/*') or stripped.startswith('*'):
                 continue
             if in_string(line, op):
                 continue
@@ -254,16 +319,15 @@ def generate_aor_mutants(lines, func_start, func_end):
                 if op == '*' and _is_pointer_decl(line, op_idx):
                     continue
             for repl in replacements:
-                new_line = line.replace(op, repl, 1)
-                if new_line != line:
-                    mutants.append({
-                        'id': 'AOR_{}_{}_{}'.format(i, op, repl),
-                        'line': i + 1,
-                        'operator': 'AOR',
-                        'original': op,
-                        'replacement': repl,
-                        'description': 'L{}: {} -> {}'.format(i + 1, op, repl),
-                    })
+                mutants.append({
+                    'id': 'AOR_{}_{}_{}'.format(i, op, repl),
+                    'line': i + 1,
+                    'col': op_idx,  # Bug #17: 列号定位, 避免误中行内更早的同形记号
+                    'operator': 'AOR',
+                    'original': op,
+                    'replacement': repl,
+                    'description': 'L{}: {} -> {}'.format(i + 1, op, repl),
+                })
     return mutants
 
 
@@ -328,10 +392,11 @@ def _is_template_bracket(line, op_idx, op):
     return False
 
 
-def generate_ror_mutants(lines, func_start, func_end):
+def generate_ror_mutants(lines, func_start, func_end, masked=None):
     mutants = []
+    masked = masked if masked is not None else mask_comments(lines)
     for i in range(func_start, func_end):
-        line = lines[i]
+        line = masked[i]  # Bug #17
         for op, replacements in ROR_MAP.items():
             if op not in line:
                 continue
@@ -359,12 +424,34 @@ def generate_ror_mutants(lines, func_start, func_end):
             if op == '>' and before_char == '-':
                 continue
             for repl in replacements:
-                new_line = line.replace(op, repl, 1)
-                if new_line != line:
+                mutants.append({
+                    'id': 'ROR_{}_{}_{}'.format(i, op, repl),
+                    'line': i + 1,
+                    'col': op_idx,
+                    'operator': 'ROR',
+                    'original': op,
+                    'replacement': repl,
+                    'description': 'L{}: {} -> {}'.format(i + 1, op, repl),
+                })
+    return mutants
+
+
+def generate_lor_mutants(lines, func_start, func_end, masked=None):
+    mutants = []
+    masked = masked if masked is not None else mask_comments(lines)
+    for i in range(func_start, func_end):
+        line = masked[i]  # Bug #17
+        for op, replacements in LOR_MAP.items():
+            if op in line and not in_string(line, op):
+                op_idx = line.find(op)
+                if op_idx < 0:
+                    continue
+                for repl in replacements:
                     mutants.append({
-                        'id': 'ROR_{}_{}_{}'.format(i, op, repl),
+                        'id': 'LOR_{}_{}_{}'.format(i, op, repl),
                         'line': i + 1,
-                        'operator': 'ROR',
+                        'col': op_idx,
+                        'operator': 'LOR',
                         'original': op,
                         'replacement': repl,
                         'description': 'L{}: {} -> {}'.format(i + 1, op, repl),
@@ -372,32 +459,13 @@ def generate_ror_mutants(lines, func_start, func_end):
     return mutants
 
 
-def generate_lor_mutants(lines, func_start, func_end):
+def generate_crc_mutants(lines, func_start, func_end, masked=None):
     mutants = []
-    for i in range(func_start, func_end):
-        line = lines[i]
-        for op, replacements in LOR_MAP.items():
-            if op in line and not in_string(line, op):
-                for repl in replacements:
-                    new_line = line.replace(op, repl, 1)
-                    if new_line != line:
-                        mutants.append({
-                            'id': 'LOR_{}_{}_{}'.format(i, op, repl),
-                            'line': i + 1,
-                            'operator': 'LOR',
-                            'original': op,
-                            'replacement': repl,
-                            'description': 'L{}: {} -> {}'.format(i + 1, op, repl),
-                        })
-    return mutants
-
-
-def generate_crc_mutants(lines, func_start, func_end):
-    mutants = []
+    masked = masked if masked is not None else mask_comments(lines)
     # Bug #11: 识别一元负号，-N 作为整体常量
     int_pattern = re.compile(r'(?<!\w)-?(\d+)(?!\w)')
     for i in range(func_start, func_end):
-        line = lines[i]
+        line = masked[i]  # Bug #17: 注释里的常量不再变异
         for m in int_pattern.finditer(line):
             full_match = m.group(0)   # 可能含前导 -
             val = int(full_match)
@@ -422,6 +490,7 @@ def generate_crc_mutants(lines, func_start, func_end):
                 mutants.append({
                     'id': 'CRC_{}_{}_{}'.format(i, val, repl),
                     'line': i + 1,
+                    'col': pos,
                     'operator': 'CRC',
                     'original': str(val),
                     'replacement': str(repl),
@@ -430,17 +499,20 @@ def generate_crc_mutants(lines, func_start, func_end):
     return mutants
 
 
-def generate_rvf_mutants(lines, func_start, func_end):
+def generate_rvf_mutants(lines, func_start, func_end, masked=None):
     mutants = []
+    masked = masked if masked is not None else mask_comments(lines)
     for i in range(func_start, func_end):
-        line = lines[i]
+        line = masked[i]  # Bug #17
         stripped = line.strip()
         for original, replacements in RVF_BOOL_MAP.items():
             if original in stripped:
+                col = line.find(original)
                 for repl in replacements:
                     mutants.append({
                         'id': 'RVF_{}_{}_{}'.format(i, original, repl),
                         'line': i + 1,
+                        'col': col,
                         'operator': 'RVF',
                         'original': original,
                         'replacement': repl,
@@ -454,6 +526,7 @@ def generate_rvf_mutants(lines, func_start, func_end):
                     mutants.append({
                         'id': 'RVF_int_{}_{}_{}'.format(i, val, repl),
                         'line': i + 1,
+                        'col': line.find('return'),
                         'operator': 'RVF',
                         'original': 'return {}'.format(val),
                         'replacement': 'return {}'.format(repl),
@@ -466,42 +539,73 @@ def generate_rvf_mutants(lines, func_start, func_end):
 # 函数定位 (正则; 生产环境可换 MCP get_code_snippet)
 # ═══════════════════════════════════════════════════════════════
 
+_CALL_INTRODUCERS = ('if', 'while', 'for', 'switch', 'return', 'elif',
+                     'sizeof', 'emit', 'connect', 'Q_ARG', 'and', 'or', 'not',
+                     'else', 'do', 'case')
+
+
+def _rank_definition_site(line, match_start):
+    """Bug #13 根因修复: 判断 name( 出现处是"定义"还是"调用点".
+
+    旧实现取第一个匹配行, 若函数在文件前部被调用过
+    (如构造函数内 if (isWaylandPlatform())), 定位到的是调用点,
+    函数范围错乱、变异体归属错函数.
+    返回 0=定义(优先), 1=调用(兑底).
+    """
+    prefix = line[:match_start].rstrip()
+    if not prefix:
+        # 行首无返回类型: 仅当顶格(列0)时视为自由函数定义, 缩进的裸调用视为调用点
+        return 0 if match_start == 0 else 1
+    if prefix.endswith('::'):
+        return 0  # Class::name( 方法定义
+    last_tok = prefix.split()[-1]
+    if last_tok in _CALL_INTRODUCERS:
+        return 1
+    if prefix[-1] in ('=', '(', ',', '!', '&', '|', '?', ':', '.', '+', '-', '*', '/'):
+        return 1  # 表达式中的调用/取地址等
+    # ReturnType name( 样式 (含 static/inline/virtual/Q_SLOT 等前缀)
+    if re.match(r'^[A-Za-z_][\w:<>,\s\*&]*$', prefix):
+        return 0
+    return 1
+
+
 def find_function_range(lines, function_name, source_file=""):
     """在源码中找到函数的行范围 (0-indexed, 半开区间 [start, end))"""
     short_name = function_name.split('::')[-1] if '::' in function_name else function_name
     class_name = function_name.split('::')[0] if '::' in function_name else None
 
-    in_func = False
-    brace_depth = 0
-    func_start = -1
-    func_end = -1
-
+    # Bug #13: 收集全部 name( 候选, 定义点优先于调用点
+    name_pat = re.compile(r'\b' + re.escape(short_name) + r'\s*\(')
+    candidates = []
     for i, line in enumerate(lines):
-        if not in_func and re.search(r'\b' + re.escape(short_name) + r'\s*\(', line):
-            # 注意: \bstringIsDigit\s*\( 不会匹配 stringIsDigitPro( 因为 Pro 在中间
-            if class_name and class_name not in line and i > 0:
-                # Bug #6: 放宽 class_name 检查 — 搜索多行上下文 (含 .h 内联方法)
-                context_lines = 10
-                found = False
-                for j in range(max(0, i - context_lines), i):
-                    if class_name in lines[j]:
-                        found = True
-                        break
-                if not found:
-                    # .h 文件中的内联方法: 跳过 class_name 检查
-                    if not source_file.endswith('.h'):
-                        continue
-            in_func = True
-            func_start = i
-            brace_depth = 0
+        m = name_pat.search(line)
+        if m:
+            # 注意: \bstringIsDigit\s*\( 不会匹配 stringIsDigitPro(
+            candidates.append((_rank_definition_site(line, m.start()), i))
+    candidates.sort()
 
-        if in_func:
-            brace_depth += line.count('{') - line.count('}')
-            if brace_depth <= 0 and '{' in ''.join(lines[func_start:i + 1]):
-                func_end = i + 1
-                break
+    for rank, i in candidates:
+        line = lines[i]
+        if class_name and class_name not in line and i > 0:
+            # Bug #6: 放宽 class_name 检查 — 搜索多行上下文 (含 .h 内联方法)
+            context_lines = 10
+            found = False
+            for j in range(max(0, i - context_lines), i):
+                if class_name in lines[j]:
+                    found = True
+                    break
+            if not found:
+                # .h 文件中的内联方法: 跳过 class_name 检查
+                if not source_file.endswith('.h'):
+                    continue
+        # 从候选行起配对花括号
+        brace_depth = 0
+        for k in range(i, len(lines)):
+            brace_depth += lines[k].count('{') - lines[k].count('}')
+            if brace_depth <= 0 and '{' in ''.join(lines[i:k + 1]):
+                return i, k + 1
 
-    return func_start, func_end
+    return -1, -1
 
 
 def apply_mutation(lines, mutant):
@@ -510,7 +614,13 @@ def apply_mutation(lines, mutant):
     line_idx = mutant['line'] - 1
     original = mutant['original']
     replacement = mutant['replacement']
-    new_lines[line_idx] = new_lines[line_idx].replace(original, replacement, 1)
+    col = mutant.get('col')
+    if col is not None and lines[line_idx][col:col + len(original)] == original:
+        # Bug #17: 按列号精确替换; replace(,1) 可能误中行内更早的注释同形记号
+        new_lines[line_idx] = (lines[line_idx][:col] + replacement
+                               + lines[line_idx][col + len(original):])
+    else:
+        new_lines[line_idx] = new_lines[line_idx].replace(original, replacement, 1)
     return new_lines
 
 
@@ -609,11 +719,39 @@ def compile_and_test(source_file, mutant_lines, build_dir, test_target,
             return 'survived', stdout[-200:] if stdout else ''
 
     finally:
-        # 恢复原始文件 (铁律: 必恢复; 不重新编译——下次变异写入会触发增量重编)
+        # 恢复原始文件 (铁律: 必恢复)
+        # 注: 此处不重编 — 同文件连续变异时, 下次写入会触发增量重编;
+        #     但每个函数跑完后必须调用 _rebuild_clean() 清理残留变异体 (Bug #16)
         if os.path.exists(backup_path):
             shutil.move(backup_path, source_file)
         if restore_entry in _PENDING_RESTORES:
             _PENDING_RESTORES.remove(restore_entry)
+
+
+def _rebuild_clean(source_file, build_dir, test_target):
+    """恢复干净构建产物 (Bug #16 修复).
+
+    compile_and_test() 的 finally 恢复了源码但不清重编, 最后一个变异体的
+    .o/二进制会残留在构建树; 且 shutil.copy2/move 保留源码原 mtime,
+    下次 make 认为源码未变而跳过重编 → 污染二进制被长期复用
+    (症状: 变异跑批后普通测试莫名失败、断言值诡异、覆盖率数据错乱).
+    修复: touch 源码使其比变异产物新, 再增量重编该目标一次.
+    """
+    try:
+        now = time.time()
+        os.utime(source_file, (now, now))
+        rc, _, err = run_command(
+            ['cmake', '--build', '.', '--target', test_target,
+             '--', '-j{}'.format(os.cpu_count() or 4)],
+            cwd=build_dir, timeout=300,
+            env={'CCACHE_DISABLE': '1'})
+        if rc != 0:
+            print("  [WARN] 干净重建失败, 构建树可能仍含变异体: {}".format(
+                (err or '')[-200:]))
+        else:
+            print("  [CLEAN] 已重建干净测试目标: {}".format(test_target))
+    except Exception as exc:
+        print("  [WARN] 干净重建异常: {}".format(exc))
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -633,13 +771,14 @@ def run_mutation_testing(source_file, function_name, func_start, func_end,
     with open(source_file) as f:
         lines = f.readlines()
 
-    # 生成所有变异体
+    # 生成所有变异体 (Bug #17: 掩码行统一跳过注释区, 只算一次)
+    masked = mask_comments(lines)
     all_mutants = []
-    all_mutants.extend(generate_aor_mutants(lines, func_start, func_end))
-    all_mutants.extend(generate_ror_mutants(lines, func_start, func_end))
-    all_mutants.extend(generate_lor_mutants(lines, func_start, func_end))
-    all_mutants.extend(generate_crc_mutants(lines, func_start, func_end))
-    all_mutants.extend(generate_rvf_mutants(lines, func_start, func_end))
+    all_mutants.extend(generate_aor_mutants(lines, func_start, func_end, masked))
+    all_mutants.extend(generate_ror_mutants(lines, func_start, func_end, masked))
+    all_mutants.extend(generate_lor_mutants(lines, func_start, func_end, masked))
+    all_mutants.extend(generate_crc_mutants(lines, func_start, func_end, masked))
+    all_mutants.extend(generate_rvf_mutants(lines, func_start, func_end, masked))
 
     # 去重
     seen_ids = set()
@@ -722,6 +861,9 @@ def run_mutation_testing(source_file, function_name, func_start, func_end,
 
         print("  [{:>2}/{}] {} — {}".format(
             i + 1, len(unique_mutants), marker, mutant['description']))
+
+    # Bug #16: 清理残留变异体 — touch 源码 + 重编该目标, 恢复干净二进制
+    _rebuild_clean(source_file, build_dir, test_target)
 
     total_valid = killed + survived
     score = round(killed / total_valid * 100, 1) if total_valid > 0 else 0
