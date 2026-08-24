@@ -405,8 +405,12 @@ if result.has_more:
 
 项目名是 repo 绝对路径的转换（`/` → `-`）。拿不准时：
 ```python
+import os
 projects = list_projects()
-# 找 root_path 匹配的那个，用它的 name
+project_basename = os.path.basename(project_path.rstrip('/'))
+# 找 root_path 最后一段匹配的那个，用它的 name
+matched = [p for p in projects if os.path.basename(p.root_path.rstrip('/')) == project_basename]
+project_name = matched[0].name if matched else None
 ```
 
 ### 7.5 索引后立即查询返回空

@@ -47,7 +47,7 @@ FOR candidate IN candidates:
     # Step B: 远端提供方需额外确认目标项目已索引且 ready
     IF candidate.type == "remote":
         remote_attempted = true
-        project_name = find_project_by_root_path(candidate, project_path)
+        project_name = find_project_by_basename(candidate, project_path)
         IF project_name IS None:
             # 远端未索引该项目 → 跳过远端
             CONTINUE
@@ -91,11 +91,15 @@ def probe_available(candidate):
 
 ### 3.2 远端项目已索引判定
 
-远端 MCP 的 `list_projects()` 返回的项目列表中，用 `root_path` 字段匹配 `project_path`。匹配不到则视为"远端未索引该项目"。
+远端 MCP 的 `list_projects()` 返回的项目列表中，用**项目名**匹配 `project_path`——提取 `project_path` 路径最后一段作为项目名（如 `/home/zhy/debug/deepin-picker` → `deepin-picker`），与远端返回的 `p.root_path` 最后一段做比对。匹配不到则视为"远端未索引该项目"。
+
+> **为什么不全路径匹配**：远端服务器路径与本地路径天然不同（如远端 `/home/uos/service/codebase/repos/deepin-picker` vs 本地 `/home/zhy/debug/deepin-picker`），但图谱内容以项目名为锚，路径前缀不影响查询结果。
 
 ```
+import os
+project_basename = os.path.basename(project_path.rstrip('/'))
 remote_projects = remote_provider.list_projects()
-matched = [p for p in remote_projects if p.root_path == project_path]
+matched = [p for p in remote_projects if os.path.basename(p.root_path.rstrip('/')) == project_basename]
 if not matched:
     # 远端无法 index_repository → 远端不可用于该项目
     skip remote, continue to local

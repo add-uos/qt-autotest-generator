@@ -54,24 +54,26 @@ fi
 
 **执行步骤**：
 
-1. **探测远端**：`remote_codebase_memory_mcp.list_projects()` 调通即远端可用；进一步用 `root_path` 匹配 `project_path`，命中且 `index_status(project=...) == "ready"` → 解析为远端提供方，写 `mcp_provider = "remote-codebase-memory-mcp"` / `mcp_provider_type = "remote"`，**跳过本地安装**。
+1. **探测远端**：`remote_codebase_memory_mcp.list_projects()` 调通即远端可用；进一步用**项目名**（路径最后一段，如 `deepin-picker`）匹配远端 `list_projects()` 返回的 `root_path` 最后一段，命中且 `index_status(project=...) == "ready"` → 解析为远端提供方，写 `mcp_provider = "remote-codebase-memory-mcp"` / `mcp_provider_type = "remote"`，**跳过本地安装**。
 2. **回退本地**：远端不可用 / 项目未在远端索引 / 远端索引中三者任一成立 → 探测本地 `codebase_memory_mcp.list_projects()`：调通则解析为本地提供方，`mcp_provider = "codebase-memory-mcp"` / `mcp_provider_type = "local"`，按 `mcp-providers.md` §6 输出**使用本地**提醒。
 3. **本地不可用 → 安装**：本地亦不可用 → 按 `mcp-providers.md` §6 输出**安装本地**强制提醒 → 运行 `bash ${SKILL_DIR}/scripts/setup-codebase-memory.sh`；退出码 `0` → 设本地提供方；`1`（安装失败）/ `2`（配置失败）/ `3`（验证失败）→ **硬终止**，报告退出码与错误摘要。
 4. **全不可用 → 硬终止**：远端不可用且本地安装失败 → `硬终止：无任何可用的知识图谱 MCP 提供方。`，**不降级 LSP**（`mcp-providers.md` §7）。
 
 ### 2. 确认项目已索引
 
-用解析到的提供方查询已索引项目列表，找到 `root_path` 匹配 `project_path` 的那个：
+用解析到的提供方查询已索引项目列表，按**项目名**（路径最后一段）匹配找到目标项目：
 
 ```python
+import os
 provider = resolved_provider  # "remote-codebase-memory-mcp" 或 "codebase-memory-mcp"
 projects = provider.list_projects()
-target = next((p for p in projects if p.root_path == project_path), None)
+project_basename = os.path.basename(project_path.rstrip('/'))
+target = next((p for p in projects if os.path.basename(p.root_path.rstrip('/')) == project_basename), None)
 project_name = target.name if target else None
 ```
 
 项目名规则：把 repo 绝对路径的 `/` 转成 `-`，例如 `/home/user/my-qt-app` → `home-user-my-qt-app`。
-**不要自己拼**，必须从 `list_projects` 的 `root_path` 匹配取 `name`。
+**不要自己拼**，必须从 `list_projects` 匹配取 `name`。
 
 ### 3. 首次索引（仅本地提供方）
 
@@ -87,7 +89,8 @@ if resolved_provider == "codebase-memory-mcp" and target is None:
     )
     # 索引后重新查询获取 project_name（index_repository 不返回项目名）
     projects = codebase_memory_mcp.list_projects()
-    target = next((p for p in projects if p.root_path == project_path), None)
+    project_basename = os.path.basename(project_path.rstrip('/'))
+    target = next((p for p in projects if os.path.basename(p.root_path.rstrip('/')) == project_basename), None)
     project_name = target.name if target else None
 ```
 
@@ -166,4 +169,4 @@ git -C <project_path> rev-parse HEAD
 - 图谱不可用即硬终止，不降级到 LSP
 - 必须确认 `index_status == "ready"` 且图谱非空
 - 不修改项目源码
-- 项目名必须从 `list_projects` 的 `root_path` 匹配取 `name`，不假设
+- 项目名必须从 `list_projects` 匹配取 `name`，不假设（远端按路径最后一段匹配，本地按全路径匹配）
