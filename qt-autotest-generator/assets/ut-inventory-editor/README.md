@@ -1,63 +1,95 @@
-# UT Inventory Editor
+# UT Inventory Editor & Dashboard
 
-`.ut-inventory.json` 的可视化编辑器，让开发者直观调节函数测试优先级、复核待审条目、管理覆盖率门禁。
+单文件 HTML 的 UT（单元测试）可测性清单编辑器 + 多项目集中看板。
 
-## 使用方式
+**独立运行，无外部依赖**（Python 仅标准库；HTML 引用 CDN 的 lucide/hljs/tailwind）。
 
-直接在浏览器中打开 `index.html`，或拖放 `.ut-inventory.json` 文件到页面。
+## 目录结构
 
-### 数据来源
-
-由 `fetch-mcp-data.py` + `scan-inventory.py` 生成：
-
-```bash
-python3 fetch-mcp-data.py --project <id> --output .ut-inventory.json
+```
+ut-inventory-editor/
+├── index.html              # 单文件应用（编辑器 + 看板，纯显示层）
+├── dashboard-plan.md       # 设计方案
+├── scripts/
+│   ├── dashboard-server.py # 伴随服务：托管 HTML + 调脚本刷新数据
+│   ├── batch-collect.py    # 批量编排 26 个项目
+│   ├── fetch-mcp-data.py   # MCP → .ut-inventory.json（依赖 scan-inventory.py）
+│   ├── fetch-test-mapping.py # MCP CALLS → test-mapping.json（测试覆盖）
+│   └── scan-inventory.py   # 评分逻辑（被 fetch-mcp-data.py 动态加载）
+└── mcp-projects/           # 数据目录（首次「刷新」后自动生成）
+    ├── _summary.json
+    └── <项目名>/
+        ├── .ut-inventory.json
+        ├── test-mapping.json
+        └── collect.log
 ```
 
-## 功能
+## 快速开始
 
-| 功能 | 说明 |
-|------|------|
-| 三栏布局 | 左侧筛选+Class树 / 中间方法表格 / 右侧详情面板 |
-| Level 筛选 |  high / mid / low / exempt 复选框 |
-| Level 编辑 | 点击 Level 色标 → 弹出选择器，或键盘 1-4 |
-| 豁免切换 | testable 开关 → 豁免/取消豁免，双向切换 |
-| Review Queue | 逐条复核待审条目，确认 high/mid/low；**✅ 完成复核** 按钮可批量将剩余条目按 ⚖ mid 确认 |
-| 批量操作 | 多选 → 批量设 Level / 豁免 / 取消豁免 |
-| 因子筛选 | 点击 Factor pill → 筛选含该因子的所有方法 |
-| Class 树 | 按类分组，点击类名过滤 |
-| 搜索 | 方法名/类名/文件路径模糊搜索 |
-| 虚拟滚动 | IntersectionObserver，支持 12000+ 方法 |
-| 撤销 | Ctrl+Z，最多 50 步 |
-| 保存 | 写回 `.ut-inventory.json` |
-| CSV 导出 | 导出当前筛选结果 |
-| 拖放导入 | 拖放 JSON 文件到页面 |
-| 暗色/亮色主题 | 自动检测系统偏好，手动切换 |
-| 字体大小 | S/M/L 三档（12/15/17px），默认 M，持久化到 localStorage |
+```bash
+cd scripts
+python3 dashboard-server.py          # 默认 http://localhost:8765
+# 浏览器打开 http://localhost:8765/
+```
 
-## 快捷键
+1. **[📋 编辑器]** — 打开单个 `.ut-inventory.json`（拖拽/文件选择），评审 level、
+   双击函数开 GitHub 右侧面板定位源码、点测试用例开左侧面板看测试文件
+2. **[📊 看板]** — 首次使用点右上 **「🔄 刷新」**：
+   server 后台调用 `batch-collect.py` 从 MCP（`10.8.12.80:13626`，可用环境变量
+   `QTAG_MCP_URL` 覆盖）逐项目拉取数据 → 26 张项目卡渐进亮起
+3. 点卡片下钻：Level 饼图 + 高优无覆盖 Top10（点条目直达 GitHub 源码）
+   → 「在编辑器中打开」自动加载该 inventory
 
-| 快捷键 | 功能 |
-|--------|------|
-| `1` | 设为 high |
-| `2` | 设为 mid |
-| `3` | 设为 low |
-| `4` | 设为 exempt（弹出原因输入） |
-| `Ctrl+Z` | 撤销 |
-| `Ctrl+S` | 保存 |
+## 运行模式
 
-## 覆盖率门禁
+| 模式 | 探测 | 能力 |
+|---|---|---|
+| ● server | `GET /api/status` 2xx | 刷新调脚本、下钻加载、全部功能 |
+| ○ 静态 | 直接双击 index.html | 降级：手动「📥 导入」JSON（离线缓存兜底） |
 
-| Level | 行覆盖 | 分支覆盖 | 函数覆盖 |
-|-------|--------|----------|----------|
-| high | ≥90% | ≥80% | =100% |
-| mid | ≥60% | — | =100% |
-| low | ≥60% | — | =100% |
-| exempt | 豁免 | 豁免 | 豁免 |
+## 命令行（不开看板时）
 
-## 技术栈
+```bash
+cd scripts
+python3 batch-collect.py                  # 全量收集 26 项目
+python3 batch-collect.py --filter camera  # 只收集匹配项目
+python3 batch-collect.py --skip-fetch-mcp # 增量：已有 inventory 跳过 MCP 拉取
+python3 fetch-mcp-data.py <项目>          # 单项目 MCP → inventory
+```
 
-- 纯 HTML + Vanilla JS（零构建依赖，单文件可分发）
-- Tailwind CSS (CDN)
-- Lucide Icons (CDN)
-- Google Fonts: JetBrains Mono + IBM Plex Sans
+## API（dashboard-server.py）
+
+| 端点 | 说明 |
+|---|---|
+| `GET /api/status` | server/MCP/数据目录状态 |
+| `POST /api/sync` | 后台调 batch-collect（防重入），返回 task_id |
+| `GET /api/task/<id>` | 进度 {state, done_n/total_n, current, log_tail} |
+| `GET /api/projects` | 26 项目聚合统计 + 高优缺口 Top10 |
+| `GET /api/inventory/<name>` | 单项目完整 inventory |
+| `GET /api/mapping/<name>` | test-mapping.json |
+
+仅绑定 `127.0.0.1`，`--port` 可改；前端可配 server 地址
+（localStorage `utie-server-url`）。
+
+## 项目分支表（v1.2 新增）
+
+GitHub 链接不再硬编码 `main`，每个项目自带分支，默认 `master`：
+
+```
+scripts/project-branches.json   # 77 项目分支表（CSV + downloader 整合产物）
+scripts/gen-project-info.py     # 重新生成上表（可重跑）
+```
+
+- **生成时机注入**：`fetch-mcp-data.py` 写 `.ut-inventory.json` 时自动查表，
+  新增 `git: {org, remote, branch, branch_source}` 字段（可用 `--branch/--org` 覆盖）
+- **旧数据兼容**：`dashboard-server.py /api/projects` 对无 `git` 字段的旧 inventory
+  自动从表补齐，无需重新生成
+- **前端优先级**：手动覆盖（状态栏 🌿 点击）> inventory.git.branch > 分支表 > master
+- 分支来源在状态栏 tooltip 与看板抽屉 `🌿` 徽标中可见
+- 表数据源：`~/debug/product_info_*.csv`（62 项）+ downloader `PROJECT_REPOS`（44 项）
+
+重新生成分支表：
+```bash
+python3 scripts/gen-project-info.py          # 默认取最新 CSV
+python3 scripts/gen-project-info.py --csv /path/to/new.csv
+```

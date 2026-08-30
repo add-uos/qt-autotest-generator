@@ -1,0 +1,492 @@
+{
+  "_meta": {
+    "generated": "2026-08-27",
+    "csv": "/home/zhy/debug/product_info_20260715143603.csv",
+    "default_branch": "master",
+    "org": "linuxdeepin",
+    "count": 77
+  },
+  "projects": {
+    "dcc-wallpapersetting-plugin": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "dde-appearance": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "downloader"
+    },
+    "dde-calendar": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "dde-clipboard": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "downloader"
+    },
+    "dde-cooperation": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "dde-daemon": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "downloader"
+    },
+    "dde-device-formatter": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "dde-file-manager": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "dde-grand-search": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "dde-introduction": {
+      "org": "linuxdeepin",
+      "branch": "develop/snipe-tmp",
+      "host": "gerrit",
+      "source": "csv",
+      "github_mirror": "linuxdeepin/dde-introduction"
+    },
+    "dde-launchpad": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "downloader"
+    },
+    "dde-network-core": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "downloader"
+    },
+    "dde-polkit-agent": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "downloader"
+    },
+    "dde-session": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "downloader"
+    },
+    "dde-session-shell": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "downloader"
+    },
+    "dde-session-ui": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "downloader"
+    },
+    "dde-shell": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "downloader"
+    },
+    "dde-tray-loader": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "downloader"
+    },
+    "deepin-album": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "deepin-anything": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "deepin-boot-maker": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "deepin-calculator": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "deepin-camera": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "deepin-compressor": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "deepin-data-transfer": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "deepin-deb-installer": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "deepin-devicemanager": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "deepin-diskmanager": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "deepin-downloader": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "deepin-draw": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "deepin-editor": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "deepin-fcitxconfigtool-plugin": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "deepin-font-manager": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "deepin-image-viewer": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "deepin-log-viewer": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "deepin-mail": {
+      "org": "linuxdeepin",
+      "branch": "develop/snipe",
+      "host": "gerrit",
+      "source": "csv",
+      "github_mirror": "linuxdeepin/deepin-mail"
+    },
+    "deepin-manual": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "deepin-mobile-assistant": {
+      "org": "linuxdeepin",
+      "branch": "develop/snipe",
+      "host": "gerrit",
+      "source": "csv",
+      "github_mirror": "linuxdeepin/deepin-mobile-assistant"
+    },
+    "deepin-movie-reborn": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "deepin-music": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "deepin-ocr": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "deepin-pdfium": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "deepin-picker": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "deepin-reader": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "deepin-scanner": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "downloader"
+    },
+    "deepin-screen-recorder": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "deepin-screensaver": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "deepin-system-monitor": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "deepin-terminal": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "deepin-update-ui": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "downloader"
+    },
+    "deepin-voice-note": {
+      "org": "linuxdeepin",
+      "branch": "develop/snipe",
+      "host": "github",
+      "source": "csv"
+    },
+    "dfmplugin-disk-encrypt": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "dtkdeclarative": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "downloader"
+    },
+    "fcitx": {
+      "org": "linuxdeepin",
+      "branch": "develop/eagle",
+      "host": "gerrit",
+      "source": "csv",
+      "github_mirror": "linuxdeepin/fcitx"
+    },
+    "ffmpeg": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "gerrit",
+      "source": "fallback",
+      "github_mirror": "linuxdeepin/ffmpeg"
+    },
+    "gvfs": {
+      "org": "linuxdeepin",
+      "branch": "develop/eagle",
+      "host": "gerrit",
+      "source": "csv",
+      "github_mirror": "linuxdeepin/gvfs"
+    },
+    "image-editor": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "downloader"
+    },
+    "libdocparser": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "libglib2.0": {
+      "org": "linuxdeepin",
+      "branch": "uos",
+      "host": "gerrit",
+      "source": "csv",
+      "github_mirror": "linuxdeepin/libglib2.0"
+    },
+    "libgpuinfo": {
+      "org": "linuxdeepin",
+      "branch": "develop/snipe",
+      "host": "gerrit",
+      "source": "csv",
+      "github_mirror": "linuxdeepin/libgpuinfo"
+    },
+    "libgtk-3": {
+      "org": "linuxdeepin",
+      "branch": "uos",
+      "host": "gerrit",
+      "source": "csv",
+      "github_mirror": "linuxdeepin/libgtk-3"
+    },
+    "libimageeditor": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "libmtp": {
+      "org": "linuxdeepin",
+      "branch": "develop/eagle",
+      "host": "gerrit",
+      "source": "csv",
+      "github_mirror": "linuxdeepin/libmtp"
+    },
+    "libqapt3": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "libtalloc2": {
+      "org": "linuxdeepin",
+      "branch": "upstream/2.4.0",
+      "host": "gerrit",
+      "source": "csv",
+      "github_mirror": "linuxdeepin/libtalloc2"
+    },
+    "libtdb1": {
+      "org": "linuxdeepin",
+      "branch": "upstream/1.4.8",
+      "host": "gerrit",
+      "source": "csv",
+      "github_mirror": "linuxdeepin/libtdb1"
+    },
+    "libtevent0": {
+      "org": "linuxdeepin",
+      "branch": "upstream/0.14.1",
+      "host": "gerrit",
+      "source": "csv",
+      "github_mirror": "linuxdeepin/libtevent0"
+    },
+    "liburing2": {
+      "org": "linuxdeepin",
+      "branch": "upstream/2.3",
+      "host": "gerrit",
+      "source": "csv",
+      "github_mirror": "linuxdeepin/liburing2"
+    },
+    "libutpm2": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "gerrit",
+      "source": "csv",
+      "github_mirror": "linuxdeepin/libutpm2"
+    },
+    "libxraw": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "fallback"
+    },
+    "mpv": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "gerrit",
+      "source": "fallback",
+      "github_mirror": "linuxdeepin/mpv"
+    },
+    "qt6integration": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "downloader"
+    },
+    "remmina": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "gerrit",
+      "source": "csv",
+      "github_mirror": "linuxdeepin/remmina"
+    },
+    "samba": {
+      "org": "linuxdeepin",
+      "branch": "uos",
+      "host": "gerrit",
+      "source": "csv",
+      "github_mirror": "linuxdeepin/samba"
+    },
+    "udisk2": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    },
+    "uos-remote-assistance": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "gerrit",
+      "source": "csv",
+      "github_mirror": "linuxdeepin/uos-remote-assistance"
+    },
+    "util-dfm": {
+      "org": "linuxdeepin",
+      "branch": "master",
+      "host": "github",
+      "source": "csv"
+    }
+  }
+}
