@@ -1,0 +1,1049 @@
+{
+  "defaults": {
+    "org": "linuxdeepin",
+    "branch": "master",
+    "test_dir": "autotests"
+  },
+  "projects": [
+    {
+      "name": "deepin-shortcut-viewer",
+      "mcp_name": "home-uos-service-codebase-repos-deepin-shortcut-viewer",
+      "enabled": true,
+      "size": "S",
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      },
+      "nodes": 177
+    },
+    {
+      "name": "dde-device-formatter",
+      "mcp_name": "home-uos-service-codebase-repos-dde-device-formatter",
+      "enabled": true,
+      "size": "S",
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      },
+      "nodes": 428
+    },
+    {
+      "name": "udisks2-qt6",
+      "mcp_name": "home-uos-service-codebase-repos-udisks2-qt6",
+      "enabled": true,
+      "size": "S",
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      },
+      "nodes": 578
+    },
+    {
+      "name": "deepin-picker",
+      "mcp_name": "home-uos-service-codebase-repos-deepin-picker",
+      "enabled": true,
+      "size": "S",
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      },
+      "nodes": 517
+    },
+    {
+      "name": "deepin-scanner",
+      "mcp_name": "home-uos-service-codebase-repos-deepin-scanner",
+      "enabled": true,
+      "size": "S",
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      },
+      "nodes": 652
+    },
+    {
+      "name": "com.deepin.gomoku",
+      "mcp_name": "home-uos-service-codebase-repos-com.deepin.gomoku",
+      "enabled": true,
+      "size": "M",
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      },
+      "nodes": 1142
+    },
+    {
+      "name": "com.deepin.lianliankan",
+      "mcp_name": "home-uos-service-codebase-repos-com.deepin.lianliankan",
+      "enabled": true,
+      "size": "S",
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      },
+      "nodes": 798
+    },
+    {
+      "name": "deepin-image-viewer",
+      "mcp_name": "home-uos-service-codebase-repos-deepin-image-viewer",
+      "enabled": true,
+      "size": "M",
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "local",
+        "path": "/home/zhy/debug/deepin-image-viewer/tests"
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      },
+      "nodes": 2450
+    },
+    {
+      "name": "deepin-ocr",
+      "mcp_name": "home-uos-service-codebase-repos-deepin-ocr",
+      "enabled": true,
+      "size": "M",
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      },
+      "nodes": 1557
+    },
+    {
+      "name": "docparser",
+      "mcp_name": "home-uos-service-codebase-repos-docparser",
+      "enabled": true,
+      "size": "M",
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      },
+      "nodes": 2198
+    },
+    {
+      "name": "image-editor",
+      "mcp_name": "home-uos-service-codebase-repos-image-editor",
+      "enabled": true,
+      "size": "M",
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      },
+      "nodes": 2042
+    },
+    {
+      "name": "deepin-music",
+      "mcp_name": "home-uos-service-codebase-repos-deepin-music",
+      "enabled": true,
+      "size": "M",
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      },
+      "nodes": 2392
+    },
+    {
+      "name": "deepin-downloader",
+      "mcp_name": "home-uos-service-codebase-repos-deepin-downloader",
+      "enabled": true,
+      "size": "M",
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      },
+      "nodes": 2756
+    },
+    {
+      "name": "deepin-font-manager",
+      "mcp_name": "home-uos-service-codebase-repos-deepin-font-manager",
+      "enabled": true,
+      "size": "M",
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      },
+      "nodes": 2417
+    },
+    {
+      "name": "deepin-anything",
+      "mcp_name": "home-uos-service-codebase-repos-deepin-anything",
+      "enabled": true,
+      "size": "M",
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "develop/snipe"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      },
+      "nodes": 1834
+    },
+    {
+      "name": "deepin-boot-maker",
+      "mcp_name": "home-uos-service-codebase-repos-deepin-boot-maker",
+      "enabled": true,
+      "size": "M",
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      },
+      "nodes": 1181
+    },
+    {
+      "name": "deepin-album",
+      "mcp_name": "home-uos-service-codebase-repos-deepin-album",
+      "enabled": true,
+      "size": "M",
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      },
+      "nodes": 3860
+    },
+    {
+      "name": "deepin-camera",
+      "mcp_name": "home-uos-service-codebase-repos-deepin-camera",
+      "enabled": true,
+      "size": "L",
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      },
+      "nodes": 8104
+    },
+    {
+      "name": "deepin-calculator",
+      "mcp_name": "home-uos-service-codebase-repos-deepin-calculator",
+      "enabled": true,
+      "size": "M",
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      },
+      "nodes": 3492
+    },
+    {
+      "name": "deepin-deb-installer",
+      "mcp_name": "home-uos-service-codebase-repos-deepin-deb-installer",
+      "enabled": true,
+      "size": "M",
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      },
+      "nodes": 3859
+    },
+    {
+      "name": "deepin-terminal",
+      "mcp_name": "home-uos-service-codebase-repos-deepin-terminal",
+      "enabled": true,
+      "size": "L",
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      },
+      "nodes": 5903
+    },
+    {
+      "name": "dde-grand-search",
+      "mcp_name": "home-uos-service-codebase-repos-dde-grand-search",
+      "enabled": true,
+      "size": "L",
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      },
+      "nodes": 7484
+    },
+    {
+      "name": "deepin-draw",
+      "mcp_name": "home-uos-service-codebase-repos-deepin-draw",
+      "enabled": true,
+      "size": "M",
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      },
+      "nodes": 4499
+    },
+    {
+      "name": "deepin-reader",
+      "mcp_name": "home-uos-service-codebase-repos-deepin-reader",
+      "enabled": true,
+      "size": "XL",
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      },
+      "nodes": 26773
+    },
+    {
+      "name": "deepin-pdfium",
+      "mcp_name": "home-uos-service-codebase-repos-deepin-pdfium",
+      "enabled": true,
+      "size": "XL",
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      },
+      "nodes": 16073
+    },
+    {
+      "name": "deepin-compressor",
+      "mcp_name": "home-uos-service-codebase-repos-deepin-compressor",
+      "enabled": true,
+      "size": "L",
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      },
+      "nodes": 6849
+    },
+    {
+      "name": "dde-file-manager",
+      "mcp_name": "home-uos-service-codebase-repos-dde-file-manager",
+      "enabled": true,
+      "size": "XL",
+      "nodes": 42842,
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      }
+    },
+    {
+      "name": "deepin-movie-reborn",
+      "mcp_name": "home-uos-service-codebase-repos-deepin-movie-reborn",
+      "enabled": true,
+      "size": "L",
+      "nodes": 8529,
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      }
+    },
+    {
+      "name": "deepin-voice-note",
+      "mcp_name": "home-uos-service-codebase-repos-deepin-voice-note",
+      "enabled": true,
+      "size": "L",
+      "nodes": 6618,
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "develop/snipe"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      }
+    },
+    {
+      "name": "deepin-screen-recorder",
+      "mcp_name": "home-uos-service-codebase-repos-deepin-screen-recorder",
+      "enabled": true,
+      "size": "L",
+      "nodes": 11890,
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      }
+    },
+    {
+      "name": "deepin-diskmanager",
+      "mcp_name": "home-uos-service-codebase-repos-deepin-diskmanager",
+      "enabled": true,
+      "size": "M",
+      "nodes": 3313,
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      }
+    },
+    {
+      "name": "deepin-system-monitor",
+      "mcp_name": "home-uos-service-codebase-repos-deepin-system-monitor",
+      "enabled": true,
+      "size": "L",
+      "nodes": 11849,
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      }
+    },
+    {
+      "name": "deepin-fcitx5configtool-plugin",
+      "mcp_name": "home-uos-service-codebase-repos-deepin-fcitx5configtool-plugin",
+      "enabled": true,
+      "size": "M",
+      "nodes": 2744,
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      }
+    },
+    {
+      "name": "dde-calendar",
+      "mcp_name": "home-uos-service-codebase-repos-dde-calendar",
+      "enabled": true,
+      "size": "L",
+      "nodes": 8742,
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      }
+    },
+    {
+      "name": "deepin-editor",
+      "mcp_name": "home-uos-service-codebase-repos-deepin-editor",
+      "enabled": true,
+      "size": "M",
+      "nodes": 4206,
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      }
+    },
+    {
+      "name": "deepin-manual",
+      "mcp_name": "home-uos-service-codebase-repos-deepin-manual",
+      "enabled": true,
+      "size": "L",
+      "nodes": 6984,
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      }
+    },
+    {
+      "name": "deepin-log-viewer",
+      "mcp_name": "home-uos-service-codebase-repos-deepin-log-viewer",
+      "enabled": true,
+      "size": "L",
+      "nodes": 12141,
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      }
+    },
+    {
+      "name": "deepin-devicemanager",
+      "mcp_name": "home-uos-service-codebase-repos-deepin-devicemanager",
+      "enabled": true,
+      "size": "L",
+      "nodes": 8397,
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      }
+    },
+    {
+      "name": "util-dfm",
+      "mcp_name": "home-uos-service-codebase-repos-util-dfm",
+      "enabled": true,
+      "size": "L",
+      "nodes": 6580,
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      }
+    },
+    {
+      "name": "dde-cooperation",
+      "mcp_name": "home-uos-service-codebase-repos-dde-cooperation",
+      "enabled": true,
+      "size": "XL",
+      "nodes": 72858,
+      "git": {
+        "org": "linuxdeepin",
+        "branch": "master"
+      },
+      "source": {
+        "type": "mcp",
+        "path": ""
+      },
+      "build": {
+        "system": "cmake",
+        "framework": "gtest",
+        "configure": "",
+        "build_cmd": "",
+        "test_cmd": "",
+        "env": {
+          "QT_QPA_PLATFORM": "offscreen"
+        },
+        "timeout": 600
+      }
+    }
+  ]
+}

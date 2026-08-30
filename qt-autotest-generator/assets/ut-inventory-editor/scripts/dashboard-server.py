@@ -27,6 +27,7 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import socket
 import subprocess
 import sys
@@ -45,8 +46,35 @@ BATCH_COLLECT = SCRIPT_DIR / "batch-collect.py"
 FETCH_MCP = SCRIPT_DIR / "fetch-mcp-data.py"
 MCP_PROBE_HOST = "10.8.12.80"
 MCP_PROBE_PORT = 13626
+CONFIG_FILE = DEFAULT_ROOT / "config.json"
+REGISTRY_FILE = DEFAULT_ROOT / "projects.json"
 
-# ── batch_collect 模块加载（文件名含连字符） ──
+
+def load_config():
+    """全局配置 config.json（损坏时退回默认）。"""
+    cfg = {"server": {"port": 8765, "host": "127.0.0.1"},
+           "mcp_url": f"http://{MCP_PROBE_HOST}:{MCP_PROBE_PORT}/mcp",
+           "github": {"org": "linuxdeepin"}, "sync": {"concurrency": 1}}
+    try:
+        data = json.loads(CONFIG_FILE.read_text("utf-8"))
+        for k, v in data.items():
+            if isinstance(v, dict) and isinstance(cfg.get(k), dict):
+                cfg[k].update(v)
+            else:
+                cfg[k] = v
+    except (OSError, ValueError):
+        pass
+    return cfg
+
+
+def _parse_mcp_host(url):
+    """从 mcp_url 提取 (host, port) 用于 TCP 探测。"""
+    m = re.match(r"https?://([^/:]+)(?::(\d+))?", url or "")
+    if not m:
+        return MCP_PROBE_HOST, MCP_PROBE_PORT
+    return m.group(1), int(m.group(2) or 80)
+
+# ── batch_collect 模块加载（文件名含连字符，仅复用 collect_project 函数）──
 _bc = None
 
 def load_batch_collect():
@@ -65,35 +93,53 @@ TASKS_LOCK = threading.Lock()
 _SYNC_POOL = ThreadPoolExecutor(max_workers=1)   # 同时只允许一个同步任务
 
 def probe_mcp(timeout=2.0):
-    """TCP 探测 MCP 端口可达性。"""
+    """TCP 探测 MCP 端口可达性（地址取自 config.json mcp_url）。"""
+    host, port = _parse_mcp_host(load_config().get("mcp_url", ""))
     try:
-        s = socket.create_connection((MCP_PROBE_HOST, MCP_PROBE_PORT), timeout=timeout)
+        s = socket.create_connection((host, port), timeout=timeout)
         s.close()
         return True
     except OSError:
         return False
 
-_BRANCH_TABLE = None
+_REGISTRY = None
+_REGISTRY_MTIME = None
 
 
-def load_branch_table():
-    """project-branches.json（与本脚本同目录），供旧 inventory 兼并分支"""
-    global _BRANCH_TABLE
-    if _BRANCH_TABLE is None:
-        p = Path(__file__).resolve().parent / "project-branches.json"
-        try:
-            _BRANCH_TABLE = json.loads(p.read_text(encoding="utf-8")).get("projects", {})
-        except (OSError, ValueError):
-            _BRANCH_TABLE = {}
-    return _BRANCH_TABLE
+def load_registry(force=False):
+    """项目注册表 projects.json（支持热更新：文件变更后重新加载）。"""
+    global _REGISTRY, _REGISTRY_MTIME
+    try:
+        mt = REGISTRY_FILE.stat().st_mtime
+    except OSError:
+        return {"defaults": {}, "projects": []}
+    if not force and _REGISTRY is not None and mt == _REGISTRY_MTIME:
+        return _REGISTRY
+    try:
+        _REGISTRY = json.loads(REGISTRY_FILE.read_text("utf-8"))
+        _REGISTRY_MTIME = mt
+    except (OSError, ValueError):
+        _REGISTRY = _REGISTRY or {"defaults": {}, "projects": []}
+        _REGISTRY_MTIME = mt
+    return _REGISTRY
+
+
+def registry_index():
+    """{name: entry} 视图。"""
+    return {p.get("name"): p for p in load_registry().get("projects", []) if p.get("name")}
 
 
 def project_git_info(name, inventory_data):
-    """优先 inventory 自带 git 字段，其次表，最后 fallback master"""
+    """优先 inventory 自带 git 字段，其次注册表，最后 fallback master"""
     g = inventory_data.get("git")
     if isinstance(g, dict) and g.get("branch"):
         return {"branch": g["branch"], "org": g.get("org", "linuxdeepin"),
                 "source": g.get("branch_source", "inventory")}
+    e = registry_index().get(name)
+    if e:
+        git = e.get("git") or {}
+        return {"branch": git.get("branch", "master"), "org": git.get("org", "linuxdeepin"),
+                "source": "registry"}
     e = load_branch_table().get(name)
     if e:
         return {"branch": e["branch"], "org": e.get("org", "linuxdeepin"),
@@ -101,11 +147,20 @@ def project_git_info(name, inventory_data):
     return {"branch": "master", "org": "linuxdeepin", "source": "fallback"}
 
 
+def load_branch_table():
+    """project-branches.json 兼容层（注册表优先，此表兜底）。"""
+    p = SCRIPT_DIR / "project-branches.json"
+    try:
+        return json.loads(p.read_text(encoding="utf-8")).get("projects", {})
+    except (OSError, ValueError):
+        return {}
+
+
 def collect_stats(base_dir):
-    """聚合 base_dir/*/.ut-inventory.json 的统计。"""
-    bc = load_batch_collect()
-    size_map = {gh: size for _mcp, gh, size in bc.PROJECTS}
-    mcp_map = {gh: mcp for mcp, gh, _s in bc.PROJECTS}
+    """聚合 base_dir/*/.ut-inventory.json 的统计（size/mcp 名取自注册表）。"""
+    reg = registry_index()
+    size_map = {n: e.get("size", "?") for n, e in reg.items()}
+    mcp_map = {n: e.get("mcp_name", n) for n, e in reg.items()}
     projects = []
     if not base_dir.is_dir():
         return projects
@@ -163,9 +218,16 @@ def collect_stats(base_dir):
     return projects
 
 def run_sync(task_id, opts, base_dir):
-    """后台逐项目调 collect_project（复用 batch_collect 模块），更新 TASKS。"""
-    bc = load_batch_collect()
-    projects = [p for p in bc.PROJECTS]
+    """后台逐项目调 collect_project（复用 batch_collect 模块的收集函数），更新 TASKS。
+    项目清单唯一来源: 注册表 enabled 项目。"""
+    bc = load_batch_collect()  # 仅用其 collect_project 函数
+    reg = registry_index()
+    projects = [(e.get("mcp_name") or n, n, e.get("size", "?"))
+                for n, e in reg.items() if e.get("enabled", True)]
+    if not projects:
+        with TASKS_LOCK:
+            TASKS[task_id].update(state="error", log_tail="注册表无启用项目")
+        return
     if opts.get("filter"):
         projects = [p for p in projects if opts["filter"].lower() in p[1].lower()]
     if opts.get("size"):
@@ -173,6 +235,10 @@ def run_sync(task_id, opts, base_dir):
     with TASKS_LOCK:
         TASKS[task_id].update(state="running", total_n=len(projects), done_n=0)
     for mcp_name, gh_name, _sz in projects:
+        if not mcp_name:
+            with TASKS_LOCK:
+                TASKS[task_id]["log_tail"] += f"\n⚠ {gh_name}: 注册表缺 mcp_name，跳过"
+            continue
         with TASKS_LOCK:
             TASKS[task_id]["current"] = gh_name
         t0 = time.time()
@@ -218,6 +284,106 @@ def start_sync(opts, base_dir):
                           "elapsed": 0}
     _SYNC_POOL.submit(run_sync, task_id, opts, base_dir)
     return task_id, True
+
+
+# ── 配置管理（/api/config）──
+
+def _backup_and_write(path, data):
+    if path.is_file():
+        shutil.copy(path, str(path) + ".bak")
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", "utf-8")
+
+
+def save_config(body):
+    """保存全局配置（仅接受已知字段，端口等重启后生效）。"""
+    if not isinstance(body, dict):
+        return False, "body 必须是对象"
+    cfg = load_config()
+    for k in ("mcp_url",):
+        if k in body:
+            v = body[k]
+            if not isinstance(v, str):
+                return False, f"{k} 必须是字符串"
+            cfg[k] = v
+    for sec in ("server", "github", "sync"):
+        if sec in body:
+            if not isinstance(body[sec], dict):
+                return False, f"{sec} 必须是对象"
+            cfg.setdefault(sec, {}).update(body[sec])
+    if cfg.get("server", {}).get("port"):
+        try:
+            cfg["server"]["port"] = int(cfg["server"]["port"])
+        except (TypeError, ValueError):
+            return False, "server.port 必须是整数"
+    _backup_and_write(CONFIG_FILE, cfg)
+    return True, "已保存（端口等改动重启服务后生效）"
+
+
+def save_registry(body):
+    """保存项目注册表 projects.json（结构校验 + 备份）。"""
+    if not isinstance(body, dict) or not isinstance(body.get("projects"), list):
+        return False, "需要 {projects: [...]}"
+    names = set()
+    for i, p in enumerate(body["projects"]):
+        if not isinstance(p, dict) or not p.get("name") or not re.match(r"^[\w.\-]+$", str(p["name"])):
+            return False, f"第 {i+1} 项缺少合法 name"
+        if p["name"] in names:
+            return False, f"项目名重复: {p['name']}"
+        names.add(p["name"])
+        for sec in ("git", "source", "build"):
+            if sec in p and not isinstance(p[sec], dict):
+                return False, f"{p['name']}.{sec} 必须是对象"
+        if p.get("source", {}).get("path") and not Path(p["source"]["path"]).expanduser().is_dir():
+            return False, f"{p['name']} 本地路径不存在: {p['source']['path']}"
+    out = {"defaults": body.get("defaults") or load_registry().get("defaults", {}),
+           "projects": body["projects"]}
+    _backup_and_write(REGISTRY_FILE, out)
+    load_registry(force=True)
+    return True, f"已保存 {len(body['projects'])} 个项目"
+
+
+BUILD_FILES = [
+    ("CMakeLists.txt", "cmake"), ("Makefile", "make"), ("meson.build", "meson"),
+    ("qmake.pro", "qmake"),
+]
+
+
+def detect_build(path):
+    """探测本地项目路径的构建系统与测试目录（不执行任何命令，只读文件）。"""
+    path = (path or "").strip()
+    if not path:
+        return {"ok": False, "msg": "请先填写本地路径"}
+    root = Path(path).expanduser()
+    if not root.is_dir():
+        return {"ok": False, "msg": f"路径不存在: {path}"}
+    system = ""
+    found = []
+    for fn, sysname in BUILD_FILES:
+        if (root / fn).is_file():
+            found.append(fn)
+            if not system:
+                system = sysname
+    # .pro 任意匹配（qmake 项目文件名不一定叫 qmake.pro）
+    pros = list(root.glob("*.pro"))
+    if pros and not system:
+        system = "qmake"
+        found.append(pros[0].name)
+    # 测试目录推测
+    test_dir = ""
+    for cand in ("autotests", "tests", "test"):
+        if (root / cand).is_dir():
+            test_dir = cand
+            break
+    gtest = any((root / test_dir).rglob("*test*.cpp")) if test_dir else False
+    return {
+        "ok": bool(system),
+        "msg": "" if system else "未识别到构建文件（CMakeLists.txt/.pro/meson.build/Makefile）",
+        "system": system or "custom",
+        "framework": "gtest" if gtest else "gtest",
+        "test_dir": test_dir,
+        "found": found,
+        "name_guess": root.name,
+    }
 
 # ── HTTP Handler ──
 
@@ -281,6 +447,37 @@ class Handler(BaseHTTPRequestHandler):
         p = u.path
         if p in ("/", "/index.html"):
             self._file(self.root_dir / "index.html", "text/html; charset=utf-8")
+        elif p == "/api/fs/list":
+            q = parse_qs(u.query)
+            raw = (q.get("path") or ["~"])[0]
+            try:
+                target = Path(raw).expanduser().resolve()
+            except OSError:
+                target = Path(raw).expanduser().absolute()
+            if not target.is_dir():
+                self._json({"error": f"不是目录: {target}"}, 400)
+                return
+            entries = []
+            try:
+                with os.scandir(target) as it:
+                    for e in it:
+                        try:
+                            is_dir = e.is_dir(follow_symlinks=True)
+                            entries.append({"name": e.name, "dir": is_dir, "symlink": e.is_symlink()})
+                        except OSError:
+                            continue
+            except PermissionError:
+                self._json({"error": f"无权限: {target}"}, 400)
+                return
+            entries.sort(key=lambda x: (not x["dir"], x["name"].lower()))
+            if len(entries) > 800:
+                entries = entries[:800]
+            self._json({
+                "path": str(target),
+                "parent": str(target.parent) if target.parent != target else "",
+                "entries": entries,
+                "truncated": False,
+            })
         elif p == "/api/status":
             summary = self.base_dir / "_summary.json"
             last_ts = None
@@ -322,6 +519,17 @@ class Handler(BaseHTTPRequestHandler):
                 return
             f = self.base_dir / name / "test-mapping.json"
             self._file(f, "application/json; charset=utf-8")
+        elif p == "/api/config":
+            self._json({"config": load_config(), "projects": load_registry(force=True)})
+        elif p in ("/styles.css",) or p.startswith("/js/"):
+            # 静态资源（拆分后的前端模块）
+            rel = p.lstrip("/")
+            f = (self.root_dir / rel).resolve()
+            if not str(f).startswith(str(self.root_dir.resolve())) or not f.is_file():
+                self._json({"error": "not found"}, 404)
+                return
+            ctype = "text/javascript; charset=utf-8" if f.suffix == ".js" else "text/css; charset=utf-8"
+            self._file(f, ctype)
         else:
             self._json({"error": "not found"}, 404)
 
@@ -331,16 +539,46 @@ class Handler(BaseHTTPRequestHandler):
             body = self._body_json()
             task_id, started = start_sync(body, self.base_dir)
             self._json({"task_id": task_id, "started": started})
+        elif u.path == "/api/config/sync-registry":
+            body = self._body_json()
+            cfg = load_config()
+            cmd = [sys.executable, str(SCRIPT_DIR / "sync-registry-from-mcp.py"), "--json"]
+            if body.get("keep_size"):
+                cmd.append("--keep-size")
+            if cfg.get("mcp_url"):
+                cmd += ["--mcp-url", cfg["mcp_url"]]
+            try:
+                r = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+            except subprocess.TimeoutExpired:
+                self._json({"ok": False, "msg": "MCP 同步超时 (180s)"}, 504)
+                return
+            try:
+                data = json.loads(r.stdout)
+            except ValueError:
+                data = {"ok": False, "msg": (r.stdout + r.stderr)[-400:]}
+            self._json(data)
+        elif u.path == "/api/config/global":
+            body = self._body_json()
+            ok, msg = save_config(body)
+            self._json({"ok": ok, "msg": msg}, 200 if ok else 400)
+        elif u.path == "/api/config/projects":
+            body = self._body_json()
+            ok, msg = save_registry(body)
+            self._json({"ok": ok, "msg": msg}, 200 if ok else 400)
+        elif u.path == "/api/config/detect":
+            body = self._body_json()
+            self._json(detect_build(body.get("path", "")))
         else:
             self._json({"error": "not found"}, 404)
 
 
 def main():
     ap = argparse.ArgumentParser(description="UT 看板伴随服务")
-    ap.add_argument("--port", type=int, default=8765)
+    ap.add_argument("--port", type=int, default=None, help="覆盖 config.json 端口")
     ap.add_argument("--root", default=str(DEFAULT_ROOT), help="index.html 目录")
     ap.add_argument("--base", default=str(DEFAULT_BASE), help="mcp-projects 数据目录")
     args = ap.parse_args()
+    port = args.port or int(load_config().get("server", {}).get("port") or 8765)
 
     Handler.root_dir = Path(args.root)
     Handler.base_dir = Path(args.base)
@@ -349,10 +587,10 @@ def main():
         print(f"❌ 找不到 batch-collect.py: {BATCH_COLLECT}", file=sys.stderr)
         sys.exit(1)
 
-    load_batch_collect()  # 预加载，失败早退
+    load_batch_collect()  # 预加载 collect_project, 失败早退
 
     # 端口占用自动顺延（最多试 10 个）
-    port = args.port
+    base_port = port
     httpd = None
     for _ in range(10):
         try:
@@ -367,14 +605,15 @@ def main():
     if httpd is None:
         print("❌ 连续 10 个端口均被占用，请用 --port 指定", file=sys.stderr)
         sys.exit(1)
-    if port != args.port:
-        print(f"ℹ 实际使用端口: {port}（原端口 {args.port} 被占用）")
+    if port != base_port:
+        print(f"ℹ 实际使用端口: {port}（原端口 {base_port} 被占用）")
 
     print(f"✅ UT Dashboard Server")
     print(f"   http://localhost:{port}/")
     print(f"   HTML : {Handler.root_dir}")
     print(f"   数据 : {Handler.base_dir}")
-    print(f"   MCP  : {MCP_PROBE_HOST}:{MCP_PROBE_PORT} {'✓可达' if probe_mcp() else '✗不可达'}")
+    murl = load_config().get("mcp_url", "")
+    print(f"   MCP  : {murl} {'✓可达' if probe_mcp() else '✗不可达'}")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 批量从 MCP 收集项目 inventory + 测试映射
+项目清单唯一来源: projects.json 注册表 (由 sync-registry-from-mcp.py 维护)
 用法: python3 batch-collect.py [--skip-fetch-mcp] [--skip-test-mapping] [--parallel N]
 """
 import json, os, sys, subprocess, argparse, time
@@ -11,41 +12,22 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 FETCH_MCP = SCRIPT_DIR / "fetch-mcp-data.py"
 FETCH_TM  = SCRIPT_DIR / "fetch-test-mapping.py"
 BASE_DIR  = SCRIPT_DIR.parent / "mcp-projects"
+REGISTRY  = SCRIPT_DIR.parent / "projects.json"
 
-# MCP 项目列表 — 挑选中小型且有代表性的项目
-# 格式: (mcp_project_name, github_project_name, 预估规模)
-PROJECTS = [
-    # 小型 (nodes < 1000)
-    ("home-uos-service-codebase-repos-deepin-shortcut-viewer",   "deepin-shortcut-viewer",   "S"),
-    ("home-uos-service-codebase-repos-dde-device-formatter",    "dde-device-formatter",     "S"),
-    ("home-uos-service-codebase-repos-udisks2-qt6",            "udisks2-qt6",              "S"),
-    ("home-uos-service-codebase-repos-deepin-picker",           "deepin-picker",            "S"),
-    ("home-uos-service-codebase-repos-deepin-scanner",           "deepin-scanner",            "S"),
-    ("home-uos-service-codebase-repos-com.deepin.gomoku",       "com.deepin.gomoku",        "S"),
-    ("home-uos-service-codebase-repos-com.deepin.lianliankan",  "com.deepin.lianliankan",   "S"),
-    # 中型 (nodes 1K~5K)
-    ("home-uos-service-codebase-repos-deepin-image-viewer",     "deepin-image-viewer",      "M"),
-    ("home-uos-service-codebase-repos-deepin-ocr",              "deepin-ocr",               "M"),
-    ("home-uos-service-codebase-repos-docparser",               "docparser",                "M"),
-    ("home-uos-service-codebase-repos-image-editor",            "image-editor",              "M"),
-    ("home-uos-service-codebase-repos-deepin-music",            "deepin-music",              "M"),
-    ("home-uos-service-codebase-repos-deepin-downloader",       "deepin-downloader",         "M"),
-    ("home-uos-service-codebase-repos-deepin-font-manager",     "deepin-font-manager",      "M"),
-    ("home-uos-service-codebase-repos-deepin-anything",         "deepin-anything",           "M"),
-    ("home-uos-service-codebase-repos-deepin-boot-maker",       "deepin-boot-maker",         "M"),
-    ("home-uos-service-codebase-repos-deepin-album",            "deepin-album",              "M"),
-    # 大中型 (nodes 5K~15K)
-    ("home-uos-service-codebase-repos-deepin-camera",           "deepin-camera",             "L"),
-    ("home-uos-service-codebase-repos-deepin-calculator",       "deepin-calculator",         "L"),
-    ("home-uos-service-codebase-repos-deepin-deb-installer",    "deepin-deb-installer",      "L"),
-    ("home-uos-service-codebase-repos-deepin-terminal",         "deepin-terminal",           "L"),
-    ("home-uos-service-codebase-repos-dde-grand-search",        "dde-grand-search",         "L"),
-    ("home-uos-service-codebase-repos-deepin-draw",             "deepin-draw",               "L"),
-    # 超大型 (nodes 15K+)
-    ("home-uos-service-codebase-repos-deepin-reader",           "deepin-reader",             "XL"),
-    ("home-uos-service-codebase-repos-deepin-pdfium",           "deepin-pdfium",             "XL"),
-    ("home-uos-service-codebase-repos-deepin-compressor",       "deepin-compressor",         "XL"),
-]
+
+def require_registry_projects():
+    """从 projects.json 注册表取启用项目 (mcp_name, gh_name, size)。缺失/为空时直接退出。"""
+    try:
+        reg = json.loads(REGISTRY.read_text("utf-8"))
+    except OSError:
+        sys.exit(f"❌ 未找到注册表 {REGISTRY}\n   生成: python3 scripts/sync-registry-from-mcp.py")
+    except ValueError as e:
+        sys.exit(f"❌ 注册表 JSON 解析失败: {e}\n   重新生成: python3 scripts/sync-registry-from-mcp.py")
+    projects = [(p.get("mcp_name") or p["name"], p["name"], p.get("size", "?"))
+                for p in reg.get("projects", []) if p.get("enabled", True)]
+    if not projects:
+        sys.exit("❌ 注册表无启用项目 — 在编辑器「设置」页勾选启用, 或运行 sync-registry-from-mcp.py")
+    return projects
 
 def run_step(cmd, label, project_dir):
     """运行子进程命令，返回 (success, elapsed_sec, output_tail)"""
@@ -161,7 +143,7 @@ def main():
 
     BASE_DIR.mkdir(parents=True, exist_ok=True)
 
-    projects = PROJECTS
+    projects = require_registry_projects()
     if args.filter:
         projects = [p for p in projects if args.filter.lower() in p[1].lower()]
     if args.size:

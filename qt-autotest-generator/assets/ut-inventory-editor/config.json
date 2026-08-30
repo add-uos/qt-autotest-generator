@@ -1,0 +1,13 @@
+{
+  "server": {
+    "port": 8765,
+    "host": "127.0.0.1"
+  },
+  "mcp_url": "http://10.8.12.80:13626/mcp",
+  "github": {
+    "org": "linuxdeepin"
+  },
+  "sync": {
+    "concurrency": 1
+  }
+}

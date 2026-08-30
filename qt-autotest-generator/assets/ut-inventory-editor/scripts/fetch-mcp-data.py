@@ -69,7 +69,15 @@ from pathlib import Path
 # 优先级：环境变量 > 代码默认值
 # - QTAG_MCP_URL: 远端 MCP HTTP 端点（覆盖默认值）
 
-MCP_URL = os.environ.get("QTAG_MCP_URL", "http://10.8.12.80:13626/mcp")
+def _cfg_mcp_url():
+    """MCP 地址优先级: 环境变量 QTAG_MCP_URL > config.json > 内置默认"""
+    p = Path(os.path.dirname(os.path.abspath(__file__))).parent / "config.json"
+    try:
+        return json.loads(p.read_text("utf-8")).get("mcp_url") or ""
+    except (OSError, ValueError):
+        return ""
+
+MCP_URL = os.environ.get("QTAG_MCP_URL") or _cfg_mcp_url() or "http://10.8.12.80:13626/mcp"
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_ORG = "linuxdeepin"
 DEFAULT_BRANCH = "master"
@@ -1048,24 +1056,41 @@ def run_extract_branches():
 
 
 def lookup_git_info(project_name, branch_arg, org_arg):
-    """按项目名查 project-branches.json；项目名可能带 MCP 路径前缀，取尾部匹配"""
+    """查项目 git 信息，优先级：注册表 projects.json > project-branches.json > 默认。
+    项目名可能带 MCP 路径前缀，取尾部匹配"""
     org = org_arg or DEFAULT_ORG
-    table_path = Path(os.path.dirname(os.path.abspath(__file__))) / "project-branches.json"
     short = project_name.rsplit("-repos-", 1)[-1]
     entry = None
-    if table_path.is_file():
+    source = "table"
+    # ① 注册表（scripts 上一级 projects.json）
+    reg_path = Path(os.path.dirname(os.path.abspath(__file__))).parent / "projects.json"
+    if reg_path.is_file():
         try:
-            projects = json.loads(table_path.read_text(encoding="utf-8")).get("projects", {})
-            entry = projects.get(project_name) or projects.get(short)
+            reg = json.loads(reg_path.read_text(encoding="utf-8")).get("projects", [])
+            for p in reg:
+                if p.get("name") in (project_name, short):
+                    git = p.get("git") or {}
+                    entry = {"org": git.get("org", org), "branch": git.get("branch", DEFAULT_BRANCH)}
+                    source = "registry"
+                    break
         except (OSError, ValueError):
             pass
+    # ② 分支表兼容
+    if entry is None:
+        table_path = Path(os.path.dirname(os.path.abspath(__file__))) / "project-branches.json"
+        if table_path.is_file():
+            try:
+                projects = json.loads(table_path.read_text(encoding="utf-8")).get("projects", {})
+                entry = projects.get(project_name) or projects.get(short)
+            except (OSError, ValueError):
+                pass
     if branch_arg:
         return {"org": org, "remote": f"https://github.com/{org}/{short}.git",
                 "branch": branch_arg, "branch_source": "arg"}
     if entry:
         return {"org": entry.get("org", org),
                 "remote": f"https://github.com/{entry.get('org', org)}/{short}.git",
-                "branch": entry["branch"], "branch_source": "table"}
+                "branch": entry["branch"], "branch_source": source}
     return {"org": org, "remote": f"https://github.com/{org}/{short}.git",
             "branch": DEFAULT_BRANCH, "branch_source": "fallback"}
 

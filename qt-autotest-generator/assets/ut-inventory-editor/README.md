@@ -93,3 +93,45 @@ scripts/gen-project-info.py     # 重新生成上表（可重跑）
 python3 scripts/gen-project-info.py          # 默认取最新 CSV
 python3 scripts/gen-project-info.py --csv /path/to/new.csv
 ```
+
+## P1 配置化重构（v2.0）
+
+前端拆分为**零构建经典 script 模块**（file:// 与 server 模式都可用）：
+
+```
+index.html          页面壳（标记 + 模块引用）
+styles.css          全部样式
+js/core.js          全局状态 S / 工具 / 分支与视图切换
+js/editor.js        inventory 编辑器
+js/github.js        GitHub 面板
+js/dashboard.js     多项目看板
+js/settings.js      配置管理界面
+js/app.js           boot 启动入口
+config.json         全局配置（端口 / MCP 地址 / org / 并发）
+projects.json       项目注册表（权威数据源，26 项目）
+scripts/sync-registry-from-mcp.py   从 MCP list_projects 同步注册表（新增/规模/分支）
+```
+
+**注册表是唯一数据源**（无内置兜底）：batch-collect 同步清单、fetch-mcp-data 的
+git 注入、server /api/projects 分支合并全部只读注册表。
+
+**从 MCP 同步项目**：设置页「🔄 从 MCP 同步」或 CLI `python3 scripts/sync-registry-from-mcp.py`。
+- MCP `list_projects` 现有 40 个项目（注册表 40，26 启用）
+- 规模按节点数推导：`<1K=S, <5K=M, <15K=L, ≥15K=XL`（可在同步时选"保留手工标注"）
+- 分支取 MCP 真实 git 分支（如 deepin-anything → develop/snipe）
+- 新增项目默认 **enabled=false**，在设置页勾选启用后才参与同步收集
+- 已不在 MCP 的项目保留不动，报告中标注
+
+**设置 tab**（第三个标签）：
+- 全局设置：MCP 地址 / org / 端口（重启生效）/ 同步并发
+- 项目注册表：增删行、enabled 开关、规模、分支、来源类型、**本地源码路径**、
+  构建系统、自定义测试命令；🔍 按钮按本地路径**探测**构建系统（CMakeLists/pro/meson/Makefile）
+- 本地路径栏带 **… 浏览按钮** → 目录浏览对话框（`GET /api/fs/list`）：🏠 主目录 / ⬆ 上级 /
+  路径回车跳转 / 隐藏项开关（记忆偏好）/ ✅ 选定写回并自动把来源切为 local
+- 保存写回 `config.json` / `projects.json`（自动 .bak 备份，路径不存在的项目会被拒绝）
+
+新增 API：`GET /api/config`、`POST /api/config/global`、`POST /api/config/projects`、
+`POST /api/config/detect`、`GET /api/fs/list`。
+
+> 测试运行（P2）预留：注册表 `build` 字段即运行配置，`source.path` 指向本地源码，
+> 全部 GTest + ctest 默认模板，custom 命令兜底。
