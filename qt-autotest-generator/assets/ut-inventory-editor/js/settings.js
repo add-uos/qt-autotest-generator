@@ -24,6 +24,10 @@ async function loadConfig() {
         $('#cfg-org').value = r.config?.github?.org || '';
         $('#cfg-port').value = r.config?.server?.port || 8765;
         $('#cfg-concurrency').value = r.config?.sync?.concurrency || 1;
+        // 测试配置 (Phase 2)
+        const tc = r.config?.test || {};
+        $('#cfg-test-concurrent').value = tc.max_concurrent || 2;
+        $('#cfg-test-timeout').value = tc.default_timeout || 600;
         const def = r.projects?.defaults || {};
         $('#cfg-def-branch').value = def.branch || 'master';
         $('#cfg-def-testdir').value = def.test_dir || 'autotests';
@@ -119,6 +123,10 @@ async function saveGlobalCfg() {
     CFG.config.github = CFG.config.github || {}; CFG.config.github.org = $('#cfg-org').value.trim();
     CFG.config.server = CFG.config.server || {}; CFG.config.server.port = parseInt($('#cfg-port').value, 10) || 8765;
     CFG.config.sync = CFG.config.sync || {}; CFG.config.sync.concurrency = Math.max(1, parseInt($('#cfg-concurrency').value, 10) || 1);
+    // 测试配置 (Phase 2)
+    CFG.config.test = CFG.config.test || {};
+    CFG.config.test.max_concurrent = Math.max(1, parseInt($('#cfg-test-concurrent').value, 10) || 2);
+    CFG.config.test.default_timeout = Math.max(30, parseInt($('#cfg-test-timeout').value, 10) || 600);
     try {
         const r = await dashJson('/api/config/global', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(CFG.config) });
         toast(r.ok ? '✓ ' + r.msg : '保存失败: ' + r.msg, r.ok ? '' : 'err');
@@ -185,7 +193,7 @@ function initSettingsEvents() {
     $('#cfg-size-mode').onchange = e => localStorage.setItem('utie-size-mode', e.target.value);
     // 目录浏览对话框
     $('#fs-cancel').onclick = fsClose;
-    $('#fs-confirm').onclick = () => { if (fsPick.cb && fsPick.path) fsPick.cb(fsPick.path); fsClose(); };
+    $('#fs-confirm').onclick = () => { const picked = fsPick.selected ? fsPick.path + '/' + fsPick.selected : fsPick.path; if (fsPick.cb && picked) fsPick.cb(picked); fsClose(); };
     $('#fs-home').onclick = () => fsLoad('~');
     $('#fs-up').onclick = () => fsLoad((fsPick.path || '/') + '/..');
     $('#fs-show-hidden').onchange = e => { fsPick.showHidden = e.target.checked; localStorage.setItem('utie-fs-hidden', fsPick.showHidden ? '1' : '0'); renderFsList(); };
@@ -194,7 +202,7 @@ function initSettingsEvents() {
 }
 
 // ═══ 目录浏览对话框 ═══
-const fsPick = { path: '', cb: null, entries: [], showHidden: localStorage.getItem('utie-fs-hidden') === '1' };
+const fsPick = { path: '', selected: '', cb: null, entries: [], showHidden: localStorage.getItem('utie-fs-hidden') === '1' };
 
 async function openFsPicker(startPath, onPick) {
     if (!S.dash.server) { toast('目录浏览需要伴随服务运行中', 'warn'); return; }
@@ -219,13 +227,22 @@ async function fsLoad(raw) {
 function renderFsList() {
     const list = $('#fs-list');
     list.innerHTML = '';
+    fsPick.selected = '';
     const shown = fsPick.entries.filter(e => fsPick.showHidden || !e.name.startsWith('.'));
     if (!shown.length) { list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted)">空目录</div>'; return; }
     shown.forEach(e => {
         const row = document.createElement('div');
         row.className = 'fs-row' + (e.dir ? '' : ' fs-file');
         row.textContent = (e.dir ? '📁 ' : '📄 ') + e.name + (e.symlink ? ' ↗' : '');
-        if (e.dir) row.onclick = () => fsLoad(fsPick.path + '/' + e.name);
+        row.dataset.name = e.name;
+        // 单击选中，不导航
+        row.onclick = () => {
+            list.querySelectorAll('.fs-row.selected').forEach(r => r.classList.remove('selected'));
+            row.classList.add('selected');
+            fsPick.selected = e.name;
+        };
+        // 双击进入目录
+        if (e.dir) row.ondblclick = () => fsLoad(fsPick.path + '/' + e.name);
         list.appendChild(row);
     });
 }

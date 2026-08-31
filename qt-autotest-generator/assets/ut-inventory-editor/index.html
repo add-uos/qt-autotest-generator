@@ -173,6 +173,7 @@
 <div class="dash-drawer-head">
 <i data-lucide="box" class="icon" style="color:var(--accent)"></i>
 <span id="dash-drawer-title" style="font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+<button class="btn btn-sm btn-ghost" id="dash-drawer-maximize" title="最大化"><i data-lucide="maximize-2" class="icon"></i></button>
 <button class="btn btn-sm btn-ghost" id="dash-drawer-close" title="关闭"><i data-lucide="x" class="icon"></i></button>
 </div>
 <div class="dash-drawer-body" id="dash-drawer-body"></div>
@@ -235,6 +236,8 @@
 <label class="cfg-field"><span>GitHub 组织</span><input id="cfg-org" class="cfg-input"/></label>
 <label class="cfg-field"><span>服务端口 <em title="重启 dashboard-server.py 后生效">重启生效</em></span><input id="cfg-port" class="cfg-input" type="number" min="1024" max="65535"/></label>
 <label class="cfg-field"><span>同步并发</span><input id="cfg-concurrency" class="cfg-input" type="number" min="1" max="8"/></label>
+<label class="cfg-field"><span>测试最大并行 <em title="同时运行测试的项目数">max_concurrent</em></span><input id="cfg-test-concurrent" class="cfg-input" type="number" min="1" max="8"/></label>
+<label class="cfg-field"><span>测试超时(秒) <em title="单个阶段超时">timeout</em></span><input id="cfg-test-timeout" class="cfg-input" type="number" min="30" max="3600"/></label>
 </div>
 <div class="settings-head" style="margin-top:18px">
 <h3>📋 项目注册表 <span id="cfg-proj-count" class="detail-small text-[var(--text-muted)]"></span></h3>

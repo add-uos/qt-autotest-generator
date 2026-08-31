@@ -197,15 +197,20 @@
         "branch": "master"
       },
       "source": {
-        "type": "local",
-        "path": "/home/zhy/debug/deepin-image-viewer/tests"
+        "type": ["mcp", "local"],
+        "path": "/home/zhy/debug/deepin-image-viewer"
       },
       "build": {
         "system": "cmake",
         "framework": "gtest",
-        "configure": "",
-        "build_cmd": "",
-        "test_cmd": "",
+        "build_dir": "build",
+        "phases": {
+          "configure": "cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_SAFETYTEST_ARG=\"CMAKE_SAFETYTEST_ARG_ON\" ..",
+          "build": "make -j$(nproc)",
+          "test": "./tests/deepin-image-viewer-test --gtest_output=xml:./report/report_deepin-image-viewer.xml",
+          "coverage": "lcov -d . -c -o coverage.info && genhtml -o html coverage.info",
+          "summary": ""
+        },
         "env": {
           "QT_QPA_PLATFORM": "offscreen"
         },
@@ -483,15 +488,20 @@
         "branch": "master"
       },
       "source": {
-        "type": "mcp",
-        "path": ""
+        "type": ["mcp", "local"],
+        "path": "/home/zhy/debug/deepin-calculator"
       },
       "build": {
         "system": "cmake",
         "framework": "gtest",
-        "configure": "",
-        "build_cmd": "",
-        "test_cmd": "",
+        "build_dir": "build-ut",
+        "phases": {
+          "configure": "cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_SAFETYTEST_ARG=\"CMAKE_SAFETYTEST_ARG_ON\" ..",
+          "build": "make -j$(nproc)",
+          "test": "./tests/deepin-calculator-test --gtest_output=xml:./report/report_deepin-calculator.xml",
+          "coverage": "lcov -d . -c -o coverage.info && genhtml -o html coverage.info",
+          "summary": ""
+        },
         "env": {
           "QT_QPA_PLATFORM": "offscreen"
         },

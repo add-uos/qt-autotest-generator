@@ -9,5 +9,32 @@
   },
   "sync": {
     "concurrency": 1
+  },
+  "test": {
+    "max_concurrent": 2,
+    "default_timeout": 600,
+    "build_dir_candidates": [
+      "build-ut",
+      "build-test",
+      "build-ut-m3",
+      "build"
+    ]
+  },
+  "coverage": {
+    "theme": "utie-auto",
+    "themes": {
+      "utie-auto": {
+        "css": "assets/coverage-themes/utie-light.css",
+        "override": true
+      },
+      "utie-dark": {
+        "css": "assets/coverage-themes/utie-dark.css",
+        "override": true
+      },
+      "original": {
+        "css": null,
+        "override": false
+      }
+    }
   }
 }

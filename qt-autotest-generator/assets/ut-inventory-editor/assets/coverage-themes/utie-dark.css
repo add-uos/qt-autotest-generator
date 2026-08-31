@@ -1,0 +1,564 @@
+/*
+ * utie-dark.css — LCOV coverage report theme matching UT Inventory Editor (Dark)
+ *
+ * Design system (dark mode):
+ *   Backgrounds: #0f172a (canvas) / #1e293b (elevated) / #273449 (elev2)
+ *   Borders:     #334155 / #1e293b (soft)
+ *   Text:        #f8fafc (primary) / #94a3b8 (dim) / #475569 (muted)
+ *   Accent:      #22c55e (green)  / #f59e0b (amber) / #ef4444 (red)
+ *   Info:        #38bdf8 (sky blue)
+ *   Low gray:    #64748b
+ *   Fonts:       IBM Plex Sans (body) / JetBrains Mono (code)
+ *
+ * Usage:
+ *   Server-side injection: dashboard-server.py intercepts gcov.css requests
+ *   and returns this file. No modification to project source or genhtml args.
+ *
+ * SPDX-FileCopyrightText: 2026 UnionTech Software Technology Co., Ltd.
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
+/* ── Base ── */
+body {
+  color: #f8fafc;
+  background-color: #0f172a;
+  font-family: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Links ── */
+a:link {
+  color: #38bdf8;
+  text-decoration: none;
+}
+a:visited {
+  color: #38bdf8;
+  text-decoration: none;
+}
+a:active {
+  color: #22c55e;
+  text-decoration: none;
+}
+a:hover {
+  color: #22c55e;
+  text-decoration: underline;
+}
+
+/* ── Title bar ── */
+td.title {
+  text-align: center;
+  padding: 16px 12px 12px;
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-size: 22pt;
+  font-style: italic;
+  font-weight: 700;
+  color: #f8fafc;
+  letter-spacing: -0.02em;
+}
+
+/* ── Ruler (separator line) ── */
+td.ruler {
+  background-color: #334155;
+  height: 2px;
+}
+td.ruler img { display: none; }
+
+/* ── Header items (Test / Date / Lines / Functions) ── */
+td.headerItem {
+  text-align: right;
+  padding-right: 8px;
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  vertical-align: top;
+  white-space: nowrap;
+  color: #94a3b8;
+}
+
+td.headerValue {
+  text-align: left;
+  color: #38bdf8;
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* ── Coverage table header ── */
+td.headerCovTableHead {
+  text-align: center;
+  padding: 0 8px 6px;
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid #1e293b;
+}
+
+/* ── Coverage table entries (neutral) ── */
+td.headerCovTableEntry {
+  text-align: right;
+  color: #94a3b8;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+  padding: 3px 12px 3px 4px;
+  background-color: #273449;
+  border-radius: 4px;
+}
+
+/* ── Coverage table entries: high ≥75% ── */
+td.headerCovTableEntryHi {
+  text-align: right;
+  color: #22c55e;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 700;
+  font-size: 13px;
+  white-space: nowrap;
+  padding: 3px 12px 3px 4px;
+  background-color: rgba(34, 197, 94, 0.25);
+  border-radius: 4px;
+}
+
+/* ── Coverage table entries: medium 50-74% ── */
+td.headerCovTableEntryMed {
+  text-align: right;
+  color: #f59e0b;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 700;
+  font-size: 13px;
+  white-space: nowrap;
+  padding: 3px 12px 3px 4px;
+  background-color: rgba(245, 158, 11, 0.25);
+  border-radius: 4px;
+}
+
+/* ── Coverage table entries: low <50% ── */
+td.headerCovTableEntryLo {
+  text-align: right;
+  color: #ef4444;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 700;
+  font-size: 13px;
+  white-space: nowrap;
+  padding: 3px 12px 3px 4px;
+  background-color: rgba(239, 68, 68, 0.25);
+  border-radius: 4px;
+}
+
+/* ── Header legend entries ── */
+td.headerValueLeg {
+  text-align: left;
+  color: #94a3b8;
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-size: 11px;
+  white-space: nowrap;
+  padding-top: 4px;
+}
+
+/* ── Table head (directory/file rows) ── */
+td.tableHead {
+  text-align: left;
+  color: #f8fafc;
+  background-color: #273449;
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  padding: 8px 10px;
+  border-bottom: 2px solid #334155;
+}
+
+td.tableHead[align="center"] {
+  text-align: center;
+}
+
+span.tableHeadSort {
+  padding-right: 4px;
+}
+
+span.tableHeadSort img {
+  opacity: 0.5;
+}
+
+/* ── File/directory entries ── */
+td.coverFile {
+  text-align: left;
+  padding: 7px 10px 7px 14px;
+  color: #38bdf8;
+  background-color: transparent;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 13px;
+  border-bottom: 1px solid #1e293b;
+}
+
+/* ── Bar graph cells ── */
+td.coverBar {
+  padding: 7px 10px;
+  background-color: transparent;
+  border-bottom: 1px solid #1e293b;
+}
+
+td.coverBarOutline {
+  background-color: #334155;
+  border-radius: 3px;
+  padding: 1px;
+}
+
+td.coverBarOutline img { display: none; }
+
+/* ── Coverage percentage: high ── */
+td.coverPerHi {
+  text-align: right;
+  padding: 7px 10px;
+  background-color: rgba(34, 197, 94, 0.22);
+  color: #22c55e;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  border-bottom: 1px solid #1e293b;
+}
+
+/* ── Coverage line count: high ── */
+td.coverNumHi {
+  text-align: right;
+  padding: 7px 10px;
+  background-color: rgba(34, 197, 94, 0.22);
+  color: #64748b;
+  white-space: nowrap;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  border-bottom: 1px solid #1e293b;
+}
+
+/* ── Coverage percentage: medium ── */
+td.coverPerMed {
+  text-align: right;
+  padding: 7px 10px;
+  background-color: rgba(245, 158, 11, 0.22);
+  color: #f59e0b;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  border-bottom: 1px solid #1e293b;
+}
+
+/* ── Coverage line count: medium ── */
+td.coverNumMed {
+  text-align: right;
+  padding: 7px 10px;
+  background-color: rgba(245, 158, 11, 0.22);
+  color: #64748b;
+  white-space: nowrap;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  border-bottom: 1px solid #1e293b;
+}
+
+/* ── Coverage percentage: low ── */
+td.coverPerLo {
+  text-align: right;
+  padding: 7px 10px;
+  background-color: rgba(239, 68, 68, 0.22);
+  color: #ef4444;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  border-bottom: 1px solid #1e293b;
+}
+
+/* ── Coverage line count: low ── */
+td.coverNumLo {
+  text-align: right;
+  padding: 7px 10px;
+  background-color: rgba(239, 68, 68, 0.22);
+  color: #64748b;
+  white-space: nowrap;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  border-bottom: 1px solid #1e293b;
+}
+
+/* ── Detail link ── */
+a.detail:link {
+  color: #38bdf8;
+  font-size: 80%;
+}
+a.detail:visited {
+  color: #38bdf8;
+  font-size: 80%;
+}
+a.detail:active {
+  color: #22c55e;
+  font-size: 80%;
+}
+
+/* ── Test entries ── */
+td.testName {
+  text-align: right;
+  padding-right: 10px;
+  background-color: #273449;
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  color: #94a3b8;
+}
+
+td.testPer {
+  text-align: right;
+  padding: 0 10px;
+  background-color: #273449;
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  color: #94a3b8;
+}
+
+td.testNum {
+  text-align: right;
+  padding: 0 10px;
+  background-color: #273449;
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  color: #94a3b8;
+}
+
+dt {
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+td.testDescription {
+  padding: 10px 30px;
+  background-color: #273449;
+  color: #94a3b8;
+  border-radius: 6px;
+}
+
+/* ── Function view ── */
+td.coverFn {
+  text-align: left;
+  padding: 5px 10px 5px 14px;
+  color: #38bdf8;
+  background-color: transparent;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  border-bottom: 1px solid #1e293b;
+}
+
+td.coverFnLo {
+  text-align: right;
+  padding: 5px 10px;
+  background-color: rgba(239, 68, 68, 0.28);
+  color: #ef4444;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  border-bottom: 1px solid #1e293b;
+}
+
+td.coverFnHi {
+  text-align: right;
+  padding: 5px 10px;
+  background-color: rgba(34, 197, 94, 0.25);
+  color: #22c55e;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  border-bottom: 1px solid #1e293b;
+}
+
+/* ── Source code view ── */
+pre.source {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre;
+  margin-top: 2px;
+  background: transparent;
+  color: #f8fafc;
+  tab-size: 4;
+}
+
+pre.sourceHeading {
+  white-space: pre;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 600;
+  font-size: 11px;
+  margin: 0;
+  color: #475569;
+}
+
+/* Line numbers */
+span.lineNum {
+  background-color: #273449;
+  color: #475569;
+  padding: 0 8px;
+  user-select: none;
+}
+
+/* Covered lines */
+td.lineCov,
+span.lineCov {
+  background-color: rgba(34, 197, 94, 0.28);
+  color: #bbf7d0;
+}
+
+span.coverLegendCov {
+  padding: 2px 10px;
+  background-color: rgba(34, 197, 94, 0.30);
+  color: #22c55e;
+  border-radius: 3px;
+}
+
+/* Uncovered lines */
+td.lineNoCov,
+span.lineNoCov {
+  background-color: rgba(239, 68, 68, 0.32);
+  color: #fecaca;
+}
+
+span.coverLegendNoCov {
+  padding: 2px 10px;
+  background-color: rgba(239, 68, 68, 0.30);
+  color: #ef4444;
+  border-radius: 3px;
+}
+
+/* Source code links in coverage lines */
+td.lineNoCov > a:visited,
+td.lineCov > a:visited {
+  color: #f8fafc;
+  text-decoration: none;
+}
+
+/* Diff coverage lines */
+span.lineDiffCov {
+  background-color: rgba(56, 189, 248, 0.25);
+  color: #bae6fd;
+}
+
+/* Branch coverage */
+span.branchCov {
+  background-color: rgba(34, 197, 94, 0.25);
+  color: #bbf7d0;
+}
+
+span.branchNoCov {
+  background-color: rgba(239, 68, 68, 0.30);
+  color: #fecaca;
+}
+
+span.branchNoExec {
+  background-color: rgba(239, 68, 68, 0.30);
+  color: #fecaca;
+}
+
+/* ── Header legend badges ── */
+td.headerValueLegL {
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  text-align: center;
+  white-space: nowrap;
+  padding: 3px 6px;
+  background-color: rgba(239, 68, 68, 0.30);
+  color: #ef4444;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 4px;
+}
+
+td.headerValueLegM {
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  text-align: center;
+  white-space: nowrap;
+  padding: 3px 6px;
+  background-color: rgba(245, 158, 11, 0.30);
+  color: #f59e0b;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 4px;
+}
+
+td.headerValueLegH {
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  text-align: center;
+  white-space: nowrap;
+  padding: 3px 6px;
+  background-color: rgba(34, 197, 94, 0.30);
+  color: #22c55e;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 4px;
+}
+
+/* ── Legend (non-source views) ── */
+span.coverLegendCovLo {
+  padding: 2px 10px;
+  background-color: rgba(239, 68, 68, 0.30);
+  color: #ef4444;
+  border-radius: 3px;
+}
+
+span.coverLegendCovMed {
+  padding: 2px 10px;
+  background-color: rgba(245, 158, 11, 0.30);
+  color: #f59e0b;
+  border-radius: 3px;
+}
+
+span.coverLegendCovHi {
+  padding: 2px 10px;
+  background-color: rgba(34, 197, 94, 0.30);
+  color: #22c55e;
+  border-radius: 3px;
+}
+
+/* ── Version info ── */
+td.versionInfo {
+  text-align: center;
+  padding-top: 8px;
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-style: italic;
+  color: #475569;
+  font-size: 11px;
+}
+
+/* ── Layout refinements ── */
+
+/* Header area: subtle card background */
+table[width="100%"][cellpadding="1"] {
+  background: #1e293b;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 0;
+}
+
+/* Center content table */
+center > table {
+  border-collapse: collapse;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* Scrollbar styling (Webkit) */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #334155; border-radius: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* Selection */
+::selection {
+  background: rgba(34, 197, 94, 0.25);
+  color: #f8fafc;
+}
+
+/* ── Hide legacy pixel bar images ── */
+td.coverBar img[src$="amber.png"],
+td.coverBar img[src$="emerald.png"],
+td.coverBar img[src$="ruby.png"],
+td.coverBar img[src$="snow.png"] {
+  display: none;
+}
