@@ -142,9 +142,17 @@ class TestExternalMappingUpdate:
         assert "test_cover_count" not in m
 
     def test_normalize_qn_bridge(self, fetch_test_mapping):
-        """两侧 qn 归一化后能对上（inventory 带参数签名 vs dump 无签名）。"""
-        assert (fetch_test_mapping.normalize_qn("proj.src.Calc.add")
-                == fetch_test_mapping.normalize_qn("proj.src.Calc.add"))
+        """两侧 qn 归一化后能对上：inventory 带仓库前缀、dump 不带。
+
+        update_inventory 对 method qn 和 mapping key 都过 normalize_qn，
+        必须保证两侧不同形态归一化到同一值才能匹配成功。
+        """
+        from_inventory = ("home-uos-service-codebase-repos-"
+                          "deepin-image-viewer.src.Calc.add")
+        from_dump = "deepin-image-viewer.src.Calc.add"
+        assert fetch_test_mapping.normalize_qn(from_inventory) == from_dump
+        # 幂等：已归一化的不再变化
+        assert fetch_test_mapping.normalize_qn(from_dump) == from_dump
 
 
 # ── UPDATE-A → READ：外部回写后查询工具正确识别 ───────────────────────
@@ -300,20 +308,25 @@ class TestFullPipeline:
         q = utq.Inv(tmp_path)
         assert q.is_todo(q.methods[0]) is False  # 双信号离开 todo
 
-        # UPDATE-A：外部工具随后回写 test_* 字段
-        m = json.loads(inv_path.read_text(encoding="utf-8"))["methods"][0]
-        assert m["usecase_count"] == 2  # Mode 2 精确计数不被下界覆盖
+        # UPDATE-A：外部工具随后回写 test_* 字段（回写 inv_path，使 UPDATE-C 能读到）
+        inv = json.loads(inv_path.read_text(encoding="utf-8"))
+        assert inv["methods"][0]["usecase_count"] == 2  # Mode 2 精确计数不被下界覆盖
         mapping = fetch_test_mapping.build_mapping(
             {"proj.src.Calc.add": {str(test_file)}})
-        inv2 = {"methods": [m]}
-        fetch_test_mapping.update_inventory(inv2, mapping)
-        assert inv2["methods"][0]["test_cover_count"] == 1
-        assert inv2["methods"][0]["usecase_count"] == 2  # max(2, 1)
+        fetch_test_mapping.update_inventory(inv, mapping)
+        assert inv["methods"][0]["test_cover_count"] == 1
+        assert inv["methods"][0]["usecase_count"] == 2  # max(2, 1)
+        _write_inv(inv_path, inv)  # 回写：UPDATE-C 必须读到 test_* 才能验证 A→C 衔接
 
-        # UPDATE-C：源码删除 → 清理 → 回到 todo
+        # UPDATE-C：源码删除 → 清理 → test_* 同步归零 → 回到 todo
         report = stale_test_cleanup.cleanup_removed_methods(
             str(tmp_path), str(inv_path),
             [{"name": "add", "class_qn": "proj.src.Calc"}])
         assert report["cleaned_cases"] == 2
+        cleaned = json.loads(inv_path.read_text(encoding="utf-8"))["methods"][0]
+        # A→C 衔接验证：UPDATE-A 写入的 test_* 被 UPDATE-C 同步清理
+        assert cleaned["test_cover_count"] == 0
+        assert cleaned["test_files"] == []
+        assert cleaned["usecase_count"] == 0
         q = utq.Inv(tmp_path)
         assert q.is_todo(q.methods[0]) is True
