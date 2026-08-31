@@ -348,6 +348,7 @@ for method in all_methods:
 |-------|------|------|
 | 方法名差集有缺口 | gap 非空 | 流转至 `incremental-updater`（传入 gap） |
 | lcov 函数覆盖率 < 阈值 | pct < threshold | 流转至 `incremental-updater`（传入 uncovered_functions） |
+| 弱覆盖（已测但用例太少） | high 级方法 `usecase_count≤1` 且 `score≥3` | 流转至 `incremental-updater`；先用 `utq -P ${test_dir} weak --json` 定位弱覆盖函数清单 |
 | 命名不规范 | 有违规 | 流转至 `test-writer.md` 修正 |
 | SPDX 缺失 | 无头 | 流转至 `test-writer.md` 补 |
 | stub 问题 | 有问题 | 流转至 `test-writer.md` 修正 |

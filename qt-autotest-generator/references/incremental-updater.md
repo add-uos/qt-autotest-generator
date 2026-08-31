@@ -59,6 +59,20 @@ uncovered_from_lcov = target_class.self_check.get("uncovered_functions", [])
 methods_to_add = untested_methods | set(uncovered_from_lcov)
 ```
 
+#### 来源 C：inventory 覆盖率状态交叉校验（utq）
+> 用 `utq` 从 inventory 视角核对该类哪些方法 `test_cover_count==0`，与来源 A/B 取并集。
+> 图谱差集（A）基于方法名匹配，可能漏掉被测但未在测试文件中出现的方法名变体；
+> inventory 的 `test_cover_count` 来自 MCP CALLS 静态分析，是独立的覆盖信号。
+
+```bash
+# 该类所有未测方法（JSON，含 signature/factors 供用例设计）
+python3 ${SKILL_DIR}/scripts/utq.py -P ${test_dir} todo --class ${target_class.name} --json
+```
+```python
+uncovered_from_inv = {t["name"] for t in utq_todo_json["tasks"]}
+methods_to_add |= uncovered_from_inv   # 三来源并集
+```
+
 若 `methods_to_add` 为空 → 该类已全覆盖，无需补全，标记 `status=done`。
 
 ### 2. 解析函数名为图谱节点

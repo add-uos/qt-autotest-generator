@@ -44,6 +44,9 @@ if not file_exists(inventory_path):
 
 inventory = read_json(inventory_path)
 gui_names = {c["name"] for c in inventory.get("classes", []) if c.get("is_gui")}
+
+# 摸底：用 utq 一眼看总体缺口（可选，用于决定补测策略）
+# python3 ${SKILL_DIR}/scripts/utq.py -P ${test_dir} stats
 ```
 
 ### 2. 环境门禁
@@ -67,6 +70,20 @@ gui_names = {c["name"] for c in inventory.get("classes", []) if c.get("is_gui")}
 > ```
 >
 > 下方伪代码仅作兜底（脚本不可用时）。
+
+> **inventory 状态查询首选 `utq`**：以下场景用 `scripts/utq.py`（详见
+> `references/utq-usage.md`）替代手工读 JSON 过滤，`--json` 输出可直接消费：
+>
+> | 需求 | 命令 |
+> |------|------|
+> | 该类还有哪些方法没测 | `utq -P ${test_dir} todo --class <类名> --json` |
+> | 该类已测方法的用例参考 | `utq -P ${test_dir} covered --class <类名> --show-cases` |
+> | 单个函数的签名/factors/已有用例 | `utq -P ${test_dir} info <函数名>` |
+> | 某测试文件已覆盖了什么（防重复） | `utq -P ${test_dir} by-test-file <测试文件名>` |
+> | 弱覆盖（高复杂度但用例≤1） | `utq -P ${test_dir} weak --json` |
+>
+> 注意：utq 只读 inventory 的覆盖率状态字段（test_cover_count/usecase_count），
+> **项目源码理解仍走 MCP**（Iron Law #12），二者分工不同。
 
 从 `.ut-inventory.json` 提取待测类：
 

@@ -20,6 +20,13 @@
 
 若 `failure_reason` 已含 `source_defect` → 直接标红，不再尝试修复。
 
+**查 inventory 补全上下文**（可选）：用 `utq` 看失败方法的 factors/已有用例，
+辅助判断是测试问题还是源码问题：
+```bash
+python3 ${SKILL_DIR}/scripts/utq.py -P ${test_dir} info <失败方法名>
+# 输出 signature/factors/existing test_cases——复杂度高却用例少，可能是分支漏测
+```
+
 ### 2. 读源码确认根因
 
 用图谱读失败方法的源码：

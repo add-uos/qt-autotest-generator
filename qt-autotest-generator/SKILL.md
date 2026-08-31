@@ -195,6 +195,7 @@ Mode 5 **不跑测试、不编译、不改测试代码、不改源码**（与 Mo
 | 变异测试 | `scripts/mutation-score.py`（Mode 4，可选，阈值 85%） |
 | 源码缺陷导出 | `scripts/export-defects.py`（Mode 5，可选，upsert/mark-fixed/export） |
 | 过时测试清理 | `scripts/stale-test-cleanup.py`（reconcile 后主动清理，不等编译报错） |
+| inventory 状态筛查 | `scripts/utq.py`（查未测/弱覆盖/单函数详情/测试文件反查，详见 `references/utq-usage.md`） |
 | 分支清单交叉验证 | `scripts/fetch-mcp-data.py extract-branches`（self-checker §2c，MCP `get_code_snippet` 反查真实分支做差集） |
 | 缺陷数据文件 | `.ut-defects.json`（本地，不入 git） |
 
@@ -229,6 +230,7 @@ Mode 5 **不跑测试、不编译、不改测试代码、不改源码**（与 Mo
 □ Mode 0：已 Read references/dev-preflight.md；本地 MCP 可用且图谱已同步到本地 HEAD；已设置 mode_0_active 标志
 □ Mode 1：已 Read references/environment-check.md + references/inventory.md；产出 .ut-inventory.json
 □ Mode 2：已 Read references/environment-check.md；.ut-inventory.json 存在（不存在则先执行 Mode 1）
+□ inventory 状态查询（未测/弱覆盖/单函数详情/测试文件反查）首选 `scripts/utq.py`（见 `references/utq-usage.md`），未手工读全量 JSON 过滤
 □ Mode 2：已按步骤 Read 对应 reference 子步骤文件
 □ 过时测试清理：若 diff 报告含 removed 方法，已 Read stale-test-cleanup.md 并主动清理（不等编译报错）
 □ MCP 提供方已解析（Mode 0=本地，其余=远端唯一、不回退），互斥使用

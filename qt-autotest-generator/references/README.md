@@ -29,3 +29,4 @@
 | `defect-schema.md` | .ut-defects.json 完整 JSON Schema + severity 映射 | defect-exporter, failure-repairer |
 | `code-committer.md` | 批次代码提交：暂存→复核→commit | test-writer 子步骤 |
 | `templates-guide.md` | templates/ 目录资产说明：模板 vs 脚本 vs stub-ext | framework-builder, test-code-gen |
+| `utq-usage.md` | utq.py 查询手册：inventory 状态筛查（todo/covered/weak/info/export） | test-writer, incremental-updater, failure-repairer, self-checker |
