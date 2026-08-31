@@ -3,7 +3,7 @@
 > 本指南面向 `qt-autotest-generator` 技能的子 Agent。
 > 它假设 MCP 服务已经由 `setup-codebase-memory.sh` 安装并配置完成。
 
-> **提供方说明**：本技能支持两种知识图谱 MCP 提供方——远端（`remote-codebase-memory-mcp`）和本地（`codebase-memory-mcp`）。提供方在 `environment_check` 阶段一次性解析（远端优先，本地兜底），全流程互斥使用其一，记录为内存变量 `mcp_provider`。下文所有 `codebase_memory_mcp.*` 调用示例均为**概念性写法**，实际调用时替换为 `mcp_provider` 对应的工具前缀。完整解析算法见 `mcp-providers.md`。
+> **提供方说明**：本技能支持两种知识图谱 MCP 提供方——远端（`remote-codebase-memory-mcp`）和本地（`codebase-memory-mcp`）。提供方一次性解析、全流程互斥使用其一：Mode 0 显式走本地（`references/dev-preflight.md`），其余模式远端唯一、失败硬终止不回退；结果记录为内存变量 `mcp_provider`。下文所有 `codebase_memory_mcp.*` 调用示例均为**概念性写法**，实际调用时替换为 `mcp_provider` 对应的工具前缀。完整解析规则见 `mcp-providers.md`。
 
 ## 目录
 

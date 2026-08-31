@@ -2,7 +2,7 @@
 name: qt-autotest-generator
 description: "Qt CMake 项目 GTest 单元测试自动生成与质量闭环。基于 codebase-memory-mcp 知识图谱，支持：开发预检与本地图谱同步（Mode 0）、函数重要性探测与分级（Mode 1）、按分级补全 GTest 用例（Mode 2，编译验证+覆盖率门禁）、覆盖率采集与汇总（Mode 3）、变异测试（Mode 4，可选，验证测试有效性）、源码缺陷导出与统计（Mode 5，可选，用例级标红清单）。触发于：生成单测/补全测试/扫描函数重要性/采集覆盖率/变异测试/导出源码缺陷/dev preflight/本地模式/unpushed/add gtest/coverage gap/fix test failures/mutation score/defect report 等。硬门禁：codebase-memory-mcp 知识图谱（Mode 0 显式本地，其余远端唯一、不回退），无图谱不执行。不触发于：非 Qt 或非 CMake 项目、Qt Test/Catch2/doctest、仅运行测试/配 CI/不生成测试代码。"
 metadata:
-  version: "3.4.0"
+  version: "3.4.1"
 user-invocable: true
 argument-hint: "[项目路径 / 模块路径 / 类名]"
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash
@@ -64,7 +64,7 @@ Mode 5 为**可选增强**，在 Mode 2 闭环中实时持久化发现的源码�
 
 ## 触发条件
 
-- **Mode 0**：dev preflight、开发预检、dev 模式、本地模式、local mode、用本地图谱、索引同步、同步图谱、sync graph、unpushed、未推送、本地写测试、mode 0
+- **Mode 0**：dev preflight、开发预检、dev 模式、本地模式、local mode、用本地图谱、索引同步、同步图谱、sync graph、unpushed、未推送、mode 0（注意：普通"生成单测/写测试"归 Mode 2，即使用户在本地开发，不要因"本地"字样误路由到 Mode 0）
 - **Mode 1**：扫描函数重要性、建立分级表、探测分级、生成 inventory、项目初始化单测分析、importance inventory、scan method importance
 - **Mode 2**：生成单测、建测试框架、批量生成单测、补全测试、修测试、重新对账、加测试、add gtest、setup unit tests、coverage gap、fix test failures、sync tests、improve coverage
 - **Mode 3**：采集覆盖率、统计覆盖率、生成覆盖率报告、collect coverage、coverage report、coverage summary

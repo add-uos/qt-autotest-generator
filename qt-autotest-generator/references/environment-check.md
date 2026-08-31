@@ -114,24 +114,38 @@ while True:
 
 ```python
 if mcp_provider_type == "remote" and not mode_0_active:
-    # 1) 未推送检测（定论性：远端必然没有这些代码）
+    # 1) dirty 工作区（定论性：未提交改动远端必然没有，也没有可 push 的 commit 可等）
+    if git("-C", project_path, "status", "--porcelain").stdout.strip():
+        HARD_FATAL("[FATAL] 工作区有未提交改动，远端图谱必然看不到。"
+                   "commit + push 后等远端同步，或显式触发 Mode 0。" + 指引模板(mcp-providers.md §5))
+
+    # 2) 未推送检测（定论性：远端必然没有这些代码）
     up = git("-C", project_path, "log", "@{upstream}..HEAD", "--oneline")
     if up.failed or up.stdout.strip():
         n = "无远程追踪分支" if up.failed else f"{len(up.stdout.strip().splitlines())} 个未推送 commit"
         HARD_FATAL("[FATAL] 远端图谱必然落后于本地代码（" + n + "）。" + 指引模板(mcp-providers.md §5))
         # 不回退本地；用户须 push 后等远端同步，或显式触发 Mode 0
 
-    # 2) 已全部推送 → 用远端元数据直比（无需间接推断）
+    # 3) 分支一致性（远端索引可能挂在别的分支，此时等待 watcher 永不收敛）
+    local_branch = git("-C", project_path, "branch", "--show-current").stdout.strip()
+    remote_branch = <远端 list_projects 中本项目的 git.branch>   # 远端携带 git 元数据（实测）
+    if local_branch != remote_branch:
+        HARD_FATAL(f"[FATAL] 本地分支 {local_branch} 与远端索引分支 {remote_branch} 不一致。"
+                   "请让远端索引正确分支，或显式触发 Mode 0。" + 指引模板(mcp-providers.md §5))
+
+    # 4) 已全部推送且分支一致 → 用远端元数据直比（无需间接推断）
     local_head = git("-C", project_path, "rev-parse", "HEAD").stdout.strip()
-    remote_head = <远端 list_projects 中本项目的 git.head_sha>   # 远端提供方携带 git 元数据
+    remote_head = <远端 list_projects 中本项目的 git.head_sha>
     # local_head == remote_head → 图谱 fresh，继续
     # 不等 → watcher 延迟，落入 reconcile 的索引等待逻辑（有界）
 ```
 
 **注意**：
+- 工作区 dirty → **立即硬终止**：未提交改动永远到不了远端，commit+push 或切 Mode 0 二选一。**不回退本地**（`mcp-providers.md` §2）
 - 有未推送 commit（或无 upstream）→ **立即硬终止**：远端永远看不到这些代码，等待无意义。指引二选一：push 后等待远端同步重试；或显式触发 Mode 0。**不回退本地**（`mcp-providers.md` §2）
-- 本步骤不使用 `get_graph_head_sha` 间接推断——那是本地 MCP 无 git 元数据时的手段，仅 Mode 0 使用
-- Mode 0 激活时（`mode_0_active == true`）跳过本检测——Mode 0 已确保本地 fresh
+- 本地分支 ≠ 远端索引分支（`git.branch`）→ **硬终止**：watcher 追的是远端配置的分支，等待永不收敛
+- 本步骤不做任何间接推断——远端 `list_projects()` 实测携带 `git.head_sha` / `git.branch` 元数据，直接读取
+- Mode 0 激活时（`mode_0_active == true`）跳过本检测——Mode 0 已按本地 HEAD + 工作区确认 fresh（含 dirty 同步）
 
 ### 5. 验证图谱可用性
 

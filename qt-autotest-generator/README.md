@@ -42,8 +42,8 @@ Qt 项目代码量大，**单测覆盖率上不去**？<br>
 <tr><th align="left" nowrap width="1%">能力</th><th align="left">说明</th></tr>
 </thead>
 <tbody>
-<tr><td nowrap width="1%"><strong>五模式架构</strong></td><td><strong>Mode 1</strong>（函数重要性探测）：全量扫描知识图谱，多因子评分，产出 <code>.ut-inventory.json</code> 分级表。<strong>Mode 2</strong>（单元测试生成）：读取分级表，按 high→mid→low 优先级逐类生成 GTest 用例，编译验证+覆盖率门禁。Mode 2 启动时若 inventory 不存在则自动触发 Mode 1。<strong>Mode 3</strong>（覆盖率采集与汇总）：一条命令采集 gtest XML + lcov HTML + 分级覆盖率 + 汇总 JSON，不生成测试代码。<strong>Mode 4</strong>（变异测试，可选）：对 high 级方法注入变异体，计算变异得分验证测试有效性，退出 <code>git diff</code> 必为空。<strong>Mode 5</strong>（源码缺陷导出，可选）：用例级缺陷持久化到 <code>.ut-defects.json</code>（不入 git），按需导出 <code>defects-summary.md</code> 标红清单 + <code>defects.json</code>。</td></tr>
-<tr><td nowrap width="1%"><strong>知识图谱驱动</strong></td><td>基于 codebase-memory-mcp 知识图谱毫秒级拉取类结构、方法签名、调用链、依赖关系；硬门禁，无图谱不执行。<strong>支持远端（<code>remote-codebase-memory-mcp</code>）与本地两种提供方，远端优先</strong></td></tr>
+<tr><td nowrap width="1%"><strong>六模式架构</strong></td><td><strong>Mode 0</strong>（开发预检，可选）：本地开发场景（有未 push 代码）显式使用本地图谱，完成提供方锁定与索引同步。<strong>Mode 1</strong>（函数重要性探测）：全量扫描知识图谱，多因子评分，产出 <code>.ut-inventory.json</code> 分级表。<strong>Mode 2</strong>（单元测试生成）：读取分级表，按 high→mid→low 优先级逐类生成 GTest 用例，编译验证+覆盖率门禁。Mode 2 启动时若 inventory 不存在则自动触发 Mode 1。<strong>Mode 3</strong>（覆盖率采集与汇总）：一条命令采集 gtest XML + lcov HTML + 分级覆盖率 + 汇总 JSON，不生成测试代码。<strong>Mode 4</strong>（变异测试，可选）：对 high 级方法注入变异体，计算变异得分验证测试有效性，退出 <code>git diff</code> 必为空。<strong>Mode 5</strong>（源码缺陷导出，可选）：用例级缺陷持久化到 <code>.ut-defects.json</code>（不入 git），按需导出 <code>defects-summary.md</code> 标红清单 + <code>defects.json</code>。</td></tr>
+<tr><td nowrap width="1%"><strong>知识图谱驱动</strong></td><td>基于 codebase-memory-mcp 知识图谱毫秒级拉取类结构、方法签名、调用链、依赖关系；硬门禁，无图谱不执行。<strong>支持两种提供方：远端（<code>remote-codebase-memory-mcp</code>，Mode 1-5 唯一）与本地（仅 Mode 0 显式进入），互斥使用、失败硬终止不回退</strong></td></tr>
 <tr><td nowrap width="1%"><strong>框架搭建</strong></td><td>自动创建 <code>{test_dir}/</code> 目录（默认 <code>autotests/</code>，若项目已有 <code>tests/</code> 则沿用）：CMake 配置、stub-ext、测试运行脚本、报告生成器</td></tr>
 <tr><td nowrap width="1%"><strong>逐类生成</strong></td><td>按复杂度规划用例数（高复杂度多写边界+异常），AAA 模式，<code>{Feature}_{Scenario}_{ExpectedResult}</code> 命名</td></tr>
 <tr><td nowrap width="1%"><strong>依赖追踪</strong></td><td>MCP <code>trace_path</code> 自动追踪出向调用链，按决策矩阵决定 stub 哪些依赖、编入哪些源码目录</td></tr>
@@ -80,7 +80,7 @@ Claude Code、Cursor、opencode 等兼容 AgentSkills 的客户端，具体落�
 | CMake | >= 3.16 | 构建系统 |
 | Qt | 5 或 6 | Core + Widgets 模块 |
 | Google Test | 任意 | `libgtest-dev` 或源码编译 |
-| codebase-memory-mcp | >= 0.8.0 | 知识图谱 MCP（本地兜底，由 `setup-codebase-memory.sh` 自动安装）；或接入已索引本项目的 `remote-codebase-memory-mcp` 远端实例（远端优先） |
+| codebase-memory-mcp | >= 0.8.0 | 知识图谱 MCP。远端实例 `remote-codebase-memory-mcp`（Mode 1-5 唯一，须已索引本项目）；本地实例仅经 Mode 0 显式使用（由 `setup-codebase-memory.sh` 安装） |
 | Python | >= 3.8 | 覆盖率采集脚本（仅用标准库） |
 | gcc/g++ | 支持 C++17 | 编译器 |
 

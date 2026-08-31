@@ -73,18 +73,18 @@ sudo apt install lcov
 
 ### codebase-memory-mcp（知识图谱）
 
-本技能支持两种知识图谱 MCP 提供方，**远端优先，本地兜底，互斥使用**：
+本技能支持两种知识图谱 MCP 提供方，**互斥使用，不自动回退**：
 
 | 提供方 | 说明 |
 |--------|------|
-| `remote-codebase-memory-mcp` | 远端/外部 MCP。已索引项目且 `index_status == "ready"` 时优先使用。**远端无法触发索引**，项目须已在远端索引好 |
-| `codebase-memory-mcp` | 本地 MCP。远端不可用或项目未在远端索引时，自动安装并为本机项目建立索引 |
+| `remote-codebase-memory-mcp` | 远端 MCP，Mode 1-5 的**唯一**提供方。只读查询，**远端无法触发索引**，项目须已在远端索引且 ready；图谱过时（工作区 dirty / 有未推送 commit）时硬终止并指引 |
+| `codebase-memory-mcp` | 本地 MCP，**仅经 Mode 0（Dev Preflight）显式使用**：探测/安装、为本机项目建立索引并同步到本地 HEAD |
 
-提供方解析在 `environment_check` 阶段完成，结果记录为内存变量 `mcp_provider`，详见
-`references/mcp-providers.md`。
+提供方解析在 `environment_check` 阶段完成（Mode 0 则在 `references/dev-preflight.md`），
+结果记录为内存变量 `mcp_provider`，详见 `references/mcp-providers.md`。
 
-若已接入远端实例（如 `remote-codebase-memory-mcp`）且目标项目已在远端索引，则**跳过本地安装**。
-否则 `environment_check` 会强制提醒用户并安装本地 `codebase-memory-mcp`：
+本地开发（有未 push 代码 / 工作区有未提交改动）请显式触发 Mode 0（说「dev preflight /
+本地模式」），技能会安装并使用本地 `codebase-memory-mcp`：
 
 ```bash
 bash scripts/setup-codebase-memory.sh

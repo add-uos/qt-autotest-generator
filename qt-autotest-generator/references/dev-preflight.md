@@ -18,17 +18,20 @@
 
 ## 执行步骤
 
-### Step 0: 未 push commit 检测与展示
+### Step 0: 本地 git 状态检测与展示
 
 ```bash
-git -C <project_path> log @{upstream}..HEAD --oneline 2>/dev/null
+git -C <project_path> log @{upstream}..HEAD --oneline 2>/dev/null   # 未推送 commit
+git -C <project_path> status --porcelain                            # 工作区脏检测（含 untracked）
 ```
 
-| git 返回 | 含义 | 处理 |
-|----------|------|------|
-| 非空输出 | 有 N 个未 push commit | 记录 `unpushed_count`，展示列表，继续 |
-| 空输出 | 已全部 push / 无新 commit | 提示「未检测到未推送 commit，远端图谱可能已是最新」，但**仍继续**（用户可能想用本地模式的其他原因） |
-| 错误（无 upstream） | 无远程追踪分支 | 记录 `has_upstream = false`，继续（远端图谱必然无法同步） |
+| 检测 | 返回 | 含义 | 处理 |
+|------|------|------|------|
+| 未推送 | 非空输出 | 有 N 个未 push commit | 记录 `unpushed_count = N`，展示列表，继续 |
+| 未推送 | 空输出 | 已全部 push / 无新 commit | `unpushed_count = 0`，提示「未检测到未推送 commit，远端图谱可能已是最新」，但**仍继续**（用户可能想用本地模式的其他原因） |
+| 未推送 | 错误（无 upstream） | 无远程追踪分支 | 记录 `has_upstream = false`，继续（远端图谱必然无法同步） |
+| 脏检测 | porcelain 非空 | 工作区有未提交改动（含 untracked） | 记录 `dirty = true`，继续（**必须在 Step 3a 触发同步**，见下） |
+| 脏检测 | porcelain 为空 | 工作区干净 | `dirty = false` |
 
 **输出示例**（有未 push commit）：
 
@@ -132,73 +135,38 @@ local_head = subprocess.run(
     capture_output=True, text=True, timeout=10
 ).stdout.strip()
 
-# 获取图谱 HEAD
-graph_head = get_graph_head_sha(
-    provider=codebase_memory_mcp,
-    project_name=project_name,
-    project_path=project_path,
-    fallback_sha=local_head
-)
+# 工作区脏检测（Branch.head_sha 不随未提交改动变化，必须单独检测）
+dirty = bool(subprocess.run(
+    ["git", "-C", project_path, "status", "--porcelain"],
+    capture_output=True, text=True, timeout=10
+).stdout.strip())
+
+# 获取图谱记录的 HEAD —— 精确值，非推断
+# 图谱原生 Branch 节点携带 head_sha，实测与 git rev-parse HEAD 精确一致
+# 实测依据：codebase-memory-mcp 0.10.8，图谱 head_sha 与 git rev-parse HEAD 精确一致
+graph_head = codebase_memory_mcp.query_graph(
+    project=project_name,
+    query="MATCH (b:Branch) RETURN b.branch AS branch, b.head_sha AS head_sha LIMIT 1"
+).head_sha   # 无 Branch 节点（空图/异常）→ None
 ```
-
-**`get_graph_head_sha` 实现**（Agent 内联执行）：
-
-> 本地 MCP 的 `list_projects` **不返回 git 元数据**（远端 MCP 才有 `git.head_sha` 字段），
-> 因此本地提供方需用间接策略推断图谱新鲜度。
-
-```python
-def get_graph_head_sha(provider, project_name, project_path, fallback_sha):
-    """获取图谱记录的 HEAD SHA（本地 MCP 间接推断）。"""
-    # 策略: 从图谱取若干已知符号的 file_path，
-    #        对每个 file_path 执行 git log 取最新 commit，
-    #        取其中最新的作为 graph_head 的近似值。
-    #        如果所有 file_path 的 git log 都指向 local_head，则图谱大概率 fresh。
-    try:
-        result = provider.search_graph(
-            project=project_name,
-            label="Class",
-            limit=5
-        )
-        results = result.get("results", []) if isinstance(result, dict) else getattr(result, "results", [])
-        if not results:
-            return fallback_sha  # 图谱可能为空，交给 Step 5 处理
-
-        import subprocess
-        commits = []
-        for r in results:
-            file_path = r.get("file_path", "")
-            if not file_path:
-                continue
-            # file_path 是相对项目根的路径
-            r2 = subprocess.run(
-                ["git", "-C", project_path, "log", "-1", "--format=%H", "--", file_path],
-                capture_output=True, text=True, timeout=10
-            )
-            if r2.returncode == 0 and r2.stdout.strip():
-                commits.append(r2.stdout.strip())
-
-        if not commits:
-            return fallback_sha
-
-        # 取所有 file_path 最新 commit 中的最大值（最新那个）
-        graph_head = max(commits)  # SHA 字符串可按字典序比较
-        return graph_head
-    except Exception:
-        return fallback_sha
-```
-
-> ⚠️ **此方法是近似推断**：git log 取的是「该文件最后一次被修改的 commit」，
-> 如果图谱索引时某些文件刚被修改，近似值接近真实 graph_head；
-> 如果文件长时间未变，近似值会偏旧（误判为过时）。
-> **保守策略**：宁可误判过时（触发一次 fast 增量索引，秒级完成），
-> 也不要漏判（用过时图谱生成测试）。因此：
-> - **有未 push commit 时，无论 freshness 结果如何，都执行一次 `index_repository(mode="fast")`**
-> - 无未 push commit 时，才依赖 freshness 判断是否需要同步
 
 | 比较结果 | 处理 |
 |----------|------|
-| `local_head == graph_head` 且 `unpushed_count == 0` | 图谱 fresh → **跳过索引**，直接进入 Step 5 |
-| `local_head != graph_head` 或 `unpushed_count > 0` | 图谱过时（或保守起见） → 执行增量同步（下方） |
+| `local_head == graph_head` 且 `dirty == false` | 图谱 fresh → **跳过索引**，直接进入 Step 5 |
+| 其余（SHA 不同 / `dirty == true` / `graph_head is None`） | 图谱过时（或无法确认 fresh）→ 执行增量同步（下方） |
+
+> ⚠️ **为什么必须检测 dirty**：`Branch.head_sha` 只随 commit 变化，未提交的工作区
+> 改动不会改变 head_sha（实测：dirty 改动后 Branch.head_sha 不变）——只比 SHA 会漏掉 dirty 场景，
+> 而本图谱按磁盘内容索引，dirty 意味着图谱内容与工作区脱节。dirty 时
+> `index_repository(mode="fast")` 按当前工作区增量重建，实测 ~10s。
+
+> 🚫 **历史教训（已废弃的采样推断）**：曾用「search_graph 采样 file_path →
+> `git log -1 -- <file>` → `max(commits)`」近似 graph_head。该方法有双重缺陷：
+> ① SHA 十六进制串**无字典序时间语义**，`max()` 结果随机；
+> ② 采样既会误判过时也会**漏判过时**（图谱停在 X、本地已到 Y、采样文件恰被
+> Y 或其后 commit 改过时，近似值 == local_head，误判 fresh → 用过时图谱生成测试）。
+> 「宁可误判过时、绝不漏判」的保守承诺在采样方案下不成立，`Branch.head_sha`
+> 精确比较 + dirty 检测才同时封住两个方向。
 
 **增量同步**：
 
@@ -213,7 +181,7 @@ codebase_memory_mcp.index_repository(
 **输出**：
 
 ```
-🔄 [Mode 0] 图谱过时（graph: {graph_head[:8]} → local: {local_head[:8]}），执行增量同步 (mode=fast)...
+🔄 [Mode 0] 图谱过时（graph: {graph_head[:8] if graph_head else "?"} → local: {local_head[:8]}），执行增量同步 (mode=fast)...
 ```
 
 #### Step 3b: 首次索引
@@ -247,42 +215,47 @@ project_name = target.name if target else None
 ```python
 import time
 
-max_wait = 300  # 硬超时 300 秒
+max_wait = 300        # 硬超时 300 秒
+push_deadline = 60    # 60 秒仍未 ready 才推
+pushed = False        # 只推一次：反复重发会打断进行中的增量索引，可能永远到不了 ready
 start = time.time()
 while True:
     elapsed = time.time() - start
     if elapsed > max_wait:
-        print(f"[FATAL] [Mode 0] 本地索引 {max_wait} 秒未 ready，daemon 可能异常")
-        break  # 硬终止
-    
+        HARD_FATAL(f"[Mode 0] 本地索引 {max_wait} 秒未 ready，daemon 可能异常")
+        # 真正终止，不 break 后继续走 Step 5/6
+
     status = codebase_memory_mcp.index_status(project=project_name)
     if status.status == "ready":
         break
     elif status.status == "indexing":
-        if elapsed > 60:
-            # 超过 60 秒仍未 ready → 推一下
+        if elapsed > push_deadline and not pushed:
+            # 推一次且只推一次
             codebase_memory_mcp.index_repository(
                 repo_path=project_path,
                 mode="fast",
                 persistence=True
             )
+            pushed = True
         time.sleep(2)
     else:
-        # error / 其他状态
-        break
+        # error / 未知状态 → 真正终止（半残图谱不得交接给 Mode 1/2）
+        HARD_FATAL(f"[Mode 0] 索引状态异常：{status.status}，请检查 daemon 日志")
 ```
 
 ### Step 5: 验证图谱可用性
 
 ```python
-result = codebase_memory_mcp.search_graph(
-    project=project_name,
-    label="Class",
-    limit=1
-)
+try:
+    result = codebase_memory_mcp.search_graph(
+        project=project_name,
+        label="Class",
+        limit=1
+    )
+except Exception as e:
+    HARD_FATAL(f"[Mode 0] 图谱查询失败：{e}")   # 查询报错 ≠ 图谱为空，同样终止
 if result.total == 0:
-    print("[FATAL] [Mode 0] 图谱为空，索引可能失败")
-    # 硬终止
+    HARD_FATAL("[Mode 0] 图谱为空，索引可能失败")
 ```
 
 ### Step 6: 交接
@@ -295,6 +268,8 @@ session["mcp_provider_type"] = "local"
 session["project_name"] = project_name
 session["base_sha"] = local_head
 session["unpushed_count"] = unpushed_count
+session["has_upstream"] = has_upstream
+session["dirty"] = dirty
 session["mode_0_active"] = True
 ```
 
@@ -306,6 +281,7 @@ session["mode_0_active"] = True
    项目：<project_name>
    本地 HEAD：<local_head[:8]>
    未推送 commit：<unpushed_count> 个
+   工作区：干净 / 有未提交改动
    图谱状态：fresh / 已同步
    
    → 自动进入 Mode 1（首次） / Mode 2（增量）
@@ -314,13 +290,20 @@ session["mode_0_active"] = True
 **自动路由**：
 
 ```python
-inventory_path = f"{project_path}/{test_dir}/.ut-inventory.json"
-if os.path.exists(inventory_path):
+# Mode 0 未跑 environment-check，test_dir 尚未确定，此处自行探测。
+# 规则与 environment-check §0 一致：inventory 只可能位于 autotests/ 或 tests/。
+inventory_dir = next(
+    (d for d in ("autotests", "tests")
+     if os.path.exists(f"{project_path}/{d}/.ut-inventory.json")),
+    None
+)
+if inventory_dir:
     # 走 Mode 2（reconcile 会检测 mcp_provider_type=="local"，跳过远端相关逻辑）
     进入_Mode_2()
 else:
     # 走 Mode 1
-    # Mode 1 的环境检查步骤会检测 mode_0_active，跳过提供方解析
+    # Mode 1 的环境检查步骤会检测 mode_0_active，跳过提供方解析；
+    # test_dir 的正式命名/沿用规则由该阶段一次性探测确定
     进入_Mode_1()
 ```
 
@@ -330,7 +313,8 @@ Mode 0 完成后进入 Mode 1/2，这些 Mode 的 reconcile 阶段会：
 
 1. 检测 `mcp_provider_type == "local"` → **跳过远端 freshness 检测**（已在 Mode 0 确认 fresh）
 2. 检测 `mode_0_active == True` → **跳过环境检查的提供方解析**（已在 Mode 0 锁定）
-3. 正常执行 reconcile 对账逻辑（比较 HEAD 与 inventory.base_sha）
+3. 重新校验本地提供方仍可用（`codebase_memory_mcp.list_projects()` 可调通）→ 失联则**硬终止**：重启本地 daemon 后重跑 Mode 0（不重新解析提供方、不触碰远端）
+4. 正常执行 reconcile 对账逻辑（比较 HEAD 与 inventory.base_sha）
 
 ## 约束
 

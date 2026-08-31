@@ -19,7 +19,7 @@
 
 - **互斥且单向**：一个会话自始至终只用一个提供方，不存在任何运行时切换。
 - **不回退**：远端不可用 / 项目未索引 / 索引非 ready / 图谱过时，一律**硬终止**并给出指引（§5）。不静默安装本地、不切换本地。
-- **结构性边界**：远端图谱从远端 git 仓库同步，看不到本地未 push / 未提交代码。这不是"过时"瞬态，而是能力边界——检测到未推送 commit 即判定图谱必然过时（见 `environment-check.md` §4a / `reconcile-logic.md`）。
+- **结构性边界**：远端图谱从远端 git 仓库同步，看不到本地未 push / 未提交代码。这不是"过时"瞬态，而是能力边界——检测到未推送 commit 或未提交改动（dirty）即判定图谱必然过时（见 `environment-check.md` §4a / `reconcile-logic.md`）。
 
 ## 3. 远端解析算法（Mode 1-5）
 
@@ -90,7 +90,8 @@ if not matched:
 | 1 | 远端 MCP 不可用（list_projects 调不通）| ⛔ 远端知识图谱 MCP 不可用 |
 | 2 | 项目未在远端索引（项目名匹配不到）| ⛔ 本项目未在远端索引 |
 | 3 | 远端索引非 ready（indexing / 异常）| ⛔ 远端索引未就绪 |
-| 4 | 图谱必然过时（有未推送 commit / 无 upstream，见 environment-check §4a）| ⛔ 远端图谱必然落后于本地代码（远端看不到未推送内容）|
+| 4 | 图谱必然过时（工作区 dirty / 有未推送 commit / 无 upstream，见 environment-check §4a）| ⛔ 远端图谱必然落后于本地代码（远端看不到未推送/未提交内容）|
+| 5 | 分支不一致（本地分支 ≠ 远端索引分支 `git.branch`，见 environment-check §4a）| ⛔ 远端索引分支与本地不符，等待 watcher 永不收敛 |
 
 统一指引模板（附在终止信息后）：
 
