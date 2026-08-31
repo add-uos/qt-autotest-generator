@@ -26,6 +26,7 @@ _SCRIPT_FILES = {
     "self_check_structural": "self-check-structural.py",
     "update_usecase_count": "update-usecase-count.py",
     "compose_commit": "compose-commit.py",
+    "utq": "utq.py",
 }
 
 
@@ -106,3 +107,8 @@ def update_usecase_count():
 @pytest.fixture(scope="session")
 def compose_commit():
     return _load_module("compose_commit", "compose-commit.py")
+
+
+@pytest.fixture(scope="session")
+def utq():
+    return _load_module("utq", "utq.py")

@@ -104,8 +104,14 @@ def find_project_dir(explicit):
 class Inv:
     def __init__(self, project_dir):
         self.dir = project_dir
-        with open(project_dir / ".ut-inventory.json", encoding="utf-8") as f:
-            self.data = json.load(f)
+        inv_path = project_dir / ".ut-inventory.json"
+        try:
+            with open(inv_path, encoding="utf-8") as f:
+                self.data = json.load(f)
+        except json.JSONDecodeError as e:
+            die(f".ut-inventory.json 格式错误：{e}")
+        except OSError as e:
+            die(f"读取 .ut-inventory.json 失败：{e}")
         self.methods = self.data.get("methods", [])
         self.tm = {}
         tm_path = project_dir / "test-mapping.json"
@@ -473,9 +479,14 @@ def build_parser():
 
 
 def main():
+    sys.exit(main_no_exit())
+
+
+def main_no_exit(argv=None):
+    """供单元测试调用的入口（不 sys.exit，返回退出码）。"""
     global args_json_global
     parser = build_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     args_json_global = args.json or getattr(args, "json", False)
 
     # file/class/search 位置参数映射到过滤字段
@@ -498,6 +509,7 @@ def main():
         "exempt": cmd_exempt, "export": cmd_export,
     }
     dispatch[args.cmd](inv, args)
+    return 0
 
 
 if __name__ == "__main__":
