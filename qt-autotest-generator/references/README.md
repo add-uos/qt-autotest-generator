@@ -23,7 +23,7 @@
 | `reconcile-logic.md` | 对账逻辑：git HEAD vs base_sha→差异路由 | SKILL.md Mode 1/2 |
 | `stale-test-cleanup.md` | 过时测试清理：removed 方法→注释用例+INSTANTIATE | reconcile 后, failure-repairer 兜底 |
 | `coverage-tiers.md` | 三级覆盖率分类体系定义 | self-checker, build-verifier |
-| `report-generator.md` | Mode 3 覆盖率采集：collect-coverage-report.py | SKILL.md Mode 3 |
+| `report-generator.md` | Mode 3 覆盖率采集：coverage-report.py | SKILL.md Mode 3 |
 | `mutation-testing.md` | Mode 4 变异测试：源码安全四铁律→变异体→得分 | SKILL.md Mode 4 |
 | `defect-exporter.md` | Mode 5 缺陷导出：upsert/mark-fixed/export | SKILL.md Mode 5, failure-repairer |
 | `defect-schema.md` | .ut-defects.json 完整 JSON Schema + severity 映射 | defect-exporter, failure-repairer |

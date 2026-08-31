@@ -98,7 +98,8 @@ if not os.path.exists(inventory_path):
 snapshot_path = f"build-{test_dir}/coverage/{target_class.name}_by_level.json"
 if not os.path.exists(snapshot_path):
     subprocess.run([
-        "python3", f"{SKILL_DIR}/scripts/coverage-by-level.py",
+        "python3", f"{SKILL_DIR}/scripts/coverage-report.py",
+        "--level-only",
         "-i", inventory_path,
         "-c", f"build-{test_dir}/coverage/filtered.info",
         "--class", target_class.name, "--json", "-o", snapshot_path,
@@ -111,7 +112,7 @@ gate_failed_levels = [lv for lv in ("high", "mid", "low") if not snapshot["by_le
 uncovered_functions = snapshot["uncovered_functions"]
 ```
 
-> 脚本 `scripts/coverage-by-level.py` 解析 FN/FNDA/DA + `c++filt` demangle 关联 inventory 分级，产出函数级+行级覆盖率。门禁阈值取自 inventory 的 `gate_thresholds`，不在 self_checker 内 hardcode。
+> 脚本 `scripts/coverage-report.py` 解析 FN/FNDA/DA + `c++filt` demangle 关联 inventory 分级，产出函数级+行级覆盖率。门禁阈值取自 inventory 的 `gate_thresholds`，不在 self_checker 内 hardcode。
 
 **判定规则**：
 - `coverage_gap` 非空 → 流转至 `incremental-updater`（传入 `coverage_gap`）
@@ -217,10 +218,10 @@ for method in all_methods:
 
 §4.1 要求测试文件顶部注释声明「分支清单 → 用例映射」。本步**用 MCP `get_code_snippet` 反查真实源码分支**，校验声明是否对得上实现——这是白盒覆盖质量的硬门禁，不靠 agent 自觉读 test-types.md。
 
-> **首选方式**：跑 `scripts/fetch-mcp-data.py extract-branches`，脚本固化 §2c 全流程——从 inventory 取类方法、调 MCP `get_code_snippet` 拉方法体、正则数真实分支（if/else if/switch case/for/while/throw/early return/三元）、解析测试文件声明的 `// B1:` 分支清单、做差集输出 `MISSING_BRANCH_LIST` / `BRANCH_NOT_MAPPED` 违规清单。模型只消费违规清单决定补什么用例，不自己回读源码数分支。
+> **首选方式**：跑 `scripts/mcp-scan.py extract-branches`，脚本固化 §2c 全流程——从 inventory 取类方法、调 MCP `get_code_snippet` 拉方法体、正则数真实分支（if/else if/switch case/for/while/throw/early return/三元）、解析测试文件声明的 `// B1:` 分支清单、做差集输出 `MISSING_BRANCH_LIST` / `BRANCH_NOT_MAPPED` 违规清单。模型只消费违规清单决定补什么用例，不自己回读源码数分支。
 >
 > ```bash
-> python3 ${SKILL_DIR}/scripts/fetch-mcp-data.py extract-branches \
+> python3 ${SKILL_DIR}/scripts/mcp-scan.py extract-branches \
 >   --project <project_name_in_graph> \
 >   --test-file ${test_dir}/${module}/test_${classname}.cpp \
 >   --inventory ${test_dir}/.ut-inventory.json \

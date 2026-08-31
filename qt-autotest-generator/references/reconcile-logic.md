@@ -38,7 +38,7 @@
         本地（仅 Mode 0 路径）→ `query_graph` 读 `Branch.head_sha` 与本地 HEAD 比对 + `git status --porcelain` 脏检测。
         一致且干净 → 已同步；不一致 → 同上按提供方类型处理（本地可 index_repository 刷新，远端只能等待/提醒）
       - 执行 inventory 对账（更新 inventory 本身 + 产出 diff 报告）：
-          python3 scripts/fetch-mcp-data.py \
+          python3 scripts/mcp-scan.py fetch \
             --project <project_name> --file-pattern "src/**" \
             --output {test_dir}/.ut-inventory.json \
             --base-sha <HEAD> \

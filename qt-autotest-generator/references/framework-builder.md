@@ -69,7 +69,7 @@ TEST_DIR=${test_dir} bash ${SKILL_DIR}/scripts/generate-runner.sh
 **run-ut.sh 关键设计**：
 - **cmake 源指向项目根**（`cmake $PROJECT_ROOT`），而非 `{test_dir}` 目录——确保 `CMAKE_SOURCE_DIR` = 项目根，使 `src/CMakeLists.txt` 中 `${CMAKE_SOURCE_DIR}/src/*.cpp` 正确解析业务源码
 - **直接执行 gtest 二进制**（`./binary --gtest_output=xml:`），不依赖 ctest——避免 `gtest_discover_tests` 注册失效时 0 tests 的问题；每个目标独立 `report_<target>.xml`
-- **step_6 调 gen-ut-summary.py**（轻量解析），**不**调 `collect-coverage-report.py`——后者会重跑测试 + 重做 lcov，与 step_4/step_5 重复
+- **step_6 调 gen-ut-summary.py**（轻量解析），**不**调 `coverage-report.py`——后者会重跑测试 + 重做 lcov，与 step_4/step_5 重复
 - **ASAN/LSan**：`ASAN_OPTIONS=detect_leaks=1` + `LSAN_OPTIONS=suppressions=lsan_suppressions.txt`，并收集 `asan*.log`
 - **CMAKE_SAFETYTEST_ARG**：传入 `CMAKE_SAFETYTEST_ARG_ON` 满足公司安全测试规范
 - **headless**：`QT_QPA_PLATFORM=offscreen` 适配 CI 无显示环境
@@ -85,7 +85,7 @@ TEST_DIR=${test_dir} bash ${SKILL_DIR}/scripts/generate-runner.sh
 - `{ADD_SUBDIRECTORIES}` → `add_subdirectory()` 调用（初始为空，后续阶段会补充）
 
 **覆盖率编译标志**：模板已内置 `-fprofile-arcs -ftest-coverage`（Debug 模式下启用）。
-不要删除此标志——`run-ut.sh` 的 step_5 (lcov --capture) 和 Mode 3 `collect-coverage-report.py` 的覆盖率采集都依赖它。
+不要删除此标志——`run-ut.sh` 的 step_5 (lcov --capture) 和 Mode 3 `coverage-report.py` 的覆盖率采集都依赖它。
 若项目根 CMakeLists.txt 已有覆盖率标志，{test_dir} 的标志不冲突（追加模式）。
 
 ### 7. 修改根 CMakeLists.txt
@@ -162,7 +162,7 @@ cmake .. -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
 cmake --build . -j$(nproc)
 
 **必须使用 `-DCMAKE_BUILD_TYPE=Debug`**：覆盖率编译标志（`-fprofile-arcs -ftest-coverage`）仅在 Debug 模式下启用。
-若不传 Debug，编译出的二进制无 gcov 插桩，`run-ut.sh` 的 lcov 步骤和 Mode 3 `collect-coverage-report.py` 的覆盖率采集将全部失效。
+若不传 Debug，编译出的二进制无 gcov 插桩，`run-ut.sh` 的 lcov 步骤和 Mode 3 `coverage-report.py` 的覆盖率采集将全部失效。
 
 若失败 → 分析错误 → 修 CMakeLists → 重试（max 10 loops）。
 

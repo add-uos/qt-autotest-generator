@@ -1,6 +1,6 @@
 # Inventory 增量更新（人工标记 overlay）
 
-> 落地于 `scripts/fetch-mcp-data.py --incremental`。填补 `references/inventory.md` Step 2 的 TODO 与 `references/reconcile-logic.md` 的"方法级 diff"。
+> 落地于 `scripts/mcp-scan.py fetch --incremental`。填补 `references/inventory.md` Step 2 的 TODO 与 `references/reconcile-logic.md` 的"方法级 diff"。
 
 ## 核心思路
 
@@ -15,7 +15,7 @@
 ## 触发方式
 
 ```bash
-python3 scripts/fetch-mcp-data.py \
+python3 scripts/mcp-scan.py fetch \
   --project <project_name> \
   --output ${test_dir}/.ut-inventory.json \
   --base-sha $(git -C <project_path> rev-parse HEAD) \

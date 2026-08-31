@@ -12,7 +12,7 @@
 
 ## 触发时机
 
-- `fetch-mcp-data.py --incremental` 产出 `-diff.md` 报告，其中 `removed` 列表非空
+- `mcp-scan.py fetch --incremental` 产出 `-diff.md` 报告，其中 `removed` 列表非空
 - 分支切换后，检查类的 `file_path` 不在当前分支存在（`stale_classes`）
 
 ## 工作步骤
@@ -22,7 +22,7 @@
 从 diff 报告读取 `removed` 方法列表：
 
 ```python
-# diff["removed"] 由 fetch-mcp-data.py compute_diff() 产出
+# diff["removed"] 由 mcp-scan.py compute_diff() 产出
 # 每项含：qualified_name, name, class_qn, level, file_path, ...
 removed_methods = diff["removed"]
 

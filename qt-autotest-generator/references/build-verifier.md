@@ -114,7 +114,7 @@ python3 ${SKILL_DIR}/scripts/export-defects.py mark-fixed \
 
 ### 7. 覆盖率信号（分级覆盖率统计）
 
-产出**三信号**：方法名差集（结构性）+ lcov 数据采集 + 分级覆盖率快照（函数级+行级）。前两项为轻量检查，第三项调用 `scripts/coverage-by-level.py` 产出按 high/mid/low 的真实覆盖率数字，作为 `verified` 的满足条件之一（覆盖率快照必须产出，门禁达标判定在 `self-checker`）。
+产出**三信号**：方法名差集（结构性）+ lcov 数据采集 + 分级覆盖率快照（函数级+行级）。前两项为轻量检查，第三项调用 `scripts/coverage-report.py` 产出按 high/mid/low 的真实覆盖率数字，作为 `verified` 的满足条件之一（覆盖率快照必须产出，门禁达标判定在 `self-checker`）。
 
 #### 7a. lcov 数据采集
 
@@ -150,7 +150,7 @@ coverage_gap = planned - tested
 调用 skill 内置脚本，产出当前类的分级覆盖率快照（per-class，逐类闭环口径）：
 
 ```bash
-python3 ${SKILL_DIR}/scripts/coverage-by-level.py \
+python3 ${SKILL_DIR}/scripts/coverage-report.py --level-only \
     -i ${PROJECT_PATH}/${test_dir}/.ut-inventory.json \
     -c ${build_dir}/coverage/filtered.info \
     --class ${classname} --json -o ${build_dir}/coverage/${classname}_by_level.json

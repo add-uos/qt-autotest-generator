@@ -281,7 +281,7 @@ class TestOutputAndCli:
         inv = tmp_path / ".ut-inventory.json"
         inv.write_text(json.dumps({"methods": [
             _m("a", cls="proj.src.A", level="high")]}), encoding="utf-8")
-        rc = plan_test_classes.main_no_exit([
+        rc = plan_test_classes.plan_main_no_exit([
             "--inventory", str(inv), "--stdout"])
         out = capsys.readouterr().out
         assert rc == 0
@@ -295,7 +295,7 @@ class TestOutputAndCli:
             _m("a", cls="proj.src.A", level="mid"),
             _m("b", cls=None, file="src/u.cpp", node_type="Function"),
         ]}), encoding="utf-8")
-        rc = plan_test_classes.main_no_exit([
+        rc = plan_test_classes.plan_main_no_exit([
             "--inventory", str(inv)])
         out = capsys.readouterr().out
         assert rc == 0
@@ -310,12 +310,12 @@ class TestOutputAndCli:
         inv = tmp_path / ".ut-inventory.json"
         inv.write_text(json.dumps({"methods": []}), encoding="utf-8")
         out = tmp_path / "plan.json"
-        rc = plan_test_classes.main_no_exit([
+        rc = plan_test_classes.plan_main_no_exit([
             "--inventory", str(inv), "--output", str(out)])
         assert rc == 0 and out.exists()
 
     def test_cli_missing_inventory(self, plan_test_classes, tmp_path, capsys):
-        rc = plan_test_classes.main_no_exit([
+        rc = plan_test_classes.plan_main_no_exit([
             "--inventory", str(tmp_path / "nope.json")])
         assert rc == 2
         assert "not found" in capsys.readouterr().out
@@ -323,6 +323,6 @@ class TestOutputAndCli:
     def test_cli_invalid_json(self, plan_test_classes, tmp_path, capsys):
         bad = tmp_path / ".ut-inventory.json"
         bad.write_text("{broken", encoding="utf-8")
-        rc = plan_test_classes.main_no_exit(["--inventory", str(bad)])
+        rc = plan_test_classes.plan_main_no_exit(["--inventory", str(bad)])
         assert rc == 2
         assert "invalid JSON" in capsys.readouterr().out

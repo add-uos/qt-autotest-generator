@@ -16,7 +16,7 @@ compatibility:
   env_vars:
     - name: QTAG_MCP_URL
       default: "http://10.8.12.80:13626/mcp"
-      description: "远端 MCP HTTP 端点，fetch-mcp-data.py 使用"
+      description: "远端 MCP HTTP 端点，mcp-scan.py 使用"
     - name: QTAG_CBM_INSTALL_URL
       default: "https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/install.sh"
       description: "codebase-memory-mcp 安装脚本 URL，内网可设为镜像"
@@ -40,7 +40,7 @@ compatibility:
 | **Mode 0 · Dev Preflight** | 本地开发中、有未 push 代码、需要本地图谱同步 | 下文 + `Read references/dev-preflight.md` |
 | **Mode 1 · 函数重要性探测** | 项目初始化、扫描方法分级、生成 inventory | 下文 + `Read references/inventory.md` |
 | **Mode 2 · 单元测试编写** | 按 inventory 补全 GTest 用例 | 下文 + `Read references/test-writer.md` |
-| **Mode 3 · 覆盖率采集与汇总** | 只采集/统计覆盖率，不生成测试代码 | `Read references/report-generator.md` + `scripts/collect-coverage-report.py` |
+| **Mode 3 · 覆盖率采集与汇总** | 只采集/统计覆盖率，不生成测试代码 | `Read references/report-generator.md` + `scripts/coverage-report.py` |
 | **Mode 4 · 变异测试**（可选） | 验证已有测试能否拦住缺陷（变异得分） | `Read references/mutation-testing.md` + `scripts/mutation-score.py` |
 | **Mode 5 · 源码缺陷导出与统计** | 导出/统计单元测试发现的源码缺陷 | `Read references/defect-exporter.md` + `scripts/export-defects.py` |
 
@@ -131,7 +131,7 @@ Mode 2 的子步骤按需读取：
 
 ## Mode 3 · 覆盖率采集与汇总
 
-1. **`Read`** `references/report-generator.md` → 调用 `scripts/collect-coverage-report.py`
+1. **`Read`** `references/report-generator.md` → 调用 `scripts/coverage-report.py`
 2. 脚本一条命令完成：运行测试 → lcov 采集 → genhtml → 分级覆盖率 → 汇总 JSON
 3. 产出：`report/`（gtest XML）+ `html/`（lcov HTML）+ `coverage_by_level.json`（分级详情）+ `ut-summary.json`（三合一汇总）
 
@@ -191,12 +191,12 @@ Mode 5 **不跑测试、不编译、不改测试代码、不改源码**（与 Mo
 | 函数覆盖率阈值 | 分级门禁：high 行90%+分支80%+函数100%，mid/low 行60%+函数100%
 | Dev Preflight | Mode 0，显式本地入口，索引同步 | `Read references/dev-preflight.md` |
 | 模板与 stub-ext | `templates/`，详见 `references/templates-guide.md` |
-| 分级覆盖率采集 | `scripts/collect-coverage-report.py`（Mode 3） |
+| 分级覆盖率采集 | `scripts/coverage-report.py`（Mode 3） |
 | 变异测试 | `scripts/mutation-score.py`（Mode 4，可选，阈值 85%） |
 | 源码缺陷导出 | `scripts/export-defects.py`（Mode 5，可选，upsert/mark-fixed/export） |
 | 过时测试清理 | `scripts/stale-test-cleanup.py`（reconcile 后主动清理，不等编译报错） |
 | inventory 状态筛查 | `scripts/utq.py`（查未测/弱覆盖/单函数详情/测试文件反查，详见 `references/utq-usage.md`） |
-| 分支清单交叉验证 | `scripts/fetch-mcp-data.py extract-branches`（self-checker §2c，MCP `get_code_snippet` 反查真实分支做差集） |
+| 分支清单交叉验证 | `scripts/mcp-scan.py extract-branches`（self-checker §2c，MCP `get_code_snippet` 反查真实分支做差集） |
 | 缺陷数据文件 | `.ut-defects.json`（本地，不入 git） |
 
 ---

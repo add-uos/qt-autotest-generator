@@ -159,7 +159,7 @@ undefined reference to stub_ext::freeWrapper
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `QTAG_MCP_URL` | `http://10.8.12.80:13626/mcp` | 远端 MCP HTTP 端点，`fetch-mcp-data.py` 使用 |
+| `QTAG_MCP_URL` | `http://10.8.12.80:13626/mcp` | 远端 MCP HTTP 端点，`mcp-scan.py` 使用 |
 | `QTAG_CBM_INSTALL_URL` | GitHub 官方 install.sh | codebase-memory-mcp 安装脚本 URL，内网可设为镜像 |
 | `QTAG_PROXY` | `http://proxy02.uniontech.com:3128` | HTTP/HTTPS 代理地址 |
 | `QTAG_GIT_EMAIL` | `autotest@uniontech.com` | 自动提交 git 回退邮箱 |

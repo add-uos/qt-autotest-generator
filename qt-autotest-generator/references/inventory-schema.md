@@ -134,7 +134,7 @@
 |------|------|------|
 | `qualified_name` | string | 图谱全限定名（必须来自图谱返回，禁止自己拼） |
 | `name` | string | 方法名 |
-| `class_qn` | string \| null | 所属类短名（如 `ApplicationAdaptor`）；自由函数为 null。由 `scan-inventory.py` 产出，Mode 2 匹配时与 `classes[].name` 比对 |
+| `class_qn` | string \| null | 所属类短名（如 `ApplicationAdaptor`）；自由函数为 null。由 `mcp-scan.py` 产出，Mode 2 匹配时与 `classes[].name` 比对 |
 | `file_path` | string | 源文件路径（相对项目根） |
 | `access` | string | `"public"` / `"protected"` / `"private"` |
 | `level` | string \| null | `"high"` / `"mid"` / `"low"` / `null`（exempt 时为 null） |
@@ -154,7 +154,7 @@
 | `node_type` | string | `"Method"` / `"Function"`（自由函数） |
 | `auto_reason` | string | suggested 条目的自动建议原因（仅 `source=suggested` 时存在） |
 
-> 以上扩展字段由 `scan-inventory.py` 产出，Mode 2 消费方可忽略；`assets/ut-inventory-editor`（人工辅助工具，agent 不调用）依赖它们做展示。
+> 以上扩展字段由 `mcp-scan.py` 产出，Mode 2 消费方可忽略；`assets/ut-inventory-editor`（人工辅助工具，agent 不调用）依赖它们做展示。
 
 ### review_queue 条目
 
@@ -214,6 +214,6 @@
 |------|---------|--------|
 | Mode 1 首次建表 | 全量 methods + gate_thresholds + scope_rules | Mode 1 |
 | Mode 2 每类编译通过 | 该类方法的 `usecase_count` | Mode 2 |
-| 源码变更对账 | 新增/删除/签名变更方法 + 人工标记保留 | `fetch-mcp-data.py --incremental --existing` |
+| 源码变更对账 | 新增/删除/签名变更方法 + 人工标记保留 | `mcp-scan.py fetch --incremental --existing` |
 
 > **注意**：`usecase_count` 更新是增量操作，只改当前类的数据，不覆盖其他类。

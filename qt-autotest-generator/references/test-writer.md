@@ -59,13 +59,13 @@ gui_names = {c["name"] for c in inventory.get("classes", []) if c.get("is_gui")}
 
 ### 4. 确定待测类列表
 
-> **首选方式**：跑 `scripts/plan-test-classes.py`，消费 `{test_dir}/.reports/testable-classes.json`。
+> **首选方式**：跑 `scripts/mode2-ops.py plan`，消费 `{test_dir}/.reports/testable-classes.json`。
 > 脚本固化了按 class_qn 分组 → 类 level 取最高 → level_rank 排序 → is_gui 匹配 →
 > 自由函数归组全流程，兼容双 schema 字段（`qn`/`file` vs `qualified_name`/`file_path`）。
 > 模型只读排好序的类清单，不读 inventory 全量。
 >
 > ```bash
-> python3 ${SKILL_DIR}/scripts/plan-test-classes.py --inventory ${test_dir}/.ut-inventory.json
+> python3 ${SKILL_DIR}/scripts/mode2-ops.py plan --inventory ${test_dir}/.ut-inventory.json
 > # 输出：${test_dir}/.reports/testable-classes.json + stdout 摘要
 > ```
 >
@@ -165,12 +165,12 @@ for c in sorted_classes:
 
 ### 6. 每类通过后更新 usecase_count
 
-> **首选方式**：跑 `scripts/update-usecase-count.py`，脚本统计 TEST_F 用例数 +
+> **首选方式**：跑 `scripts/mode2-ops.py usecase`，脚本统计 TEST_F 用例数 +
 > 按方法名匹配（首段 PascalCase vs 方法名 camelCase 小写归一化）增量写回 inventory。
 > 失败安全：匹配不到的方法保持原值不动。只改当前类方法，不覆盖其他类。
 >
 > ```bash
-> python3 ${SKILL_DIR}/scripts/update-usecase-count.py \
+> python3 ${SKILL_DIR}/scripts/mode2-ops.py usecase \
 >     --test-file ${test_dir}/${module}/test_${classname}.cpp \
 >     --inventory ${test_dir}/.ut-inventory.json --class ${classname}
 > # 同名类歧义时用 --class-qn <全限定名> 精确匹配
@@ -220,7 +220,7 @@ gate = inventory["gate_thresholds"]
 
 全部批次提交完成（无下一批次）即 Mode 2 结束。此时统一生成**最终报告**，只执行一次：
 
-1. **Mode 3 覆盖率报告**：`Read references/report-generator.md` → 调用 `scripts/collect-coverage-report.py`（gtest XML + lcov HTML + 分级覆盖率 + 汇总 JSON）
+1. **Mode 3 覆盖率报告**：`Read references/report-generator.md` → 调用 `scripts/coverage-report.py`（gtest XML + lcov HTML + 分级覆盖率 + 汇总 JSON）
 2. **Mode 5 缺陷导出**：`Read references/defect-exporter.md` → 调用 `scripts/export-defects.py export`（`.ut-defects.json` → `defects.json` + `defects-summary.md`）
 
 > ⚠️ **报告只在最终退出前生成一次**，不在每笔批次提交后触发。原因：Mode 2 可能有**多笔批次提交**（每批次一笔），中间重复跑报告既浪费又状态不完整；最终退出前的报告反映所有类、所有缺陷、累计覆盖率的完整状态。

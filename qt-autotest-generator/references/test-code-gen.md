@@ -72,7 +72,7 @@ read("${SKILL_DIR}/templates/cmake-submodule.txt")
 
 文件路径：`{test_dir}/<module>/test_<classname>.cpp`（`test_dir` 从内存变量读取）
 
-**模块名确定**：优先取 `testable-classes.json`（由 `scripts/plan-test-classes.py` 产出）中该类的 `module` 字段；脚本不可用时取 `source_dirs` 的最后一段。
+**模块名确定**：优先取 `testable-classes.json`（由 `scripts/mode2-ops.py plan` 产出）中该类的 `module` 字段；脚本不可用时取 `source_dirs` 的最后一段。
 
 **同名类消歧**：若项目内存在不同路径下的同名类（如 `A/Manager.h` 和 `B/Manager.h`），测试文件路径按模块路径拆分，不合并：
 - 测试文件路径 = `{test_dir}/{module_path_flattened}/test_{classname}.cpp`
@@ -109,7 +109,7 @@ read("${SKILL_DIR}/templates/cmake-submodule.txt")
 
 > **组合规则**：以 level 定基数，factor 作加成（累加）。例：high 且含 `loop_count:5` → 3 + 1 = 4 用例下限。分支覆盖优先于用例数量（见 §4.0 第 4 条），上表是下限不是上限。
 
-> **factor 匹配方式**：inventory `factors` 数组中的因子名由 `scan-inventory.py` 产出（如 `complexity:25`、`loop_count:5`、`linear_scan_in_loop:1`），本表用**前缀匹配**（`complexity:*` 匹配所有以 `complexity:` 开头的因子），后缀数值按条件判断（≥ 20、≥ 8 等）。
+> **factor 匹配方式**：inventory `factors` 数组中的因子名由 `mcp-scan.py` 产出（如 `complexity:25`、`loop_count:5`、`linear_scan_in_loop:1`），本表用**前缀匹配**（`complexity:*` 匹配所有以 `complexity:` 开头的因子），后缀数值按条件判断（≥ 20、≥ 8 等）。
 
 ### 4.0 前置：mock 深度分析（避免漏测与环境耦合）
 

@@ -47,7 +47,7 @@ if file_exists(inventory_path):
     else:
         # 增量更新：全量重建 + 同步旧 inventory 的人工标记
         # 完整方案见 references/incremental-inventory.md
-        # 落地：fetch-mcp-data.py --incremental --existing <path>
+        # 落地：mcp-scan.py fetch --incremental --existing <path>
         #   - qn 对得上 → 回写 level/source/review_status/usecase_count
         #   - qn 对不上 → 直接丢弃（不留墓碑，不做改名软匹配）
         #   - file_overrides 整体保留；review_queue confirmed 条目保留
@@ -56,7 +56,8 @@ if file_exists(inventory_path):
         # QTAG_MCP_URL: 可选环境变量，覆盖远端 MCP HTTP 端点默认值
         mcp_url = os.environ.get("QTAG_MCP_URL")
         cmd = [
-            "python3", f"{skill_dir}/scripts/fetch-mcp-data.py",
+            "python3", f"{skill_dir}/scripts/mcp-scan.py",
+            "fetch",
             "--project", project_name,
             "--file-pattern", file_pattern or "src/**",
             "--output", inventory_path,        # 原地覆盖，脚本自动备份 .bak
@@ -73,12 +74,12 @@ if file_exists(inventory_path):
 # 否则 → 全量建表（Step 3）
 ```
 
-### 3. 运行 `fetch-mcp-data.py`（主路径）
+### 3. 运行 `mcp-scan.py`（主路径）
 
 **首选方式**：一条命令完成 MCP 采集 → 评分 → 产出 `.ut-inventory.json`。
 
 ```bash
-python3 scripts/fetch-mcp-data.py \
+python3 scripts/mcp-scan.py fetch \
   --project <project_name> \
   --file-pattern "src/**" \
   --output ${test_dir}/.ut-inventory.json \
@@ -95,14 +96,14 @@ python3 scripts/fetch-mcp-data.py \
 脚本内部自动完成 5 步：`search_graph` 分页 → `query_graph` 继承检测 → DBus 槽 → Q_INVOKABLE/Q_PLUGIN → P75 计算 → `scan_inventory.build_inventory()` 评分。
 
 - HTTP 直连 MCP 服务器（JSON-RPC 2.0），~12000 方法端到端仅需 ~2 秒
-- `scan-inventory.py` 提供评分逻辑（`build_inventory()` + `generate_summary()`），被 `fetch-mcp-data.py` import 调用
+- `mcp-scan.py` 提供评分逻辑（`build_inventory()` + `generate_summary()`），被 `mcp-scan.py` import 调用
 
-> ⚠️ **不要手动调 MCP 再跑 `scan-inventory.py --mcp-dump`**，直接用 `fetch-mcp-data.py` 即可。
+> ⚠️ **不要手动调 MCP 再跑 `mcp-scan.py scan --mcp-dump`**，直接用 `mcp-scan.py` 即可。
 
 <details>
-<summary>📖 备选：手动 3-pass 流程（仅当 fetch-mcp-data.py 不可用时）</summary>
+<summary>📖 备选：手动 3-pass 流程（仅当 mcp-scan.py 不可用时）</summary>
 
-若 `fetch-mcp-data.py` 不可用（如 MCP URL 变更、脚本损坏），Agent 可退回手动 3-pass 流程。
+若 `mcp-scan.py` 不可用（如 MCP URL 变更、脚本损坏），Agent 可退回手动 3-pass 流程。
 
 #### Pass 1 — 批量图查询（~15 次 MCP 调用）
 
@@ -142,7 +143,7 @@ for cls in target_classes:
 
 #### Pass 3 — 评分与产出
 
-加权评分逻辑见下表，完整实现详见 `scripts/scan-inventory.py` 的 `score_method()` 函数。
+加权评分逻辑见下表，完整实现详见 `scripts/mcp-scan.py` 的 `score_method()` 函数。
 
 | 因子 | 得分 | 检测方式 | source |
 |------|------|---------|--------|
@@ -182,13 +183,13 @@ for cls in target_classes:
 
 **scope_rules 应用**：scope=exempt → `testable=false`，不论因子评分多高。
 
-手动流程完成后，需自行组装 mcp_dump JSON 并调 `scan-inventory.py --mcp-dump` 评分，或用 Agent 内置逻辑复现 `build_inventory()` 的评分逻辑。
+手动流程完成后，需自行组装 mcp_dump JSON 并调 `mcp-scan.py scan --mcp-dump` 评分，或用 Agent 内置逻辑复现 `build_inventory()` 的评分逻辑。
 
 </details>
 
 ### 4. 已有用例数统计 + 写表
 
-`fetch-mcp-data.py` 默认 `usecase_count=0`（不扫描已有测试）。若需统计已有用例，扫描 `${test_dir}/` 下所有 `test_*.cpp`：
+`mcp-scan.py` 默认 `usecase_count=0`（不扫描已有测试）。若需统计已有用例，扫描 `${test_dir}/` 下所有 `test_*.cpp`：
 
 ```python
 usecase_map = {}  # "ClassQn.method_name" → count
@@ -256,7 +257,7 @@ Agent 输出 Markdown 摘要 + review_queue，与用户交互：
 
 ## 已落地
 
-- **增量更新脚本**：已实现于 `fetch-mcp-data.py --incremental --existing`。全量重建 + 同步旧 inventory 的人工标记（`source=manual` 的 level、`review_status=confirmed`、`usecase_count`）；方法删除直接清理（不留墓碑，不做改名软匹配）；`file_overrides` 整体保留。生成增量 diff 报告（新增/删除/签名变更/level 变化/人工标记保留与丢失）。详见 `references/incremental-inventory.md`。
+- **增量更新脚本**：已实现于 `mcp-scan.py fetch --incremental --existing`。全量重建 + 同步旧 inventory 的人工标记（`source=manual` 的 level、`review_status=confirmed`、`usecase_count`）；方法删除直接清理（不留墓碑，不做改名软匹配）；`file_overrides` 整体保留。生成增量 diff 报告（新增/删除/签名变更/level 变化/人工标记保留与丢失）。详见 `references/incremental-inventory.md`。
 
 ## 关键约束
 

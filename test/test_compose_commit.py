@@ -169,7 +169,7 @@ class TestCli:
     def test_outputs_message_exit_zero(self, compose_commit, tmp_path, capsys):
         sf = tmp_path / "status.json"
         sf.write_text(json.dumps(_status([("A", "done", 1, 1)])), encoding="utf-8")
-        rc = compose_commit.main_no_exit(["--status-file", str(sf)])
+        rc = compose_commit.commit_main_no_exit(["--status-file", str(sf)])
         out = capsys.readouterr().out
         assert rc == 0
         assert out.startswith("test: add")
@@ -177,7 +177,7 @@ class TestCli:
     def test_no_done_classes_exit_two(self, compose_commit, tmp_path, capsys):
         sf = tmp_path / "status.json"
         sf.write_text(json.dumps(_status([("A", "failed", 1, 0)])), encoding="utf-8")
-        rc = compose_commit.main_no_exit(["--status-file", str(sf)])
+        rc = compose_commit.commit_main_no_exit(["--status-file", str(sf)])
         assert rc == 2
         assert "no done classes" in capsys.readouterr().out
 
@@ -185,18 +185,18 @@ class TestCli:
         sf = tmp_path / "status.json"
         sf.write_text(json.dumps(_status([("A", "done", 1, 1)])), encoding="utf-8")
         out = tmp_path / "msg.txt"
-        compose_commit.main_no_exit(["--status-file", str(sf), "--output", str(out)])
+        compose_commit.commit_main_no_exit(["--status-file", str(sf), "--output", str(out)])
         assert out.exists()
         assert "test: add" in out.read_text(encoding="utf-8")
 
     def test_missing_status_file(self, compose_commit, tmp_path, capsys):
-        rc = compose_commit.main_no_exit(["--status-file", str(tmp_path / "nope.json")])
+        rc = compose_commit.commit_main_no_exit(["--status-file", str(tmp_path / "nope.json")])
         assert rc == 2
         assert "not found" in capsys.readouterr().out
 
     def test_invalid_json(self, compose_commit, tmp_path, capsys):
         sf = tmp_path / "status.json"
         sf.write_text("{broken", encoding="utf-8")
-        rc = compose_commit.main_no_exit(["--status-file", str(sf)])
+        rc = compose_commit.commit_main_no_exit(["--status-file", str(sf)])
         assert rc == 2
         assert "invalid" in capsys.readouterr().out

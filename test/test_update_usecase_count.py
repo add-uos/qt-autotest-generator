@@ -157,7 +157,7 @@ class TestAmbiguity:
         f.write_text(json.dumps(inv), encoding="utf-8")
         tf = tmp_path / "t.cpp"
         tf.write_text(TEST_FILE, encoding="utf-8")
-        update_usecase_count.main_no_exit([
+        update_usecase_count.usecase_main_no_exit([
             "--test-file", str(tf), "--inventory", str(f),
             "--class-qn", "proj.src.Calculator"])
         out = capsys.readouterr().out
@@ -176,7 +176,7 @@ class TestAmbiguity:
         f.write_text(json.dumps(inv), encoding="utf-8")
         tf = tmp_path / "t.cpp"
         tf.write_text(TEST_FILE, encoding="utf-8")
-        update_usecase_count.main_no_exit([
+        update_usecase_count.usecase_main_no_exit([
             "--test-file", str(tf), "--inventory", str(f),
             "--class", "Calculator", "--dry-run"])
         out = capsys.readouterr().out
@@ -195,7 +195,7 @@ class TestCli:
 
     def test_writes_inventory(self, update_usecase_count, tmp_path, capsys):
         tf, inv = self._setup(tmp_path)
-        rc = update_usecase_count.main_no_exit([
+        rc = update_usecase_count.usecase_main_no_exit([
             "--test-file", str(tf), "--inventory", str(inv), "--class", "Calculator"])
         assert rc == 0
         data = json.loads(inv.read_text(encoding="utf-8"))
@@ -204,7 +204,7 @@ class TestCli:
 
     def test_dry_run_no_write(self, update_usecase_count, tmp_path, capsys):
         tf, inv = self._setup(tmp_path)
-        rc = update_usecase_count.main_no_exit([
+        rc = update_usecase_count.usecase_main_no_exit([
             "--test-file", str(tf), "--inventory", str(inv),
             "--class", "Calculator", "--dry-run"])
         assert rc == 0
@@ -214,7 +214,7 @@ class TestCli:
 
     def test_class_qn_exact(self, update_usecase_count, tmp_path):
         tf, inv = self._setup(tmp_path, [("add", "proj.src.Calculator", True)])
-        rc = update_usecase_count.main_no_exit([
+        rc = update_usecase_count.usecase_main_no_exit([
             "--test-file", str(tf), "--inventory", str(inv),
             "--class-qn", "proj.src.Calculator"])
         assert rc == 0
@@ -222,12 +222,12 @@ class TestCli:
 
     def test_missing_class_arg(self, update_usecase_count, tmp_path):
         tf, inv = self._setup(tmp_path)
-        rc = update_usecase_count.main_no_exit([
+        rc = update_usecase_count.usecase_main_no_exit([
             "--test-file", str(tf), "--inventory", str(inv)])
         assert rc == 2
 
     def test_missing_files(self, update_usecase_count, tmp_path, capsys):
-        rc = update_usecase_count.main_no_exit([
+        rc = update_usecase_count.usecase_main_no_exit([
             "--test-file", str(tmp_path / "nope.cpp"),
             "--inventory", str(tmp_path / "nope.json"), "--class", "X"])
         assert rc == 2
@@ -238,7 +238,7 @@ class TestCli:
         bad.write_text("{broken", encoding="utf-8")
         tf = tmp_path / "t.cpp"
         tf.write_text("TEST_F(X, A_B_C) {}", encoding="utf-8")
-        rc = update_usecase_count.main_no_exit([
+        rc = update_usecase_count.usecase_main_no_exit([
             "--test-file", str(tf), "--inventory", str(bad), "--class", "X"])
         assert rc == 2
         assert "invalid" in capsys.readouterr().out
