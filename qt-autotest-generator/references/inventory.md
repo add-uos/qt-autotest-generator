@@ -74,7 +74,7 @@ if file_exists(inventory_path):
 # 否则 → 全量建表（Step 3）
 ```
 
-### 3. 运行 `mcp-scan.py`（主路径）
+### 3. 运行 `mcp-scan.py fetch`（主路径）
 
 **首选方式**：一条命令完成 MCP 采集 → 评分 → 产出 `.ut-inventory.json`。
 
@@ -93,12 +93,12 @@ python3 scripts/mcp-scan.py fetch \
 - **--base-sha**：当前 git HEAD SHA（对账用，默认 `unknown`）
 - **--keep-dump**：保留中间 `mcp_dump.json`（调试用）
 
-脚本内部自动完成 5 步：`search_graph` 分页 → `query_graph` 继承检测 → DBus 槽 → Q_INVOKABLE/Q_PLUGIN → P75 计算 → `scan_inventory.build_inventory()` 评分。
+脚本内部自动完成 5 步：`search_graph` 分页 → `query_graph` 继承检测 → DBus 槽 → Q_INVOKABLE/Q_PLUGIN → P75 计算 → `build_inventory()` 评分。
 
 - HTTP 直连 MCP 服务器（JSON-RPC 2.0），~12000 方法端到端仅需 ~2 秒
-- `mcp-scan.py` 提供评分逻辑（`build_inventory()` + `generate_summary()`），被 `mcp-scan.py` import 调用
+- MCP 采集与评分逻辑同在 `mcp-scan.py` 内，`fetch` 子命令直接调用 `build_inventory()` + `generate_summary()`，无跨文件 import
 
-> ⚠️ **不要手动调 MCP 再跑 `mcp-scan.py scan --mcp-dump`**，直接用 `mcp-scan.py` 即可。
+> ⚠️ **不要手动调 MCP 再跑 `mcp-scan.py scan --mcp-dump`**，直接用 `mcp-scan.py fetch` 即可。
 
 <details>
 <summary>📖 备选：手动 3-pass 流程（仅当 mcp-scan.py 不可用时）</summary>
