@@ -296,15 +296,24 @@ def cleanup_removed_methods(
                 new_content = new_content[:inst["start"]] + commented_inst + new_content[inst["end"]:]
                 cleaned_inst += 1
 
-        # 更新 usecase_count
+        # 更新 usecase_count，并同步维护 test_* 字段（清理后双信号语义一致）
         if inventory is not None:
             new_counts = count_active_cases_by_method(new_content, cls_short)
+            base_name = os.path.basename(test_file)
+            # 本文件中被删的用例名，按方法分组（精确到方法，避免同名 case 误删）
+            removed_by_method = {}
+            for d in cleaned_cases_detail:
+                removed_by_method.setdefault(d["method"].lower(), set()).add(d["case"])
             for m in inventory.get("methods", []):
                 cls_qn = m.get("class_qn") or ""
                 cls_qn_short = cls_qn.rsplit(".", 1)[-1] if "." in cls_qn else cls_qn
                 if cls_qn_short == cls_short and m.get("testable"):
                     method_lower = m["name"].lower()
                     m["usecase_count"] = new_counts.get(method_lower, 0)
+                    # 该方法在本文件已无任何用例 → 本文件不再覆盖它
+                    if new_counts.get(method_lower, 0) == 0:
+                        sync_remove_file_coverage(
+                            m, base_name, removed_by_method.get(method_lower, set()))
 
         # 写回
         if not dry_run:
@@ -325,6 +334,30 @@ def cleanup_removed_methods(
             print(f"     ❌ {cleaned_inst} 个 INSTANTIATE_TEST_SUITE_P 已清理")
 
     return report
+
+
+def sync_remove_file_coverage(method: dict, base_name: str, removed_cases: set):
+    """清理后同步维护 test_* 字段：本文件不再覆盖该方法。
+
+    stale 测试清理后，usecase_count 归零但 test_cover_count/test_files/test_cases
+    若保留旧值，会导致 utq 双信号判定仍显示"已覆盖"，语义不一致。
+
+    - test_files：移除本文件（basename 匹配），test_cover_count = len(剩余)
+    - test_cases：移除本文件中该方法的已删用例名
+    - 覆盖完全消失时清除 test_source 标记
+    """
+    files = method.get("test_files")
+    if isinstance(files, list) and base_name in {os.path.basename(tf) for tf in files}:
+        kept = [tf for tf in files if os.path.basename(tf) != base_name]
+        method["test_files"] = kept
+        method["test_cover_count"] = len(kept)
+        if not kept:
+            method.pop("test_source", None)
+    cases = method.get("test_cases")
+    if isinstance(cases, list) and removed_cases:
+        kept_cases = [c for c in cases if c not in removed_cases]
+        if kept_cases != cases:
+            method["test_cases"] = kept_cases
 
 
 def mark_stale_tests(

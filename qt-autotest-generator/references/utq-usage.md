@@ -18,8 +18,12 @@
 | `score` | 重要性分数（可负） | 排序优先级 |
 | `factors` | 打分依据 `complexity:8` `cognitive:25` `in_degree:2` 等 | 决定用例设计深度（分支多→多写分支用例） |
 | `testable` | 是否可测（false=豁免） | 豁免项跳过 |
-| `test_cover_count` | 调用该函数的**测试文件数**（MCP CALLS） | **>0 视为已覆盖；=0/缺失 = 待写** |
-| `usecase_count` | GTest 用例数（下界估计） | 已测函数的用例量，判断是否薄弱 |
+| `test_cover_count` | 调用该函数的**测试文件数**（MCP CALLS，外部工具回写） | 覆盖判定信号 ① |
+| `usecase_count` | GTest 用例数（mode2-ops usecase 回写） | 覆盖判定信号 ②；已测函数的用例量，判断是否薄弱 |
+
+> **覆盖判定为双信号**：`test_cover_count > 0` **或** `usecase_count > 0` 任一成立即已覆盖。
+> 原因：Mode 2 写完测试立即回写 `usecase_count`，但外部 fetch-test-mapping 可能未跑
+> （`test_cover_count=0`），只看信号 ① 会误判为待写，导致重复写测试。
 | `test_files` / `test_cases` | 覆盖它的测试文件 / 用例名 | 避免重复写、参考已有用例风格 |
 | `review_status` | auto / pending / exempt | pending = 待人工定级 |
 | `exempt_reason` | 豁免原因（如 `scope:tests/**`） | 排查豁免是否合理 |
@@ -104,26 +108,29 @@ JSON 含 name/签名/factors/level/score，可直接作为子代理的输入任�
 ## 兜底：无脚本时用 jq（在任何有 .ut-inventory.json 的目录）
 
 ```bash
-# 未覆盖 high 函数（TSV，按分数排序）
-jq -r '.methods[] | select(.testable and ((.test_cover_count // 0) == 0) and .level=="high")
+# 未覆盖 high 函数（TSV，按分数排序；双信号：两个计数都为 0 才算未覆盖）
+jq -r '.methods[] | select(.testable and ((.test_cover_count // 0) == 0)
+       and ((.usecase_count // 0) == 0) and .level=="high")
        | [(.score//0), (.class_qn // "-"), .name, .signature, .file_path] | @tsv' \
   .ut-inventory.json | sort -rn
 
-# 某文件的全部未测函数名
+# 某文件的全部未测函数名（同样双信号）
 jq -r '.methods[] | select(.testable and ((.test_cover_count // 0) == 0)
+       and ((.usecase_count // 0) == 0)
        and (.file_path|contains("文件名"))) | .name' .ut-inventory.json
 
-# 弱覆盖：score>=3 但用例<=1
-jq -r '.methods[] | select(.testable and (.test_cover_count//0)>0
+# 弱覆盖：score>=3 但用例<=1（已有测试 = 双信号任一 >0）
+jq -r '.methods[] | select(.testable and (((.test_cover_count//0)>0)
+       or ((.usecase_count//0)>0))
        and (.score//0)>=3 and ((.usecase_count//0)<=1))
        | [(.score//0), (.class_qn//"-"), .name] | @tsv' .ut-inventory.json | sort -rn
 
 # 总览
 jq '.scan_stats' .ut-inventory.json
 
-# 按级别统计已测/未测
+# 按级别统计已测/未测（双信号）
 jq -r '.methods | group_by(.level) | .[] | [.[0].level, length,
-       (map(select((.test_cover_count//0)>0))|length)] | @tsv' .ut-inventory.json
+       (map(select(((.test_cover_count//0)>0) or ((.usecase_count//0)>0)))|length)] | @tsv' .ut-inventory.json
 ```
 
 ## AI 补测试的推荐工作流

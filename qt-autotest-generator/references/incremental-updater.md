@@ -60,7 +60,8 @@ methods_to_add = untested_methods | set(uncovered_from_lcov)
 ```
 
 #### 来源 C：inventory 覆盖率状态交叉校验（utq）
-> 用 `utq` 从 inventory 视角核对该类哪些方法 `test_cover_count==0`，与来源 A/B 取并集。
+> 用 `utq` 从 inventory 视角核对该类哪些方法未覆盖（双信号：`test_cover_count` 与
+> `usecase_count` 均为 0），与来源 A/B 取并集。
 > 图谱差集（A）基于方法名匹配，可能漏掉被测但未在测试文件中出现的方法名变体；
 > inventory 的 `test_cover_count` 来自 MCP CALLS 静态分析，是独立的覆盖信号。
 

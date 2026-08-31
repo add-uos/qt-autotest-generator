@@ -11,6 +11,8 @@ from pathlib import Path
 import pytest
 
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "qt-autotest-generator" / "scripts"
+# 外部工具（assets/ut-inventory-editor）也写 .ut-inventory.json，纳入契约测试
+ASSETS_SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "qt-autotest-generator" / "assets" / "ut-inventory-editor" / "scripts"
 
 # 模块名 → 文件名映射（模块名用下划线，便于测试 import）
 # 合并后：旧 fixture 名指向新合并文件，测试无需改名
@@ -125,3 +127,22 @@ def self_check_structural():
 @pytest.fixture(scope="session")
 def utq():
     return _load_module("utq", "utq.py")
+
+
+@pytest.fixture(scope="session")
+def fetch_test_mapping():
+    """外部 UPDATE 脚本（assets/ut-inventory-editor），回写 test_* 字段。
+
+    仅标准库依赖（urllib），import 安全；主入口有 __main__ 保护。
+    """
+    path = ASSETS_SCRIPTS_DIR / "fetch-test-mapping.py"
+    mod_name = "fetch_test_mapping"
+    cache_key = str(path)
+    if cache_key in sys.modules:
+        return sys.modules[cache_key]
+    spec = importlib.util.spec_from_file_location(mod_name, path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[cache_key] = mod
+    sys.modules[mod_name] = mod
+    spec.loader.exec_module(mod)
+    return mod

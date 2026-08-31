@@ -97,7 +97,7 @@ for name in instantiated_names:
     )
 ```
 
-### 5. 更新 .ut-inventory.json 的 usecase_count
+### 5. 更新 .ut-inventory.json 的 usecase_count + 同步 test_* 字段
 
 已删除方法从 `methods[]` 中已消失（全量重建），但同类**其他仍存在的方法**可能也需要更新 `usecase_count`（因为被注释的用例可能也测试了其他方法，或总用例数减少）：
 
@@ -108,11 +108,16 @@ active_cases = count_active_test_cases(test_content)
 # 按方法名分组统计 usecase_count
 new_usecase_map = extract_usecase_count_by_method(test_content, class_short)
 
-# 更新 inventory 中该类方法的 usecase_count
+# 更新 inventory 中该类方法的 usecase_count，并同步 test_* 字段
 for m in inventory["methods"]:
     if m.get("class_qn") == class_qn and m.get("testable"):
         method_name = m["name"].lower()
         m["usecase_count"] = new_usecase_map.get(method_name, 0)
+        # 该方法在本文件已无用例 → 本文件不再覆盖它，同步维护覆盖字段
+        if new_usecase_map.get(method_name, 0) == 0:
+            sync_remove_file_coverage(m, basename(test_file), removed_cases)
+            # test_files 移除本文件，test_cover_count = len(剩余)
+            # test_cases 移除本文件中被注释的用例名；覆盖完全消失时清除 test_source
 ```
 
 ### 6. 清理分支切换导致的 stale 测试
@@ -159,6 +164,7 @@ for cls in stale_classes:
 - **不留墓碑在 inventory**：`.ut-inventory.json` 中方法删除就是删除，墓碑信息在 `-diff.md` 报告
 - **TEST_P 连带清理**：移除 `INSTANTIATE_TEST_SUITE_P` 避免编译错误
 - **usecase_count 实时更新**：清理后重新统计受影响类的用例数
+- **test_* 字段同步**：清理后 `test_files` 移除本文件、`test_cover_count` 重算、`test_cases` 移除被注释用例名——与 usecase_count 保持语义一致（否则 utq 双信号判定仍显示"已覆盖"）
 - **stale 不删用例**：分支切换导致的 stale 只做 CMake 隔离 + 文件头标记，不注释用例
 
 ## 与 failure-repairer 的关系

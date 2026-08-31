@@ -27,8 +27,9 @@ utq.py — .ut-inventory.json 快速筛查工具（给 AI / 人补单元测试�
   export                导出任务包 JSON（喂给子代理/AI 批量写测试）
 
 字段语义:
-  test_cover_count  调用该函数的测试文件数（MCP CALLS 静态分析），>0 视为已覆盖
-  usecase_count     GTest TEST_F 用例数（下界估计）
+  test_cover_count  调用该函数的测试文件数（MCP CALLS 静态分析，外部工具回写）
+  usecase_count     GTest TEST_F 用例数（mode2-ops usecase 回写）
+  覆盖判定         双信号：test_cover_count > 0 或 usecase_count > 0 任一成立即已覆盖
   score/factors     重要性打分与依据（complexity/cognitive/lines/in_degree...）
   level             high > mid > low（对应 gate_thresholds 的覆盖率门槛）
 
@@ -131,7 +132,10 @@ class Inv:
         return m.get("usecase_count") or 0
 
     def is_covered(self, m):
-        return self.cover(m) > 0
+        # 双信号：MCP 静态分析计数或 TEST_F 用例数任一 > 0 即视为已有测试。
+        # 只看 test_cover_count 会在 Mode 2 刚写完测试（usecase_count 已回写、
+        # 外部 fetch-test-mapping 尚未跑）时误判为 todo，导致重复写测试。
+        return self.cover(m) > 0 or self.usecase(m) > 0
 
     def is_todo(self, m):
         return bool(m.get("testable")) and not self.is_covered(m)

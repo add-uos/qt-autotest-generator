@@ -157,12 +157,31 @@ class TestInv:
         assert inv.is_covered({"test_cover_count": 2}) is True
         assert inv.is_covered({"test_cover_count": 0}) is False
 
+    def test_is_covered_dual_signal(self, utq, tmp_path):
+        """双信号：usecase_count>0 但外部回写未跑时也应判定已覆盖。
+
+        场景：Mode 2 写完测试 → mode2-ops usecase 回写 usecase_count=2，
+        但 fetch-test-mapping（外部工具）尚未跑 → test_cover_count=0。
+        只看 test_cover_count 会误判为 todo，导致重复写测试。
+        """
+        _write_inv(tmp_path, [_m("f", cover=0, usecase=2)])
+        inv = utq.Inv(tmp_path)
+        assert inv.is_covered({"test_cover_count": 0, "usecase_count": 2}) is True
+        assert inv.is_covered({"test_cover_count": 0, "usecase_count": 0}) is False
+
     def test_is_todo(self, utq, tmp_path):
         _write_inv(tmp_path, [_m("f", testable=True, cover=0)])
         inv = utq.Inv(tmp_path)
         assert inv.is_todo({"testable": True, "test_cover_count": 0}) is True
         assert inv.is_todo({"testable": True, "test_cover_count": 1}) is False
         assert inv.is_todo({"testable": False, "test_cover_count": 0}) is False
+
+    def test_is_todo_dual_signal(self, utq, tmp_path):
+        """usecase_count>0 的方法不是 todo（已有测试，避免重复写）。"""
+        _write_inv(tmp_path, [_m("f", testable=True, cover=0, usecase=1)])
+        inv = utq.Inv(tmp_path)
+        assert inv.is_todo({"testable": True, "test_cover_count": 0,
+                            "usecase_count": 1}) is False
 
     def test_display_name(self, utq, tmp_path):
         _write_inv(tmp_path, [_m("foo", cls="Bar")])
@@ -369,6 +388,15 @@ class TestCmdTodo:
         assert "notest" in out
         assert "hastest" not in out
 
+    def test_excludes_usecase_only(self, utq, tmp_path):
+        """仅 usecase_count>0（Mode 2 刚写完、外部回写未跑）不出现在 todo。"""
+        methods = [
+            _m("fresh", level="high", testable=True, cover=0, usecase=3),
+        ]
+        rc, out, _ = _run_cmd(utq, tmp_path, ["todo"], methods)
+        assert rc == 0
+        assert "fresh" not in out
+
     def test_level_filter(self, utq, tmp_path):
         methods = [
             _m("hi", level="high", testable=True, cover=0),
@@ -451,6 +479,13 @@ class TestCmdCovered:
         assert rc == 0
         assert "done" in out
         assert "pending" not in out
+
+    def test_shows_usecase_only(self, utq, tmp_path):
+        """双信号：仅 usecase_count>0 也应出现在 covered 清单。"""
+        methods = [_m("fresh", testable=True, cover=0, usecase=2)]
+        rc, out, _ = _run_cmd(utq, tmp_path, ["covered"], methods)
+        assert rc == 0
+        assert "fresh" in out
 
     def test_show_cases(self, utq, tmp_path):
         methods = [_m("f", testable=True, cover=1, usecase=2,
