@@ -8,7 +8,7 @@
 | 形态 | MCP 名称 | 能力 | 进入方式 |
 |------|----------|------|---------|
 | 远端 | `remote-codebase-memory-mcp` | 只读查询（search_graph / query_graph / trace_path / get_code_snippet / index_status / list_projects 等）。**不可触发 index_repository**——项目必须已在远端索引好 | Mode 1-5 默认，**唯一** |
-| 本地 | `codebase-memory-mcp` | 查询 + 索引（含 index_repository / index_status）。可为本机项目建立索引 | **仅 Mode 0 显式触发**（见 `references/dev-preflight.md`）|
+| 本地 | `local-codebase-memory-mcp` | 查询 + 索引（含 index_repository / index_status）。可为本机项目建立索引 | **仅 Mode 0 显式触发**（见 `references/dev-preflight.md`）|
 
 ## 2. 路由规则（全部规则，无隐藏分支）
 
@@ -77,7 +77,7 @@ if not matched:
 | resolved_provider | 工具前缀 | 示例 |
 |-------------------|---------|------|
 | `remote-codebase-memory-mcp` | `remote_codebase_memory_mcp_*` | `remote_codebase_memory_mcp_search_graph` |
-| `codebase-memory-mcp`（仅 Mode 0）| `codebase_memory_mcp_*` | `codebase_memory_mcp_search_graph` |
+| `local-codebase-memory-mcp`（仅 Mode 0）| `local_codebase_memory_mcp_*` | `local_codebase_memory_mcp_search_graph` |
 
 > ⚠️ 各 prompt 文档中的 `codebase_memory_mcp.*` 调用示例均为**概念性写法**，实际调用时替换为 `mcp_provider` 对应的前缀。
 
@@ -97,14 +97,14 @@ if not matched:
 
 ```
 本流程仅使用远端图谱，不自动回退本地。请二选一：
-  1) 修复远端后在远端 codebase-memory-mcp 服务端索引/刷新本项目，再重试；
+  1) 修复远端后在远端 remote-codebase-memory-mcp 服务端索引/刷新本项目，再重试；
   2) 显式触发 Mode 0（Dev Preflight / 本地模式）使用本地图谱。
 ```
 
 ## 6. 会话记录
 
 ```
-mcp_provider = "remote-codebase-memory-mcp"    # Mode 1-5；Mode 0 时为 "codebase-memory-mcp"
+mcp_provider = "remote-codebase-memory-mcp"    # Mode 1-5；Mode 0 时为 "local-codebase-memory-mcp"
 mcp_provider_type = "remote"                   # 或 "local"（仅 Mode 0）
 project_name_in_graph = "home-demo-utest-skills"
 mode_0_active = false                          # 仅用户显式触发 Mode 0 时为 true

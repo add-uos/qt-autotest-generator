@@ -2053,6 +2053,14 @@ def cmd_fetch(args):
                 updated, unmatched, _ = update_inventory_test_mapping(
                     inventory, mapping)
                 print(f"   test_* 已回写：{updated} 方法覆盖，{unmatched} 未匹配")
+
+                # 回写后重算 usecase_* 统计（与增量分支保持一致），避免首次建表
+                # 出现 usecase_covered=0 而 methods 已带 test_cover_count 的矛盾
+                stats = inventory["scan_stats"]
+                covered = sum(1 for m in inventory["methods"]
+                              if m.get("testable", True) and m.get("usecase_count", 0) > 0)
+                stats["usecase_covered"] = covered
+                stats["usecase_not_covered"] = stats["testable"] - covered
             else:
                 print(f"   无 ut_* 测试模块，跳过 test_* 采集")
         except Exception as e:

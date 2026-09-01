@@ -40,8 +40,9 @@ python3 ${SKILL_DIR}/scripts/coverage-report.py \
 | `--report-dir` | | = build-dir | 报告输出目录名（相对项目根） |
 | `--inventory` | | 自动探测 | `.ut-inventory.json` 路径，自动探测 `autotests/.ut-inventory.json` 或 `tests/.ut-inventory.json` |
 | `--skip-build` | | false | 跳过编译，直接运行测试采集覆盖率 |
-| `--build-type` | | Debug | CMAKE_BUILD_TYPE（需 Debug 以启用覆盖率插桩） |
-| `--cmake-extra` | | [] | 额外传给 cmake 的参数 |
+| `--build-type` | | Debug | CMAKE_BUILD_TYPE |
+| `--coverage-flags` | | `--coverage` | 覆盖率插桩 flag，注入 CMAKE_C_FLAGS / CMAKE_CXX_FLAGS / CMAKE_EXE_LINKER_FLAGS / CMAKE_SHARED_LINKER_FLAGS；项目 CMake 已自行开启插桩时传空字符串 `''` 关闭 |
+| `--cmake-extra` | | [] | 额外传给 cmake 的参数，可多次指定：`--cmake-extra=-DBUILD_TESTS=ON` |
 | `--test-targets` | | None | 多个 gtest 可执行文件，逗号分隔（相对 build-dir 或绝对路径） |
 | `--timeout` | | 300 | 单个测试目标的超时秒数 |
 
@@ -59,9 +60,13 @@ python3 ${SKILL_DIR}/scripts/coverage-report.py /path/to/project
 
 ```bash
 mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
-cmake ${PROJECT_PATH} -DCMAKE_BUILD_TYPE=Debug -DCMAKE_SAFETYTEST_ARG=CMAKE_SAFETYTEST_ARG_ON
+cmake ${PROJECT_PATH} -DCMAKE_BUILD_TYPE=Debug \
+  -DCMAKE_C_FLAGS=--coverage -DCMAKE_CXX_FLAGS=--coverage \
+  -DCMAKE_EXE_LINKER_FLAGS=--coverage -DCMAKE_SHARED_LINKER_FLAGS=--coverage
 cmake --build . -j$(nproc)
 ```
+
+编译后脚本会校验 `${BUILD_DIR}` 下存在 `.gcno` 插桩产物，缺失则提前退出（退出码 2），避免跑完测试才发现 SF=0。
 
 ### 2. 运行测试 + gtest XML
 
@@ -77,7 +82,7 @@ lcov --remove ${BUILD_DIR}/coverage.info '*/tests/*' '*/autotests/*' '*/3rdparty
 
 ### 4. genhtml
 
-产出 lcov HTML 覆盖率报告到 `${REPORT_DIR}/html/cov_<target>.html`。
+产出 lcov HTML 覆盖率报告到 `${REPORT_DIR}/html/index.html`。
 
 ### 5. 分级覆盖率（需 inventory）
 
@@ -96,7 +101,7 @@ ${REPORT_DIR}/
 ├── report/                   # gtest XML
 │   └── report_<target>.xml
 ├── html/                     # lcov genhtml
-│   └── cov_<target>.html
+│   └── index.html
 ├── coverage_by_level.json   # 分级覆盖率（需 inventory，否则无此文件）
 └── ut-summary.json           # 汇总 JSON
 ```

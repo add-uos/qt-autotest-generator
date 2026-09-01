@@ -65,7 +65,7 @@ fi
 
 ```python
 import os
-provider = resolved_provider  # "remote-codebase-memory-mcp" 或 "codebase-memory-mcp"
+provider = resolved_provider  # "remote-codebase-memory-mcp" 或 "local-codebase-memory-mcp"
 projects = provider.list_projects()
 project_basename = os.path.basename(project_path.rstrip('/'))
 target = next((p for p in projects if os.path.basename(p.root_path.rstrip('/')) == project_basename), None)

@@ -10,13 +10,19 @@ compatibility:
   required_mcp_any_of:
     - name: remote-codebase-memory-mcp
       purpose: "远端代码知识图谱，毫秒级类结构分析与依赖追踪；硬门禁，无图谱不执行"
-    - name: codebase-memory-mcp
+    - name: local-codebase-memory-mcp
       min_version: "0.8.0"
       purpose: "本地代码知识图谱，毫秒级类结构分析与依赖追踪；硬门禁，无图谱不执行"
   env_vars:
     - name: QTAG_MCP_URL
       default: "http://10.8.12.80:13626/mcp"
-      description: "远端 MCP HTTP 端点，mcp-scan.py 使用"
+      description: "远端 MCP HTTP 端点，mcp-scan.py 使用；Mode 0 本地模式需覆盖为本地端点"
+    - name: QTAG_MCP_API_KEY
+      default: ""
+      description: "MCP HTTP 端点认证头 X-API-Key 的值；部分本地/代理部署需要，按实际 mcp.json 配置"
+    - name: QTAG_MCP_HEADERS
+      default: ""
+      description: "MCP HTTP 额外请求头，JSON 字符串（如 '{\"X-API-Key\":\"xxx\"}'）；与 QTAG_MCP_API_KEY 二选一"
     - name: QTAG_CBM_INSTALL_URL
       default: "https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/install.sh"
       description: "codebase-memory-mcp 安装脚本 URL，内网可设为镜像"
@@ -37,7 +43,7 @@ compatibility:
 
 | 模式 | 何时用 | 主入口 |
 |------|--------|--------|
-| **Mode 0 · Dev Preflight** | 本地开发中、有未 push 代码、需要本地图谱同步 | 下文 + `Read references/dev-preflight.md` |
+| **Mode 0 · Dev Preflight** | 本地开发中、有未 push 代码、需要本地图谱 | 下文 + `Read references/dev-preflight.md` |
 | **Mode 1 · 函数重要性探测** | 项目初始化、扫描方法分级、生成 inventory | 下文 + `Read references/inventory.md` |
 | **Mode 2 · 单元测试编写** | 按 inventory 补全 GTest 用例 | 下文 + `Read references/test-writer.md` |
 | **Mode 3 · 覆盖率采集与汇总** | 只采集/统计覆盖率，不生成测试代码 | `Read references/report-generator.md` + `scripts/coverage-report.py` |
@@ -82,7 +88,7 @@ Mode 5 为**可选增强**，在 Mode 2 闭环中实时持久化发现的源码�
    - `.ut-inventory.json` 不存在 → Mode 1
    - `.ut-inventory.json` 存在 → Mode 2（自动走 reconcile）
 
-Mode 0 **不生成测试代码、不编译、不运行**，只确保本地提供方就绪且图谱与本地 HEAD 同步。
+Mode 0 **不生成测试代码、不编译、不运行**，只确保本地提供方就绪（本地模式默认图谱即最新工作区）。
 Mode 0 适用于正在活跃开发的场景（本地有未 push 的 commit），主动选择本地提供方
 以避免远端图谱落后导致的 reconcile 超时。
 
@@ -95,7 +101,7 @@ Mode 0 适用于正在活跃开发的场景（本地有未 push 的 commit），
 
 1. **对账（reconcile）**：`Read` `references/reconcile-logic.md` → 首次运行（无 inventory）直接进入步骤 2；inventory 已存在且 `base_sha` 漂移时按差异路由后再决定是否全量重扫
 2. **`Read`** `references/environment-check.md` → MCP 门禁
-3. **`Read`** `references/inventory.md` → 全量扫描 → 评分 → 产出 `.ut-inventory.json` + `inventory-summary.md`
+3. **`Read`** `references/inventory.md` → 全量扫描 → 评分 → 产出 `.ut-inventory.json` + `.ut-inventory-summary.md`
 
 Mode 1 **不生成测试代码、不编译、不运行**，只建表。
 

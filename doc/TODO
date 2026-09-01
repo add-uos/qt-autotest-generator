@@ -1,0 +1,46 @@
+# TODO — MCP 提供方解析的开放性
+
+> 来源：qt-autotest-generator 在 deepin-editor 项目上执行 Mode 0 时暴露。
+> 状态：待定，未固化到技能规则（不同环境 MCP 差异大，当前不好统一判断）。
+
+## 背景
+
+技能 `references/mcp-providers.md` §4 目前硬编码了两个提供方前缀映射：
+
+| resolved_provider | 工具前缀 |
+|---|---|
+| `remote-codebase-memory-mcp` | `remote_codebase_memory_mcp_*` |
+| `codebase-memory-mcp`（仅 Mode 0） | `codebase_memory_mcp_*` |
+
+但真实环境里本地提供方实际是：
+
+| 真实 MCP server | 工具前缀 | 认证 |
+|---|---|---|
+| `local-codebase-memory-mcp-http` | `local_codebase_memory_mcp_http_*` | 需要 `X-API-Key` 头 |
+| `uos70-codebase-memory-mcp` | `uos70_codebase_memory_mcp_*`（未验证） | 需要 `X-API-Key` 头 |
+
+因此技能文档里的 `codebase-memory-mcp` 概念名与 pi 环境实际注册的
+`local-codebase-memory-mcp-http` 无法直接对应，当前靠 agent 手工查
+`~/.pi/agent/mcp.json` 后自行映射。
+
+## 未决问题
+
+1. 是否把 `local-codebase-memory-mcp-http`（前缀 `local_codebase_memory_mcp_http_*`）
+   纳入 `mcp-providers.md` §4 的正式映射，作为 `codebase-memory-mcp` 的等价别名。
+2. `uos70-codebase-memory-mcp`（带 `index_repository` 能力）是否属于可用的本地/远端
+   提供方，还是应明确排除并给出原因。
+3. 提供方解析能否做成「前缀模式匹配」而不是精确名表：
+   - 含 `remote` → remote
+   - 含 `local` 且含 `codebase-memory` → local
+   这样未来新增 MCP 变体无需再改技能。
+4. 认证头（`X-API-Key`）能否从 pi 的 `mcp.json` 自动透传，而不是要求手工设
+   `QTAG_MCP_API_KEY` / `QTAG_MCP_HEADERS`。
+
+## 决策记录
+
+- **已定案（2026-04）：本地提供方正式命名为 `local-codebase-memory-mcp`**，
+  前缀 `local_codebase_memory_mcp_*`，已写入 `mcp-providers.md` §1/§4、
+  `SKILL.md` compatibility、`dev-preflight.md` 提供方引用与 `setup-codebase-memory.sh`
+  （`CBM_SERVER_NAME`）。`~/.pi/agent/mcp.json` 中本地 server 同步改为此名。
+- `mcp-scan.py` 已支持 `QTAG_MCP_URL` + `QTAG_MCP_API_KEY` / `QTAG_MCP_HEADERS`，
+  可作为当前手工兜底路径。

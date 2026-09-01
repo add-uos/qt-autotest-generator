@@ -78,13 +78,13 @@ sudo apt install lcov
 | 提供方 | 说明 |
 |--------|------|
 | `remote-codebase-memory-mcp` | 远端 MCP，Mode 1-5 的**唯一**提供方。只读查询，**远端无法触发索引**，项目须已在远端索引且 ready；图谱过时（工作区 dirty / 有未推送 commit）时硬终止并指引 |
-| `codebase-memory-mcp` | 本地 MCP，**仅经 Mode 0（Dev Preflight）显式使用**：探测/安装、为本机项目建立索引并同步到本地 HEAD |
+| `local-codebase-memory-mcp` | 本地 MCP，**仅经 Mode 0（Dev Preflight）显式使用**：探测/安装、为本机项目建立索引并同步到本地 HEAD |
 
 提供方解析在 `environment_check` 阶段完成（Mode 0 则在 `references/dev-preflight.md`），
 结果记录为内存变量 `mcp_provider`，详见 `references/mcp-providers.md`。
 
 本地开发（有未 push 代码 / 工作区有未提交改动）请显式触发 Mode 0（说「dev preflight /
-本地模式」），技能会安装并使用本地 `codebase-memory-mcp`：
+本地模式」），技能会安装并使用本地 `local-codebase-memory-mcp`：
 
 ```bash
 bash scripts/setup-codebase-memory.sh

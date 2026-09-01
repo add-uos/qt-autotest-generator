@@ -55,23 +55,26 @@ if file_exists(inventory_path):
         #   - file_overrides 整体保留；review_queue confirmed 条目保留
         #   - 产出 -diff.md 报告供人工复核
         head = current_git_sha()
-        # QTAG_MCP_URL: 可选环境变量，覆盖远端 MCP HTTP 端点默认值
+        # QTAG_MCP_URL: 可选环境变量，覆盖 MCP HTTP 端点默认值；
+        # QTAG_MCP_API_KEY / QTAG_MCP_HEADERS: 部分本地/代理端需认证（见 dev-preflight.md）
         mcp_url = os.environ.get("QTAG_MCP_URL")
         cmd = [
             "python3", f"{skill_dir}/scripts/mcp-scan.py",
             "fetch",
             "--project", project_name,
-            "--file-pattern", file_pattern or "src/**",
             "--output", inventory_path,        # 原地覆盖，脚本自动备份 .bak
             "--base-sha", head,
             "--incremental",
             "--existing", inventory_path,    # 旧 inventory（即当前文件）
             "--summary",
         ]
+        # file-pattern 可选：不传默认全项目；多源目录需逐条追加，勿固化单一默认值
+        for fp in (file_pattern or []):
+            cmd.extend(["--file-pattern", fp])
         if mcp_url:
             cmd.extend(["--mcp-url", mcp_url])
         subprocess.run(cmd, check=True)
-        # 脚本产出：inventory_path（base_sha=head）+ inventory-diff.md + inventory-summary.md
+        # 脚本产出：inventory_path（base_sha=head）+ .ut-inventory-diff.md + .ut-inventory-summary.md
         return
 # 否则 → 全量建表（Step 3）
 ```
@@ -81,17 +84,25 @@ if file_exists(inventory_path):
 **首选方式**：一条命令完成 MCP 采集 → 评分 → 产出 `.ut-inventory.json`。
 
 ```bash
+# 不传 --file-pattern 时默认扫描整个项目（scope_rules 自动排除 tests/3rdparty 等）
+python3 scripts/mcp-scan.py fetch \
+  --project <project_name> \
+  --output ${test_dir}/.ut-inventory.json \
+  --summary
+
+# 多源目录项目（如 src/ + daemon/）需多次指定 --file-pattern
 python3 scripts/mcp-scan.py fetch \
   --project <project_name> \
   --file-pattern "src/**" \
+  --file-pattern "daemon/**" \
   --output ${test_dir}/.ut-inventory.json \
   --summary
 ```
 
 - **project**：`environment_check` 解析的 MCP 项目名
-- **file-pattern**：可选，排除 3rdparty 等目录（如 `"src/**"`、`"reader/**"`）
+- **file-pattern**：可选。**不传时扫描整个项目**（`scope_rules` 自动排除 tests/3rdparty/build 等）；仅当需要收窄范围时才传，且不同项目目录结构不同，**不要固化某个默认 pattern**——单源目录项目可传 `"src/**"`，多源目录项目（如 `src/` + `daemon/`）需多次指定
 - **output**：写入 `${test_dir}/.ut-inventory.json`
-- **--summary**：同时产出 `${test_dir}/.reports/inventory-summary.md`
+- **--summary**：同时产出 `${test_dir}/.ut-inventory-summary.md`（与 output 同名、`.json` 换 `-summary.md`）
 - **--base-sha**：当前 git HEAD SHA（对账用，默认 `unknown`）
 - **--keep-dump**：保留中间 `mcp_dump.json`（调试用）
 
@@ -215,7 +226,7 @@ for m in inventory_methods:
 
 最终产出：
 - `${test_dir}/.ut-inventory.json` — 机器消费（Mode 2 读取）
-- `${test_dir}/.reports/inventory-summary.md` — 人读摘要（`--summary` 自动生成）
+- `${test_dir}/.ut-inventory-summary.md` — 人读摘要（`--summary` 自动生成，与 inventory 同名、`.json` 换 `-summary.md`）
 
 ## 产出文件结构
 

@@ -2,10 +2,10 @@
 # SPDX-FileCopyrightText: 2026 UnionTech Software Technology Co., Ltd.
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# setup-codebase-memory.sh - codebase-memory-mcp 安装与配置脚本
+# setup-codebase-memory.sh - 本地图谱（local-codebase-memory-mcp）安装与配置脚本
 #
 # ⚠️ 调用条件：本脚本仅在 `environment_check` 解析到本地提供方
-#    （`codebase-memory-mcp`）时调用。若已解析到远端提供方
+#    （`local-codebase-memory-mcp`）时调用。若已解析到远端提供方
 #    （`remote-codebase-memory-mcp`），则跳过本脚本（远端无需本地安装/索引）。
 #    解析逻辑见 reference/mcp-providers.md。
 #
@@ -41,6 +41,7 @@ set -euo pipefail
 # ============================================================================
 
 readonly CBM_BIN_NAME="codebase-memory-mcp"
+readonly CBM_SERVER_NAME="local-codebase-memory-mcp"  # MCP 客户端配置中的 server 名（与 ~/.pi/agent/mcp.json 一致）
 readonly CBM_MIN_VERSION="0.8.0"          # 最低版本要求
 readonly CBM_DEFAULT_INDEX_MODE="moderate" # 首次索引默认模式
 readonly CBM_AUTO_INDEX="true"
@@ -377,10 +378,10 @@ step_configure_clients() {
         log_warn "install 子命令返回非零，手动检查已安装客户端配置"
         # 列出已配置的客户端供用户参考
         local opencode_config="$HOME/.config/opencode/opencode.json"
-        if [ -f "$opencode_config" ] && grep -q "$CBM_BIN_NAME" "$opencode_config"; then
+        if [ -f "$opencode_config" ] && grep -q "$CBM_SERVER_NAME" "$opencode_config"; then
             log_ok "检测到 opencode 已配置: $opencode_config"
         else
-            log_warn "opencode 配置中未发现 $CBM_BIN_NAME 条目"
+            log_warn "opencode 配置中未发现 $CBM_SERVER_NAME 条目"
             log_warn "请参考: $bin_path install  或  手动添加到 $opencode_config"
         fi
     fi
@@ -428,7 +429,7 @@ step_verify() {
 main() {
     echo ""
     log_info "======================================"
-    log_info " codebase-memory-mcp 安装与配置脚本"
+    log_info " local-codebase-memory-mcp 安装与配置脚本"
     log_info "======================================"
     echo ""
 
@@ -461,7 +462,7 @@ main() {
 
     echo ""
     log_ok "======================================"
-    log_ok " 全部完成！codebase-memory-mcp 已就绪"
+    log_ok " 全部完成！local-codebase-memory-mcp 已就绪"
     log_ok "======================================"
     echo ""
     log_info "首次使用时，技能会自动为目标项目建立索引。"

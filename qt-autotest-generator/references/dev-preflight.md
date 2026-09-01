@@ -1,7 +1,7 @@
 # Mode 0 · Dev Preflight（开发预检）
 
 > Mode 0 是显式的本地开发入口。用户主动选择使用本地图谱，
-> 技能自动完成本地 MCP 可用性探测、项目索引、freshness 同步。
+> 技能自动完成本地 MCP 可用性探测、项目索引（本地模式默认图谱即最新工作区）。
 > Mode 0 完成后自动路由到 Mode 1（首次）或 Mode 2（已有 inventory）。
 
 ## 适用场景
@@ -21,6 +21,7 @@
 ### Step 0: 本地 git 状态检测与展示
 
 ```bash
+git -C <project_path> rev-parse HEAD                                # 本地 HEAD（交接用）
 git -C <project_path> log @{upstream}..HEAD --oneline 2>/dev/null   # 未推送 commit
 git -C <project_path> status --porcelain                            # 工作区脏检测（含 untracked）
 ```
@@ -30,7 +31,7 @@ git -C <project_path> status --porcelain                            # 工作区�
 | 未推送 | 非空输出 | 有 N 个未 push commit | 记录 `unpushed_count = N`，展示列表，继续 |
 | 未推送 | 空输出 | 已全部 push / 无新 commit | `unpushed_count = 0`，提示「未检测到未推送 commit，远端图谱可能已是最新」，但**仍继续**（用户可能想用本地模式的其他原因） |
 | 未推送 | 错误（无 upstream） | 无远程追踪分支 | 记录 `has_upstream = false`，继续（远端图谱必然无法同步） |
-| 脏检测 | porcelain 非空 | 工作区有未提交改动（含 untracked） | 记录 `dirty = true`，继续（**必须在 Step 3a 触发同步**，见下） |
+| 脏检测 | porcelain 非空 | 工作区有未提交改动（含 untracked） | 记录 `dirty = true`，继续（本地模式默认工作区即最新，见 Step 3a） |
 | 脏检测 | porcelain 为空 | 工作区干净 | `dirty = false` |
 
 **输出示例**（有未 push commit）：
@@ -43,6 +44,19 @@ git -C <project_path> status --porcelain                            # 工作区�
 ```
 
 ### Step 1: 本地 MCP 可用性探测
+
+> 📍 **本地 HTTP 端点与认证**：`mcp-scan.py` 通过 HTTP JSON-RPC 直连 MCP，
+> 本地模式需把 `QTAG_MCP_URL` 指向本地端点。pi 环境可从 `~/.pi/agent/mcp.json`
+> 找到 `local-codebase-memory-mcp` 的 `url` 与 `headers`：
+>
+> ```bash
+> export QTAG_MCP_URL="<mcp.json 中的 url>"
+> export QTAG_MCP_API_KEY="<headers.X-API-Key 的值>"   # 部分部署需要；无认证则省略
+> # 或一次性透传任意请求头：
+> export QTAG_MCP_HEADERS='{"X-API-Key":"<key>"}'
+> ```
+>
+> 不同部署认证方式不同：有些本地端点无需 API Key，有些必须；按实际 `mcp.json` 配置。
 
 调用本地 `codebase_memory_mcp.list_projects()` 探测可用性：
 
@@ -69,20 +83,20 @@ bash ${SKILL_DIR}/scripts/setup-codebase-memory.sh
 | 退出码 | 含义 | 处理 |
 |--------|------|------|
 | 0 | 安装成功 | 回到 Step 1 重新探测（受下方重试上限约束） |
-| 1 | 安装失败 | **硬终止**：`[FATAL] 本地 codebase-memory-mcp 安装失败，无法执行 Dev Preflight` |
+| 1 | 安装失败 | **硬终止**：`[FATAL] 本地 local-codebase-memory-mcp 安装失败，无法执行 Dev Preflight` |
 | 2 | 配置失败 | **硬终止**：同上 |
 | 3 | 验证失败 | **硬终止**：同上 |
 
 > **重试上限**：安装成功（退出码 0）后重新探测，若仍不可用，最多重试 **2 次**
 > （每次间隔 3 秒等待 daemon 就绪）。超过上限仍未可用 → **硬终止**：
-> `[FATAL] 本地 codebase-memory-mcp 安装后反复探测不可用，请检查 daemon 状态`
+> `[FATAL] 本地 local-codebase-memory-mcp 安装后反复探测不可用，请检查 daemon 状态`
 >
 > ```python
 > max_probe_retries = 2  # 安装成功后最多再探测 2 次
 > probe_attempt = 0
 > while not probe_local_mcp():
 >     if probe_attempt >= max_probe_retries:
->         HARD_FATAL("本地 codebase-memory-mcp 安装后反复探测不可用")
+>         HARD_FATAL("本地 local-codebase-memory-mcp 安装后反复探测不可用")
 >     time.sleep(3)  # 等待 daemon 就绪
 >     probe_attempt += 1
 > ```
@@ -92,7 +106,7 @@ bash ${SKILL_DIR}/scripts/setup-codebase-memory.sh
 **跳过远端探测**，直接设置：
 
 ```python
-mcp_provider = "codebase-memory-mcp"
+mcp_provider = "local-codebase-memory-mcp"
 mcp_provider_type = "local"
 mode_0_active = True  # 标志位，供后续 reconcile/Mode 1/2 识别
 ```
@@ -100,7 +114,7 @@ mode_0_active = True  # 标志位，供后续 reconcile/Mode 1/2 识别
 **输出**：
 
 ```
-✅ [Mode 0] 提供方：本地 codebase-memory-mcp（已跳过远端探测）
+✅ [Mode 0] 提供方：本地 local-codebase-memory-mcp（已跳过远端探测）
 ```
 
 ### Step 3: 项目索引检查与同步
@@ -126,49 +140,19 @@ project_name = target.name if target else None
 
 #### Step 3a: Freshness 检查（已有索引）
 
-```python
-import subprocess
+> **本地模式默认即最新**：Mode 0 面向活跃开发场景，当前工作区即最新代码。
+> 已索引项目**不做过时判定**，直接视为 fresh（跳过 `Branch.head_sha` 比对与 dirty 门禁），
+> 进入 Step 5。
 
-# 获取本地 HEAD
-local_head = subprocess.run(
-    ["git", "-C", project_path, "rev-parse", "HEAD"],
-    capture_output=True, text=True, timeout=10
-).stdout.strip()
+| 场景 | 处理 |
+|------|------|
+| 已有索引 | 默认 fresh → 直接进入 Step 5 |
+| 怀疑索引落后（刚大批改码 / 索引异常） | 手动执行一次增量同步（下方）即可，不阻断 |
 
-# 工作区脏检测（Branch.head_sha 不随未提交改动变化，必须单独检测）
-dirty = bool(subprocess.run(
-    ["git", "-C", project_path, "status", "--porcelain"],
-    capture_output=True, text=True, timeout=10
-).stdout.strip())
+> 💡 不同本地 MCP 的 fresh 信号（`Branch.head_sha` 查询 / `index_status` 的 git 字段）
+> 实现不统一，强行比对反而误判。本地模式下工作区即真相，故不再依赖该信号。
 
-# 获取图谱记录的 HEAD —— 精确值，非推断
-# 图谱原生 Branch 节点携带 head_sha，实测与 git rev-parse HEAD 精确一致
-# 实测依据：codebase-memory-mcp 0.10.8，图谱 head_sha 与 git rev-parse HEAD 精确一致
-graph_head = codebase_memory_mcp.query_graph(
-    project=project_name,
-    query="MATCH (b:Branch) RETURN b.branch AS branch, b.head_sha AS head_sha LIMIT 1"
-).head_sha   # 无 Branch 节点（空图/异常）→ None
-```
-
-| 比较结果 | 处理 |
-|----------|------|
-| `local_head == graph_head` 且 `dirty == false` | 图谱 fresh → **跳过索引**，直接进入 Step 5 |
-| 其余（SHA 不同 / `dirty == true` / `graph_head is None`） | 图谱过时（或无法确认 fresh）→ 执行增量同步（下方） |
-
-> ⚠️ **为什么必须检测 dirty**：`Branch.head_sha` 只随 commit 变化，未提交的工作区
-> 改动不会改变 head_sha（实测：dirty 改动后 Branch.head_sha 不变）——只比 SHA 会漏掉 dirty 场景，
-> 而本图谱按磁盘内容索引，dirty 意味着图谱内容与工作区脱节。dirty 时
-> `index_repository(mode="fast")` 按当前工作区增量重建，实测 ~10s。
-
-> 🚫 **历史教训（已废弃的采样推断）**：曾用「search_graph 采样 file_path →
-> `git log -1 -- <file>` → `max(commits)`」近似 graph_head。该方法有双重缺陷：
-> ① SHA 十六进制串**无字典序时间语义**，`max()` 结果随机；
-> ② 采样既会误判过时也会**漏判过时**（图谱停在 X、本地已到 Y、采样文件恰被
-> Y 或其后 commit 改过时，近似值 == local_head，误判 fresh → 用过时图谱生成测试）。
-> 「宁可误判过时、绝不漏判」的保守承诺在采样方案下不成立，`Branch.head_sha`
-> 精确比较 + dirty 检测才同时封住两个方向。
-
-**增量同步**：
+**可选增量同步**（仅当需要强制对齐工作区时执行）：
 
 ```python
 codebase_memory_mcp.index_repository(
@@ -176,12 +160,6 @@ codebase_memory_mcp.index_repository(
     mode="fast",           # 已有索引用 fast 增量
     persistence=True
 )
-```
-
-**输出**：
-
-```
-🔄 [Mode 0] 图谱过时（graph: {graph_head[:8] if graph_head else "?"} → local: {local_head[:8]}），执行增量同步 (mode=fast)...
 ```
 
 #### Step 3b: 首次索引
@@ -263,7 +241,7 @@ if result.total == 0:
 **写入 session**：
 
 ```python
-session["mcp_provider"] = "codebase-memory-mcp"
+session["mcp_provider"] = "local-codebase-memory-mcp"
 session["mcp_provider_type"] = "local"
 session["project_name"] = project_name
 session["base_sha"] = local_head
@@ -277,7 +255,7 @@ session["mode_0_active"] = True
 
 ```
 ✅ [Mode 0] Dev Preflight 完成
-   提供方：本地 codebase-memory-mcp
+   提供方：本地 local-codebase-memory-mcp
    项目：<project_name>
    本地 HEAD：<local_head[:8]>
    未推送 commit：<unpushed_count> 个
