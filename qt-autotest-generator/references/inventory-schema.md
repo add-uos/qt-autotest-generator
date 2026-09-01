@@ -154,11 +154,11 @@
 | `node_type` | string | `"Method"` / `"Function"`（自由函数） |
 | `auto_reason` | string | suggested 条目的自动建议原因（仅 `source=suggested` 时存在） |
 
-> 以上扩展字段由 `mcp-scan.py` 产出，Mode 2 消费方可忽略；`assets/ut-inventory-editor` 的人工辅助编辑器 UI（`index.html` / `dashboard-server.py` / `batch-collect.py`，agent 不调用）依赖它们做展示。
+> 以上扩展字段由 `mcp-scan.py` 产出，Mode 2 消费方可忽略；`../assets/ut-inventory-editor` 的人工辅助编辑器 UI（`index.html` / `dashboard-server.py` / `batch-collect.py`，agent 不调用）依赖它们做展示。
 
 #### 覆盖率状态字段（外部 fetch-test-mapping 回写）
 
-> 这组字段**不由 `mcp-scan.py` 产出**，由外部工具 `assets/ut-inventory-editor/scripts/fetch-test-mapping.py`（编辑器/人工侧，基于 MCP CALLS 边）回写。reconcile 增量重建时由 `extract_human_overlay` 显式保留（与 `usecase_count` 同档保护），否则全量重建会清空——这是 schema 必须声明的原因。
+> 这组字段**不由 `mcp-scan.py` 产出**，由外部工具 `../assets/ut-inventory-editor/scripts/fetch-test-mapping.py`（编辑器/人工侧，基于 MCP CALLS 边）回写。reconcile 增量重建时由 `extract_human_overlay` 显式保留（与 `usecase_count` 同档保护），否则全量重建会清空——这是 schema 必须声明的原因。
 
 | 字段 | 类型 | 说明 |
 |------|------|------|

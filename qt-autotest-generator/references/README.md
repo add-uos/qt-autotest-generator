@@ -5,7 +5,7 @@
 | 文件 | 用途一句话 | 被谁引用 |
 |------|-----------|---------|
 | `inventory.md` | Mode 1 全量扫描→评分→产出 .ut-inventory.json | SKILL.md Mode 1, test-writer |
-| `inventory-schema.md` | .ut-inventory.json 完整 JSON Schema | inventory.md, test-writer, assets/editor |
+| `inventory-schema.md` | .ut-inventory.json 完整 JSON Schema | inventory.md, test-writer, ../assets/ut-inventory-editor |
 | `test-writer.md` | Mode 2 主流程：逐类闭环→编译验证→自检→提交 | SKILL.md Mode 2 |
 | `test-code-gen.md` | 测试代码生成：模板替换、用例数下限、AAA、命名 | test-writer 子步骤 |
 | `test-types.md` | 用例设计方法论：等价类/边界值/参数化/异常/反模式 | test-code-gen (必读前置) |

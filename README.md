@@ -47,8 +47,9 @@ skills/
 │   ├── references/                参考文档（24 篇，按需读取）
 │   ├── templates/                 代码模板 + stub-ext 库
 │   ├── examples/                  示例 Qt 项目
-│   ├── assets/                    ut-inventory-editor 设计
 │   └── evals/                     触发与质量评估
+│
+├── assets/                     ← ut-inventory-editor：独立人工可视化编辑器（agent 不调用）
 │
 ├── ut-squad/                    ← 多智能体小队：广度+深度+验证协作
 │   ├── README.md                  小队设计总纲（度量模型 + 执行流程）

@@ -11,8 +11,9 @@ from pathlib import Path
 import pytest
 
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "qt-autotest-generator" / "scripts"
-# 外部工具（assets/ut-inventory-editor）也写 .ut-inventory.json，纳入契约测试
-ASSETS_SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "qt-autotest-generator" / "assets" / "ut-inventory-editor" / "scripts"
+# 外部工具（../assets/ut-inventory-editor）也写 .ut-inventory.json，纳入契约测试。
+# ut-inventory-editor 是仓库级独立人工工具，不在 qt-autotest-generator skill 目录内。
+ASSETS_SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "assets" / "ut-inventory-editor" / "scripts"
 
 # 模块名 → 文件名映射（模块名用下划线，便于测试 import）
 # 合并后：旧 fixture 名指向新合并文件，测试无需改名
