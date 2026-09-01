@@ -154,7 +154,20 @@
 | `node_type` | string | `"Method"` / `"Function"`（自由函数） |
 | `auto_reason` | string | suggested 条目的自动建议原因（仅 `source=suggested` 时存在） |
 
-> 以上扩展字段由 `mcp-scan.py` 产出，Mode 2 消费方可忽略；`assets/ut-inventory-editor`（人工辅助工具，agent 不调用）依赖它们做展示。
+> 以上扩展字段由 `mcp-scan.py` 产出，Mode 2 消费方可忽略；`assets/ut-inventory-editor` 的人工辅助编辑器 UI（`index.html` / `dashboard-server.py` / `batch-collect.py`，agent 不调用）依赖它们做展示。
+
+#### 覆盖率状态字段（外部 fetch-test-mapping 回写）
+
+> 这组字段**不由 `mcp-scan.py` 产出**，由外部工具 `assets/ut-inventory-editor/scripts/fetch-test-mapping.py`（编辑器/人工侧，基于 MCP CALLS 边）回写。reconcile 增量重建时由 `extract_human_overlay` 显式保留（与 `usecase_count` 同档保护），否则全量重建会清空——这是 schema 必须声明的原因。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `test_cover_count` | int | 调用该方法的**测试文件数**（MCP CALLS 静态分析）；覆盖判定信号 ① |
+| `test_files` | array | 调用该方法的测试文件列表（`ut_*.cpp` 路径），供 `utq by-test-file` 反查 |
+| `test_cases` | array | 调用该方法的 GTest 用例名列表，供命名参考、防重复造用例 |
+| `test_source` | string | 覆盖来源标记，目前固定 `"mcp_calls"` |
+
+> **覆盖判定双信号**：`test_cover_count > 0` **或** `usecase_count > 0` 任一成立即视为已覆盖。Agent 流程中 `usecase_count` 由 `mode2-ops usecase` 每类编译通过后即时回写，是权威信号；`test_*` 在纯 agent 流程中可能为空（未跑 fetch-test-mapping），此时双信号退化为单看 `usecase_count`，不影响“已测/未测”判定，但 `utq by-test-file` / `info --show-cases` / `covered --show-cases` 等依赖 `test_*` 的反查命令需先跑 fetch-test-mapping 才有数据（agent 亦可直接 `read` 已生成的 `test_*.cpp` 取代例名参考，见 Iron Law #12 的允许范围）。
 
 ### review_queue 条目
 

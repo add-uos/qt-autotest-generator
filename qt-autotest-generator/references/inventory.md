@@ -40,8 +40,10 @@ status = mcp.index_status(project=project_name)
 inventory_path = f"{test_dir}/.ut-inventory.json"
 if file_exists(inventory_path):
     existing = read_json(inventory_path)
-    if existing["base_sha"] == current_git_sha():
-        # 表是最新的，跳过全量扫描，直接输出统计
+    if existing["base_sha"] == current_git_sha() and existing.get("methods"):
+        # 表是最新的（且非空骨架）跳过全量扫描，直接输出统计。
+        # methods 守卫：environment_check §6 可能预写空骨架（base_sha=HEAD、
+        # methods=[]），不守卫会误判“表最新”而跳过 Mode 1 全量建表，永远建不出真表。
         print_summary(existing)
         return
     else:

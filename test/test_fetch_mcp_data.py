@@ -192,6 +192,27 @@ class TestExtractHumanOverlay:
         inv = {"methods": [{"level": "high", "source": "manual"}]}
         assert fetch_mcp_data.extract_human_overlay(inv) == {}
 
+    def test_preserves_external_cover_fields(self, fetch_mcp_data):
+        """外部 fetch-test-mapping 回写的 test_* 字段必须进 overlay，reconcile 才保留。"""
+        inv = {"methods": [{"qualified_name": "A",
+                            "test_cover_count": 2,
+                            "test_files": ["ut_a.cpp", "ut_b.cpp"],
+                            "test_cases": ["Add_Normal", "Add_Edge"],
+                            "test_source": "mcp_calls"}]}
+        assert fetch_mcp_data.extract_human_overlay(inv) == {
+            "A": {"test_cover_count": 2,
+                  "test_files": ["ut_a.cpp", "ut_b.cpp"],
+                  "test_cases": ["Add_Normal", "Add_Edge"],
+                  "test_source": "mcp_calls"}}
+
+    def test_zeroed_cover_fields_not_extracted(self, fetch_mcp_data):
+        """stale-test-cleanup 归零后（test_cover_count=0/test_files=[]）不被提取，
+        reconcile 不翻案清理结果。"""
+        inv = {"methods": [{"qualified_name": "A", "usecase_count": 0,
+                            "test_cover_count": 0, "test_files": [],
+                            "test_cases": []}]}  # test_source 已 pop
+        assert fetch_mcp_data.extract_human_overlay(inv) == {}
+
 
 # ── apply_overlay_to_methods ──────────────────────────────────────────
 
@@ -215,6 +236,22 @@ class TestApplyOverlay:
         assert applied == 1
         assert len(lost) == 1
         assert lost[0]["qualified_name"] == "B"
+
+    def test_applies_cover_fields_to_fresh_build(self, fetch_mcp_data):
+        """全量重建产出的 method 无 test_* 键，overlay 把外部回写值贴回去。"""
+        new = [{"qualified_name": "A", "level": "high", "usecase_count": 0}]
+        overlay = {"A": {"usecase_count": 2, "test_cover_count": 1,
+                         "test_files": ["ut_a.cpp"],
+                         "test_cases": ["Add_Normal", "Add_Edge"],
+                         "test_source": "mcp_calls"}}
+        applied, lost = fetch_mcp_data.apply_overlay_to_methods(new, overlay)
+        m = new[0]
+        assert applied == 1 and lost == []
+        assert m["usecase_count"] == 2
+        assert m["test_cover_count"] == 1
+        assert m["test_files"] == ["ut_a.cpp"]
+        assert m["test_cases"] == ["Add_Normal", "Add_Edge"]
+        assert m["test_source"] == "mcp_calls"
 
 
 # ── merge_review_queue ────────────────────────────────────────────────

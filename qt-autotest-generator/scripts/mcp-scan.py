@@ -1261,6 +1261,14 @@ def extract_human_overlay(old_inventory):
             human["review_status"] = "confirmed"
         if m.get("usecase_count", 0) > 0:
             human["usecase_count"] = m.get("usecase_count", 0)
+        if m.get("test_cover_count", 0) > 0:
+            human["test_cover_count"] = m["test_cover_count"]
+        if m.get("test_files"):
+            human["test_files"] = m["test_files"]
+        if m.get("test_cases"):
+            human["test_cases"] = m["test_cases"]
+        if m.get("test_source"):
+            human["test_source"] = m["test_source"]
         if human:
             overlay[qn] = human
     return overlay

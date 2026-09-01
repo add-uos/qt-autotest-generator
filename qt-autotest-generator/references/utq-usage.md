@@ -141,4 +141,4 @@ jq -r '.methods | group_by(.level) | .[] | [.[0].level, length,
 4. `info <函数名>` → 看 factors 设计用例（complexity 高→分支覆盖；in_degree 高→集成调用方多）
 5. `by-test-file ut_<模块>` → 查已有用例风格，新用例命名对齐
 6. `export --file <模块> > tasks.json` → 分发给子代理写
-7. 写完重跑 fetch-test-mapping.py 回写 inventory，再 `stats` 验证缺口收敛
+7. （人工/编辑器侧）重跑 `fetch-test-mapping.py`（`assets/ut-inventory-editor/scripts/`）回写 `test_*` 字段，再 `stats` 验证缺口收敛。**Agent 流程不依赖此步**：`usecase_count` 由 `mode2-ops usecase` 每类编译通过后即时回写，已是权威覆盖信号；`test_*` 由编辑器 `batch-collect` 在人工侧回写，reconcile 增量重建会保留（见 `inventory-schema.md`「覆盖率状态字段」）。纯 agent 流程下 `by-test-file` / `info --show-cases` 等 `test_*` 反查命令可能无数据，需先跑 fetch-test-mapping（或直接 `read` 已生成的 `test_*.cpp`）。

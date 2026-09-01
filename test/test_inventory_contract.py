@@ -330,3 +330,75 @@ class TestFullPipeline:
         assert cleaned["usecase_count"] == 0
         q = utq.Inv(tmp_path)
         assert q.is_todo(q.methods[0]) is True
+
+
+# ── reconcile 增量重建保留外部 test_* 字段（防回归）────────────────
+
+class TestReconcilePreservesExternalFields:
+    """reconcile（git HEAD 漂移 → mcp-scan fetch --incremental）不得清空外部
+    fetch-test-mapping 回写的 test_* 覆盖字段。回归守护：修复前
+    extract_human_overlay 白名单不含 test_*，全量重建后整组丢失。
+    """
+
+    def test_reconcile_preserves_test_fields(self, scan_inventory,
+                                             fetch_test_mapping, utq, tmp_path):
+        # CREATE 建表
+        dump = _minimal_dump([_dump_method("add")])
+        inv_v1 = scan_inventory.build_inventory(dump, "proj", "sha_v1")
+        inv_path = _write_inv(tmp_path / ".ut-inventory.json", inv_v1)
+
+        # UPDATE-B：Mode 2 写完回写 usecase_count
+        inv_v1["methods"][0]["usecase_count"] = 2
+        # UPDATE-A：外部 fetch-test-mapping 回写 test_* 字段
+        mapping = fetch_test_mapping.build_mapping(
+            {"proj.src.Calc.add": {"autotests/test_calc.cpp"}})
+        fetch_test_mapping.update_inventory(inv_v1, mapping)
+        _write_inv(inv_path, inv_v1)
+        before = inv_v1["methods"][0]
+        assert before["test_cover_count"] == 1
+        assert before["test_files"] == ["autotests/test_calc.cpp"]
+        assert before["usecase_count"] == 2  # max(2, 1) 保留精确计数
+
+        # reconcile：HEAD 漂移 → 全量重建 + overlay 回写（模拟 --incremental --existing）
+        inv_v2 = scan_inventory.build_inventory(dump, "proj", "sha_v2")
+        overlay = scan_inventory.extract_human_overlay(inv_v1)
+        scan_inventory.apply_overlay_to_methods(inv_v2["methods"], overlay)
+
+        after = inv_v2["methods"][0]
+        # usecase_count 保留
+        assert after["usecase_count"] == 2
+        # test_* 全部保留（修复前这里全变 None）
+        assert after["test_cover_count"] == 1
+        assert after["test_files"] == ["autotests/test_calc.cpp"]
+        assert after["test_source"] == "mcp_calls"
+        # 端到端：reconcile 后 utq 仍判已覆盖（双信号两条都在）
+        _write_inv(inv_path, inv_v2)
+        q = utq.Inv(tmp_path)
+        assert q.is_covered(q.methods[0]) is True
+        assert q.is_todo(q.methods[0]) is False
+
+    def test_reconcile_preserves_cleaned_state(self, scan_inventory,
+                                               fetch_test_mapping, utq, tmp_path):
+        """stale-test-cleanup 归零的 test_* 不被 reconcile 翻案复活。"""
+        dump = _minimal_dump([_dump_method("add")])
+        inv_v1 = scan_inventory.build_inventory(dump, "proj", "sha_v1")
+        inv_v1["methods"][0]["usecase_count"] = 2
+        mapping = fetch_test_mapping.build_mapping(
+            {"proj.src.Calc.add": {"autotests/test_calc.cpp"}})
+        fetch_test_mapping.update_inventory(inv_v1, mapping)
+        # stale-test-cleanup 清理后：test_* 归零/清空、test_source pop、usecase=0
+        inv_v1["methods"][0].update({
+            "usecase_count": 0, "test_cover_count": 0,
+            "test_files": [], "test_cases": [],
+        })
+        inv_v1["methods"][0].pop("test_source", None)
+
+        inv_v2 = scan_inventory.build_inventory(dump, "proj", "sha_v2")
+        overlay = scan_inventory.extract_human_overlay(inv_v1)
+        scan_inventory.apply_overlay_to_methods(inv_v2["methods"], overlay)
+        after = inv_v2["methods"][0]
+        # 清理结果保留：不复活旧 test_* 值
+        assert after["usecase_count"] == 0
+        assert after.get("test_cover_count", 0) == 0
+        assert after.get("test_files", []) == []
+        assert "test_source" not in after
