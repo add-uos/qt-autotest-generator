@@ -156,9 +156,9 @@
 
 > 以上扩展字段由 `mcp-scan.py` 产出，Mode 2 消费方可忽略；`../assets/ut-inventory-editor` 的人工辅助编辑器 UI（`index.html` / `dashboard-server.py` / `batch-collect.py`，agent 不调用）依赖它们做展示。
 
-#### 覆盖率状态字段（外部 fetch-test-mapping 回写）
+#### 覆盖率状态字段（fetch 采集 / test-mapping 回写）
 
-> 这组字段**不由 `mcp-scan.py` 产出**，由外部工具 `../assets/ut-inventory-editor/scripts/fetch-test-mapping.py`（编辑器/人工侧，基于 MCP CALLS 边）回写。reconcile 增量重建时由 `extract_human_overlay` 显式保留（与 `usecase_count` 同档保护），否则全量重建会清空——这是 schema 必须声明的原因。
+> 这组字段由 `mcp-scan.py` 产出：**Mode 1 `fetch` 天然采集**（`build_inventory` 后、写文件前，复用 MCPClient 查 CALLS 边，回写 `test_cover_count`/`test_files`/`test_cases`/`test_source="mcp_calls"`）。独立子命令 `mcp-scan test-mapping` 可在 inventory 已存在时增量刷新这组字段。reconcile 增量重建时由 `extract_human_overlay` 显式保留（与 `usecase_count` 同档保护），否则全量重建会清空——这是 schema 必须声明的原因。`--skip-test-mapping` 可跳过采集（首次建表无 `tests/` 目录时省时）。
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -167,7 +167,7 @@
 | `test_cases` | array | 调用该方法的 GTest 用例名列表，供命名参考、防重复造用例 |
 | `test_source` | string | 覆盖来源标记，目前固定 `"mcp_calls"` |
 
-> **覆盖判定双信号**：`test_cover_count > 0` **或** `usecase_count > 0` 任一成立即视为已覆盖。Agent 流程中 `usecase_count` 由 `mode2-ops usecase` 每类编译通过后即时回写，是权威信号；`test_*` 在纯 agent 流程中可能为空（未跑 fetch-test-mapping），此时双信号退化为单看 `usecase_count`，不影响“已测/未测”判定，但 `utq by-test-file` / `info --show-cases` / `covered --show-cases` 等依赖 `test_*` 的反查命令需先跑 fetch-test-mapping 才有数据（agent 亦可直接 `read` 已生成的 `test_*.cpp` 取代例名参考，见 Iron Law #12 的允许范围）。
+> **覆盖判定双信号**：`test_cover_count > 0` **或** `usecase_count > 0` 任一成立即视为已覆盖。Agent 流程中 `usecase_count` 由 `mode2-ops usecase` 每类编译通过后即时回写，是权威信号；`test_*` 由 Mode 1 `fetch` 天然采集（首次建表即带，增量重建靠 overlay 保留）。纯 agent 流程下 `test_*` 一般不空；若用 `--skip-test-mapping` 跳过或 MCP 无 tests/ 索引，则双信号退化为单看 `usecase_count`，不影响“已测/未测”判定，但 `utq by-test-file` / `info --show-cases` / `covered --show-cases` 等依赖 `test_*` 的反查命令需先跑 `mcp-scan test-mapping` 才有数据（agent 亦可直接 `read` 已生成的 `test_*.cpp` 取代例名参考，见 Iron Law #12 的允许范围）。
 
 ### review_queue 条目
 

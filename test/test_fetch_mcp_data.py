@@ -193,7 +193,7 @@ class TestExtractHumanOverlay:
         assert fetch_mcp_data.extract_human_overlay(inv) == {}
 
     def test_preserves_external_cover_fields(self, fetch_mcp_data):
-        """外部 fetch-test-mapping 回写的 test_* 字段必须进 overlay，reconcile 才保留。"""
+        """Mode 1 fetch / test-mapping 采集的 test_* 字段必须进 overlay，reconcile 才保留。"""
         inv = {"methods": [{"qualified_name": "A",
                             "test_cover_count": 2,
                             "test_files": ["ut_a.cpp", "ut_b.cpp"],

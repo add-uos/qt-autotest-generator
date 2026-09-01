@@ -161,7 +161,7 @@ class TestInv:
         """双信号：usecase_count>0 但外部回写未跑时也应判定已覆盖。
 
         场景：Mode 2 写完测试 → mode2-ops usecase 回写 usecase_count=2，
-        但 fetch-test-mapping（外部工具）尚未跑 → test_cover_count=0。
+        但 Mode 1 fetch 的 test_* 采集被 --skip-test-mapping 跳过 → test_cover_count=0。
         只看 test_cover_count 会误判为 todo，导致重复写测试。
         """
         _write_inv(tmp_path, [_m("f", cover=0, usecase=2)])

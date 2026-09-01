@@ -18,12 +18,13 @@
 | `score` | 重要性分数（可负） | 排序优先级 |
 | `factors` | 打分依据 `complexity:8` `cognitive:25` `in_degree:2` 等 | 决定用例设计深度（分支多→多写分支用例） |
 | `testable` | 是否可测（false=豁免） | 豁免项跳过 |
-| `test_cover_count` | 调用该函数的**测试文件数**（MCP CALLS，外部工具回写） | 覆盖判定信号 ① |
+| `test_cover_count` | 调用该函数的**测试文件数**（MCP CALLS，Mode 1 fetch 采集） | 覆盖判定信号 ① |
 | `usecase_count` | GTest 用例数（mode2-ops usecase 回写） | 覆盖判定信号 ②；已测函数的用例量，判断是否薄弱 |
 
 > **覆盖判定为双信号**：`test_cover_count > 0` **或** `usecase_count > 0` 任一成立即已覆盖。
-> 原因：Mode 2 写完测试立即回写 `usecase_count`，但外部 fetch-test-mapping 可能未跑
-> （`test_cover_count=0`），只看信号 ① 会误判为待写，导致重复写测试。
+> 原因：Mode 1 `fetch` 天然采集 `test_*`（首次建表即带），Mode 2 写完测试立即回写
+> `usecase_count`；增量重建靠 overlay 保留 `test_*`。二者互为冗余信号，任一成立即已测，
+> 避免单一信号缺失导致误判待写、重复写测试。
 | `test_files` / `test_cases` | 覆盖它的测试文件 / 用例名 | 避免重复写、参考已有用例风格 |
 | `review_status` | auto / pending / exempt | pending = 待人工定级 |
 | `exempt_reason` | 豁免原因（如 `scope:tests/**`） | 排查豁免是否合理 |
@@ -141,4 +142,4 @@ jq -r '.methods | group_by(.level) | .[] | [.[0].level, length,
 4. `info <函数名>` → 看 factors 设计用例（complexity 高→分支覆盖；in_degree 高→集成调用方多）
 5. `by-test-file ut_<模块>` → 查已有用例风格，新用例命名对齐
 6. `export --file <模块> > tasks.json` → 分发给子代理写
-7. （人工/编辑器侧）重跑 `fetch-test-mapping.py`（`../assets/ut-inventory-editor/scripts/`）回写 `test_*` 字段，再 `stats` 验证缺口收敛。**Agent 流程不依赖此步**：`usecase_count` 由 `mode2-ops usecase` 每类编译通过后即时回写，已是权威覆盖信号；`test_*` 由编辑器 `batch-collect` 在人工侧回写，reconcile 增量重建会保留（见 `inventory-schema.md`「覆盖率状态字段」）。纯 agent 流程下 `by-test-file` / `info --show-cases` 等 `test_*` 反查命令可能无数据，需先跑 fetch-test-mapping（或直接 `read` 已生成的 `test_*.cpp`）。
+7. Mode 1 `fetch` 天然采集 `test_*`（CALLS 边），写完测试后重跑 `mcp-scan fetch`（或独立 `mcp-scan test-mapping -i <inv>` 仅刷新 `test_*`）再 `stats` 验证缺口收敛。**Agent 流程不依赖此步**：`usecase_count` 由 `mode2-ops usecase` 每类编译通过后即时回写，已是权威覆盖信号；`test_*` 由 Mode 1 `fetch` 天然采集（首次建表即带，增量重建靠 overlay 保留，见 `inventory-schema.md`「覆盖率状态字段」）。若用 `--skip-test-mapping` 跳过或 MCP 无 tests/ 索引，`by-test-file` / `info --show-cases` 等 `test_*` 反查命令可能无数据，需重跑 `fetch` 或 `test-mapping`（或直接 `read` 已生成的 `test_*.cpp`）。

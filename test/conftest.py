@@ -132,8 +132,10 @@ def utq():
 
 @pytest.fixture(scope="session")
 def fetch_test_mapping():
-    """外部 UPDATE 脚本（assets/ut-inventory-editor），回写 test_* 字段。
+    """assets/ 编辑器侧 vendored 副本（回写 test_* 字段）。
 
+    主流程已并入 mcp-scan.py 的 update_inventory_test_mapping（Mode 1 fetch 天然
+    采集）；此 fixture 加载编辑器副本用于契约对比测试，两者行为应一致。
     仅标准库依赖（urllib），import 安全；主入口有 __main__ 保护。
     """
     path = ASSETS_SCRIPTS_DIR / "fetch-test-mapping.py"

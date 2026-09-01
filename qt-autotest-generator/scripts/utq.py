@@ -134,7 +134,8 @@ class Inv:
     def is_covered(self, m):
         # 双信号：MCP 静态分析计数或 TEST_F 用例数任一 > 0 即视为已有测试。
         # 只看 test_cover_count 会在 Mode 2 刚写完测试（usecase_count 已回写、
-        # 外部 fetch-test-mapping 尚未跑）时误判为 todo，导致重复写测试。
+        # Mode 1 fetch 的 test_* 采集被 --skip-test-mapping 跳过或 MCP 无 tests/ 索引）
+        # 时误判为 todo，导致重复写测试。
         return self.cover(m) > 0 or self.usecase(m) > 0
 
     def is_todo(self, m):

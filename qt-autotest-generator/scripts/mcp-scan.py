@@ -7,10 +7,15 @@
 
 """mcp-scan.py — MCP 知识图谱 → .ut-inventory.json 端到端探测
 
-合并自 scan-inventory.py + fetch-mcp-data.py。三个子命令：
+合并自 scan-inventory.py + fetch-mcp-data.py + fetch-test-mapping.py。四个子命令：
   scan             — 评分建表（原 scan-inventory.py）
-  fetch            — 端到端 MCP 采集 + 评分（原 fetch-mcp-data.py）
+  fetch            — 端到端 MCP 采集 + 评分 + test_* 覆盖回写（原 fetch-mcp-data.py）
   extract-branches — 分支清单交叉验证（原 fetch-mcp-data.py 子命令）
+  test-mapping     — 仅回写 test_* 字段（原 fetch-test-mapping.py；inventory 已存在时增量刷）
+
+fetch 的 test_* 采集：build_inventory 之后、写文件之前，复用 MCPClient 采集
+CALLS 边（测试文件 → 被测函数），回写 test_cover_count/test_files/test_cases/
+test_source。增量模式不重采（overlay 已保留旧 test_*）。
 
 用法:
   # scan: 从预采集的 MCP 数据 JSON 评分建表
@@ -80,6 +85,7 @@ import sys
 import time
 import urllib.request
 import urllib.error
+from collections import defaultdict
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -139,6 +145,19 @@ CONCURRENT_BASE_CLASSES = [
 # - QTAG_MCP_URL: 远端 MCP HTTP 端点（覆盖默认值）
 
 MCP_URL = os.environ.get("QTAG_MCP_URL", "http://10.8.12.80:13626/mcp")
+
+# 可选认证头：本地 mcp-proxy 等需 X-API-Key 认证时通过环境变量设置（向后兼容，不设则无）。
+#   QTAG_MCP_HEADERS: JSON 字符串，如 '{"X-API-Key":"xxx"}'
+#   QTAG_MCP_API_KEY: 单独 apiKey → 自动构造 {"X-API-Key": "<key>"}
+MCP_EXTRA_HEADERS = {}
+_json_headers = os.environ.get("QTAG_MCP_HEADERS")
+if _json_headers:
+    try:
+        MCP_EXTRA_HEADERS = json.loads(_json_headers) or {}
+    except Exception:
+        MCP_EXTRA_HEADERS = {}
+if not MCP_EXTRA_HEADERS and os.environ.get("QTAG_MCP_API_KEY"):
+    MCP_EXTRA_HEADERS = {"X-API-Key": os.environ["QTAG_MCP_API_KEY"]}
 
 # 服务端 DBus Adaptor — 契约级测试目标，其 public 方法 → dbus_slot (+3)
 DBUS_ADAPTOR_BASES = ["QDBusAbstractAdaptor"]
@@ -736,22 +755,239 @@ def fetch_mcp_data_via_subagent(project_name: str) -> dict:
 
 # ── MCP HTTP 客户端 ──
 
+# search_graph fields: build_inventory 评分所需的所有节点属性。
+# 本地 MCP 静默丢弃不支持的 field（如 docstring/return_type），
+# 因此只列已验证支持的 12 个；lines/in/out 为核心列，不在此请求。
+SEARCH_GRAPH_FIELDS = [
+    "complexity", "cognitive", "loop_count", "loop_depth",
+    "alloc_in_loop", "recursive", "transitive_loop_depth",
+    "linear_scan_in_loop", "param_count", "signature",
+    "parent_class", "is_test",
+]
+
+
+def _lines_range_to_int(lines_val):
+    """Convert search_graph `lines` core column (range "start-end") to count.
+
+    search_graph 返回 "251-334"（行范围）；build_inventory 评分（>=50, >=150）
+    需要整数行数。count = end - start + 1（251-334 → 84，与 query_graph
+    m.lines 真值一致）。裸整数（已是计数）原样返回。
+    """
+    if isinstance(lines_val, int):
+        return lines_val
+    if isinstance(lines_val, str):
+        s = lines_val.strip()
+        if not s or s == "-":
+            return 0
+        # 行范围 "start-end"（排除负数）
+        if "-" in s and not s.startswith("-"):
+            parts = s.split("-", 1)
+            try:
+                return int(parts[1]) - int(parts[0]) + 1
+            except ValueError:
+                pass
+        try:
+            return int(s)
+        except ValueError:
+            return 0
+    return 0
+
+
+def _tokenize_text_row(line):
+    """Tokenize a query_graph text data row.
+
+    含特殊字符（空格/方括号/引号）的值是 JSON 引号串；裸值不含空格。
+    裸 `-` 表示 null → None。
+    """
+    tokens = []
+    i = 0
+    n = len(line)
+    while i < n:
+        while i < n and line[i] in " \t":
+            i += 1
+        if i >= n:
+            break
+        if line[i] == '"':
+            j = i + 1
+            while j < n:
+                if line[j] == "\\":
+                    j += 2
+                    continue
+                if line[j] == '"':
+                    break
+                j += 1
+            tok = line[i:j + 1]
+            try:
+                tokens.append(json.loads(tok))
+            except json.JSONDecodeError:
+                tokens.append(tok)
+            i = j + 1
+        else:
+            j = i
+            while j < n and line[j] not in " \t":
+                j += 1
+            bare = line[i:j]
+            tokens.append(None if bare == "-" else bare)
+            i = j
+    return tokens
+
+
+def _parse_query_graph_text(text):
+    """Parse query_graph plain-text response into {rows, total, cols}.
+
+    Format::
+        rows: N  (cols: c.name c.qualified_name ...)
+          <val1> <val2> ...
+          ...
+        total: N
+    """
+    rows = []
+    total = 0
+    cols = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        m = re.match(r"^rows:\s+(\d+)\s+\(cols:\s*(.*?)\)\s*$", line)
+        if m:
+            cols = m.group(2).split()
+            continue
+        m = re.match(r"^total:\s+(\d+)", line)
+        if m:
+            total = int(m.group(1))
+            continue
+        # 数据行有缩进；header/total/hint("Query returned no results")顶格
+        if raw[:1] in (" ", "\t"):
+            toks = _tokenize_text_row(line)
+            if toks:
+                rows.append(toks)
+    return {"rows": rows, "total": total, "cols": cols}
+
+
+def _flatten_search_graph(result):
+    """Flatten search_graph format=json tree model into {results: [...]}.
+
+    Input:  {total, cols, groups[{qn_prefix, file, rows[[...]]}], has_more}
+    Output: {results: [{qualified_name, name, label, file_path, lines,
+            in_degree, out, <fields...>}], total, has_more}
+
+    qualified_name = qn_prefix + "." + name（无 prefix 时取 name）。
+    `lines` 行范围串 → 整数计数；`in` → `in_degree`。
+    """
+    cols = result.get("cols", [])
+    groups = result.get("groups", [])
+    results = []
+    for grp in groups:
+        qn_prefix = grp.get("qn_prefix", "")
+        file_path = grp.get("file", "")
+        for row in grp.get("rows", []):
+            d = dict(zip(cols, row))
+            name = d.get("name", "")
+            d["qualified_name"] = (qn_prefix + "." + name) if qn_prefix else name
+            d["file_path"] = file_path
+            if "lines" in d:
+                d["lines"] = _lines_range_to_int(d["lines"])
+            if "in" in d:
+                d["in_degree"] = d["in"]
+            results.append(d)
+    return {
+        "results": results,
+        "total": result.get("total", len(results)),
+        "has_more": result.get("has_more", False),
+    }
+
+
+def _normalize_search_code(result):
+    """Normalize search_code full-mode {cols, rows} into {results: [{...}]}.
+
+    列数组 → dict；`qn`→`qualified_name`、`file`→`file_path`。
+    files 模式（有 `files` 无 `rows`）不进入此函数。
+    """
+    cols = result.get("cols", [])
+    rows = result.get("rows", [])
+    results = []
+    for row in rows:
+        d = dict(zip(cols, row))
+        if "qn" in d and "qualified_name" not in d:
+            d["qualified_name"] = d["qn"]
+        if "file" in d and "file_path" not in d:
+            d["file_path"] = d["file"]
+        results.append(d)
+    out = dict(result)
+    out["results"] = results
+    return out
+
+
+def _normalize_mcp_response(tool_name, result):
+    """归一化本地 codebase-memory-mcp 响应形状至 mcp-scan 下游期望。
+
+    对远端 MCP 安全（形状已匹配时原样返回）：
+    - search_graph format=json → tree model {groups}；展平为 {results:[...]}
+    - query_graph → 纯文本 "rows: N (cols: ...)"；解析为 {rows:[[...]]}
+    - search_code full → {cols,rows}；映射为 {results:[{...}]}
+    """
+    if isinstance(result, str):
+        if tool_name == "query_graph":
+            return _parse_query_graph_text(result)
+        return result
+    if isinstance(result, dict):
+        if tool_name == "search_graph" and "groups" in result and "results" not in result:
+            return _flatten_search_graph(result)
+        if tool_name == "search_code" and "rows" in result and "results" not in result:
+            return _normalize_search_code(result)
+        return result
+    return result
+
+
 class MCPClient:
     """Minimal MCP HTTP JSON-RPC 2.0 client."""
 
-    def __init__(self, url=MCP_URL, timeout=120):
+    def __init__(self, url=MCP_URL, timeout=120, extra_headers=None):
         self.url = url
         self.timeout = timeout
         self.session_id = None
         self._id = 0
+        self.extra_headers = extra_headers if extra_headers is not None else MCP_EXTRA_HEADERS
 
     def _next_id(self):
         self._id += 1
         return self._id
 
+    def _parse_body(self, body):
+        """Parse MCP HTTP response body: plain JSON or SSE (text/event-stream).
+
+        mcp-proxy stateless mode returns text/event-stream with `data:` lines.
+        """
+        body = body.strip() if body else ""
+        if not body:
+            return {}
+        # SSE: contains `data:` / `event:` lines (text/event-stream)
+        if body.startswith("data:") or body.startswith("event:") or "\ndata:" in body:
+            data_parts = []
+            for line in body.splitlines():
+                line = line.strip()
+                if line.startswith("data:"):
+                    data_parts.append(line[len("data:"):].strip())
+            if data_parts:
+                # 单个 event：直接拼接解析
+                try:
+                    return json.loads("".join(data_parts))
+                except json.JSONDecodeError:
+                    # 多个 event：逐个解析，取 JSON-RPC response
+                    for part in data_parts:
+                        try:
+                            obj = json.loads(part)
+                            if isinstance(obj, dict) and "jsonrpc" in obj:
+                                return obj
+                        except json.JSONDecodeError:
+                            continue
+            return {}
+        # 纯 JSON
+        return json.loads(body)
+
     def initialize(self):
         """Initialize MCP session and capture session ID."""
-        headers = {"Content-Type": "application/json"}
+        headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream", **self.extra_headers}
         payload = {
             "jsonrpc": "2.0", "method": "initialize",
             "params": {
@@ -766,14 +1002,17 @@ class MCPClient:
         resp = urllib.request.urlopen(req, timeout=self.timeout)
         self.session_id = resp.headers.get("Mcp-Session-Id")
         body = resp.read().decode()
-        result = json.loads(body)
+        result = self._parse_body(body)
         if "error" in result:
             raise RuntimeError(f"Initialize error: {result['error']}")
         # Send initialized notification
         notif = {"jsonrpc": "2.0", "method": "notifications/initialized"}
+        notif_headers = {**headers}
+        if self.session_id:
+            notif_headers["Mcp-Session-Id"] = self.session_id
         req2 = urllib.request.Request(
             self.url, data=json.dumps(notif).encode(),
-            headers={**headers, "Mcp-Session-Id": self.session_id})
+            headers=notif_headers)
         urllib.request.urlopen(req2, timeout=self.timeout)
         return result
 
@@ -788,12 +1027,15 @@ class MCPClient:
                 }
                 headers = {
                     "Content-Type": "application/json",
-                    "Mcp-Session-Id": self.session_id,
+                    "Accept": "application/json, text/event-stream",
+                    **self.extra_headers,
                 }
+                if self.session_id:
+                    headers["Mcp-Session-Id"] = self.session_id
                 req = urllib.request.Request(
                     self.url, data=json.dumps(payload).encode(), headers=headers)
                 resp = urllib.request.urlopen(req, timeout=self.timeout)
-                result = json.loads(resp.read().decode())
+                result = self._parse_body(resp.read().decode())
                 if "error" in result:
                     raise RuntimeError(
                         f"RPC error: {json.dumps(result['error'], ensure_ascii=False)[:300]}")
@@ -802,9 +1044,10 @@ class MCPClient:
                 for block in content:
                     if block.get("type") == "text":
                         try:
-                            return json.loads(block["text"])
+                            parsed = json.loads(block["text"])
                         except json.JSONDecodeError:
-                            return block["text"]
+                            parsed = block["text"]
+                        return _normalize_mcp_response(name, parsed)
                 return content
             except Exception as e:
                 if attempt < retries - 1:
@@ -851,7 +1094,10 @@ def collect_methods(client, project, file_patterns=None, limit=2000):
         print(f"   file_patterns: {[p for p in patterns if p]}")
 
     for pattern in patterns:
-        args_base = {"project": project, "limit": limit, "offset": 0}
+        args_base = {
+            "project": project, "limit": limit, "offset": 0,
+            "format": "json", "fields": SEARCH_GRAPH_FIELDS,
+        }
         if pattern:
             args_base["file_pattern"] = pattern
             print(f"   ── pattern: {pattern}")
@@ -1725,7 +1971,8 @@ def cmd_fetch(args):
     client = MCPClient(url=args.mcp_url)
     print(f"🔗 Connecting to {args.mcp_url}...")
     client.initialize()
-    print(f"✅ Session: {client.session_id[:12]}...")
+    _sid = client.session_id or "stateless"
+    print(f"✅ Session: {_sid[:12]}...")
     print(f"📋 Project: {args.project}")
 
     # 解析 base_sha：显式传入优先，否则从图谱 index_status 取 git.head_sha
@@ -1780,16 +2027,37 @@ def cmd_fetch(args):
             pass  # 读取失败不影响主流程，后续正式 load 会再校验
 
     # 推导项目根目录：inventory 文件通常在 <project>/autotests/.ut-inventory.json
-    # 取 output 父目录的父目录；若路径不含 autotests/ 则取父目录
+    # 取 output 父目录的父目录；若路径在 tests/ 或 autotests/ 下则取父目录
     output_dir = Path(args.output).resolve().parent
     output_parent = output_dir.parent
     dir_name = output_dir.name
-    project_root = str(output_parent) if dir_name == "autotests" else str(output_dir)
+    project_root = str(output_parent) if dir_name in ("autotests", "tests") else str(output_dir)
     print(f"📁 推导项目根目录: {project_root}  (from --output {args.output})")
 
     inventory = build_inventory(mcp_dump, args.project, base_sha,
                                 gate_thresholds=existing_gates,
                                 project_root=project_root)
+
+    # ── test_* 覆盖回写（非增量默认采集；增量模式靠 overlay 保留，不重采） ──
+    # 首次建表时 fetch 应产出带 test_* 的完整 inventory，而非半成品。
+    # 增量模式下旧 test_* 已由 extract_human_overlay 提取并 apply_overlay_to_methods
+    # 贴回（见下方增量分支），无需重新采集（省一整轮 CALLS 查询）。
+    if not args.incremental and not args.skip_test_mapping:
+        print(f"\n📊 test_* 采集：CALLS 边 → 被测函数...")
+        try:
+            test_modules = discover_test_modules(client, args.project)
+            if test_modules:
+                source_to_tests = collect_all_calls(client, args.project, test_modules)
+                file_to_cases = fetch_test_cases(client, args.project, test_modules)
+                mapping = build_test_mapping(source_to_tests, file_to_cases)
+                updated, unmatched, _ = update_inventory_test_mapping(
+                    inventory, mapping)
+                print(f"   test_* 已回写：{updated} 方法覆盖，{unmatched} 未匹配")
+            else:
+                print(f"   无 ut_* 测试模块，跳过 test_* 采集")
+        except Exception as e:
+            # test_* 采集失败不阻断主流程（inventory 仍可用，仅缺 test_* 字段）
+            print(f"   ⚠️  test_* 采集失败（不阻断）: {e}")
 
     # ── 增量模式：同步旧 inventory 的人工标记 ──
     old_sha_for_report = "unknown"
@@ -1990,8 +2258,518 @@ def cmd_extract_branches(args):
     return 1 if errors else 0
 
 
+# ── test-mapping 子命令（原 fetch-test-mapping.py：MCP CALLS → test_* 回写）──
+
+UT_FILE_PATTERN = re.compile(r'(?:^|/)ut_\w+\.(?:cpp|h)$')
+TEST_DIR_MARKERS = ("tests/", "test/")
+
+
+def discover_test_modules(client, project):
+    """发现项目中的所有单元测试模块文件（ut_*.cpp/h）。
+
+    search_graph(label=Module, file_pattern=tests/**) → 过滤 ut_* 文件。
+    返回 [{name, file_path, out_degree}, ...]，out_degree>0 表示有 CALLS 关系。
+    """
+    print(f"\n📊 [1/4] 发现测试模块...")
+    data = client.call_tool("search_graph", {
+        "project": project,
+        "label": "Module",
+        "file_pattern": "tests/**",
+        "limit": 200,
+        "format": "json",
+    })
+    results = data.get("results", [])
+    total = data.get("total", 0)
+
+    test_modules = []
+    for r in results:
+        file_path = r.get("file_path", "")
+        name = r.get("name", "")
+        # out_degree 兼容：远端列名可能是 out_degree 或 out
+        out_degree = r.get("out_degree") or r.get("out") or 0
+        if UT_FILE_PATTERN.search(file_path) or UT_FILE_PATTERN.search(name):
+            test_modules.append({
+                "name": name,
+                "file_path": file_path,
+                "out_degree": out_degree,
+            })
+
+    test_modules.sort(key=lambda x: x["out_degree"], reverse=True)
+
+    with_calls = [m for m in test_modules if m["out_degree"] > 0]
+    without_calls = [m for m in test_modules if m["out_degree"] == 0]
+
+    print(f"   tests/ Module 总数: {total}")
+    print(f"   ut_* 单元测试文件: {len(test_modules)}")
+    print(f"   有 CALLS 关系: {len(with_calls)}")
+    print(f"   无 CALLS 关系: {len(without_calls)}")
+
+    return test_modules
+
+
+def collect_calls_for_module(client, project, module_name, module_file=None,
+                              skip_module_query=False):
+    """查询单个测试模块的 CALLS 关系目标。
+
+    返回 [(target_name, target_qn, target_file, target_labels), ...]。
+
+    图谱 schema 兼容：
+    - v0.10.0：CALLS 边挂在 Module 节点（name=文件路径），按模块名查询。
+    - v0.10.8+：Module 无 CALLS 出边（挂在 File/Function/Method 上），
+      回退按测试文件路径匹配任意源节点。
+    """
+    rows = []
+    if not skip_module_query:
+        query = (
+            f"MATCH (m:Module {{name:'{module_name}'}})-[:CALLS]->(target) "
+            f"RETURN target.name, target.qualified_name, target.file_path, labels(target)"
+        )
+        data = client.call_tool("query_graph", {
+            "project": project,
+            "query": query,
+        })
+        rows = data.get("rows", []) if isinstance(data, dict) else []
+    if not rows and module_file:
+        query = (
+            f"MATCH (src)-[:CALLS]->(target) "
+            f"WHERE src.file_path = '{module_file}' "
+            f"RETURN DISTINCT target.name, target.qualified_name, "
+            f"target.file_path, labels(target)"
+        )
+        data = client.call_tool("query_graph", {
+            "project": project,
+            "query": query,
+        })
+        rows = data.get("rows", []) if isinstance(data, dict) else []
+    result = []
+    for row in rows:
+        if len(row) >= 3:
+            name = row[0] or ""
+            qn = row[1] or ""
+            file_path = row[2] or ""
+            labels = row[3] if len(row) > 3 else []
+            if isinstance(labels, str):
+                try:
+                    labels = json.loads(labels)
+                except json.JSONDecodeError:
+                    labels = [labels]
+            result.append((name, qn, file_path, labels))
+    return result
+
+
+def collect_all_calls(client, project, test_modules):
+    """批量收集所有测试模块的 CALLS 目标。
+
+    过滤规则：去 Field 节点、去 tests/ 目录目标（stub）、只留 Method/Function。
+    返回 {source_qn: set(test_files)} 映射。
+    """
+    print(f"\n📊 [2/4] 收集 CALLS 关系...")
+
+    source_to_tests = defaultdict(set)
+    modules_with_calls = [m for m in test_modules if m["out_degree"] > 0]
+
+    # 图谱 schema 探测：v0.10.8+ Module 节点无 CALLS 出边，且其 out_degree
+    # 反映 DEFINES 而非 CALLS，不能用 out_degree>0 预筛（会漏掉有 CALLS 的
+    # 测试文件）。用首个 out_degree>0 模块探测，新 schema 下改为全量按
+    # file_path 查询。
+    skip_module_query = False
+    if modules_with_calls:
+        probe = modules_with_calls[0]
+        try:
+            data = client.call_tool("query_graph", {
+                "project": project,
+                "query": (f"MATCH (m:Module {{name:'{probe['name']}'}})"
+                          f"-[:CALLS]->() RETURN count(m) AS n"),
+            })
+            prows = data.get("rows", []) if isinstance(data, dict) else []
+            n = int(str(prows[0][0]).strip('"'))
+        except Exception:
+            n = -1
+        if n == 0:
+            skip_module_query = True
+            modules_with_calls = test_modules
+            print("   ℹ️  检测到 v0.10.8+ 图谱（Module 无 CALLS 出边），"
+                  "改用 file_path 匹配全量测试模块")
+
+    total_modules = len(modules_with_calls)
+
+    for idx, module in enumerate(modules_with_calls, 1):
+        module_name = module["name"]
+        module_file = module["file_path"]
+
+        if idx % 5 == 0 or idx == total_modules:
+            print(f"   [{idx}/{total_modules}] {module_name} "
+                  f"(out_degree={module['out_degree']})")
+
+        try:
+            targets = collect_calls_for_module(
+                client, project, module_name, module_file,
+                skip_module_query=skip_module_query)
+        except Exception as e:
+            print(f"   ⚠️  {module_name} 查询失败: {e}")
+            continue
+
+        for target_name, target_qn, target_file, target_labels in targets:
+            # 过滤 1: 去掉 Field 节点
+            label_strs = [l.strip('"') for l in (target_labels or [])]
+            if "Field" in label_strs and "Method" not in label_strs and "Function" not in label_strs:
+                continue
+            # 过滤 2: 去掉 tests/ 目录中的目标（stub/辅助类）
+            if any(marker in target_file for marker in TEST_DIR_MARKERS):
+                continue
+            # 过滤 3: 确保至少是 Method 或 Function
+            if not any(l in label_strs for l in ("Method", "Function")):
+                continue
+            if target_qn:
+                source_to_tests[target_qn].add(module_file)
+
+        if idx < total_modules:
+            time.sleep(0.1)
+
+    total_targets = sum(len(v) for v in source_to_tests.values())
+    covered_sources = len(source_to_tests)
+    max_coverage = max((len(v) for v in source_to_tests.values()), default=0)
+
+    print(f"   ✅ {total_modules} 个测试模块已查询")
+    print(f"   被测源码节点: {covered_sources}")
+    print(f"   总 CALLS 边: {total_targets}")
+    print(f"   最大覆盖: {max_coverage} 个测试文件")
+
+    return source_to_tests
+
+
+def fetch_test_cases(client, project, test_modules):
+    """采集每个测试文件中的 TEST_F 用例名。
+
+    search_graph(label=Function, name_pattern=TEST_F, file_pattern=tests/**)
+    signature 格式 (test_class, test_case_name)。
+    返回 {test_file_path: [test_case_name, ...]} 映射。
+    """
+    print(f"\n📊 [3/4] 采集 TEST_F 用例名...")
+    data = client.call_tool("search_graph", {
+        "project": project,
+        "label": "Function",
+        "name_pattern": "TEST_F",
+        "file_pattern": "tests/**",
+        "limit": 500,
+        "format": "json",
+        "fields": ["signature", "docstring"],
+    })
+    results = data.get("results", [])
+    total = data.get("total", 0)
+
+    file_to_cases = defaultdict(list)
+    for r in results:
+        sig = r.get("signature", "")
+        file_path = r.get("file_path", "")
+        if not sig or not file_path:
+            continue
+        match = re.match(r'\(\s*([^,]+)\s*,\s*([^)]+)\s*\)', sig)
+        if match:
+            test_class = match.group(1).strip()
+            test_case = match.group(2).strip()
+            full_name = f"{test_class}.{test_case}"
+            doc = r.get("docstring", "")
+            comment = doc.lstrip('/ ').strip() if doc else ""
+            if comment:
+                full_name = f"{full_name}  // {comment}"
+            file_to_cases[file_path].append(full_name)
+
+    total_cases = sum(len(v) for v in file_to_cases.values())
+    files_with_cases = len(file_to_cases)
+    print(f"   TEST_F 节点总数: {total}")
+    print(f"   含用例名的文件: {files_with_cases}")
+    print(f"   用例名总数: {total_cases}")
+
+    if test_modules:
+        ut_files = {m["file_path"] for m in test_modules}
+        for fp in sorted(file_to_cases.keys()):
+            if fp in ut_files:
+                cases = file_to_cases[fp]
+                print(f"   {os.path.basename(fp)}: {len(cases)} 个用例")
+                for tc in cases[:5]:
+                    print(f"     \U0001f9ea {tc}")
+                if len(cases) > 5:
+                    print(f"     ... 还有 {len(cases) - 5} 个")
+
+    return file_to_cases
+
+
+def _tm_normalize_qn(qn):
+    """去掉项目前缀段，得到源码路径+类+方法的归一化 qn。
+
+    通用方法：项目根名带 '-'（如 home-uos-service-codebase-repos-deepin-reader、
+    home-zhy-debug-deepin-reader），源码路径段不带 '-'（reader/document/browser/sheet/
+    application/3rdparty 等）。所以剥掉所有含 '-' 的前导段即可，不需要硬编码仓库名。
+
+    对 'home-uos-service-codebase-repos-deepin-reader.reader.A.foo':
+      split('.') → ['home-uos-service-...', 'reader', 'A', 'foo']
+      strip leading '-' segments → ['reader', 'A', 'foo']
+      → 'reader.A.foo'
+    """
+    if not qn:
+        return qn
+    parts = qn.split(".")
+    # 去掉所有含 '-' 的前导段（项目根路径段）
+    while parts and "-" in parts[0]:
+        parts.pop(0)
+    return ".".join(parts) if parts else qn
+
+
+def build_test_mapping(source_to_tests, file_to_cases=None):
+    """构建归一化 qn → {test_cover_count, test_files, test_cases} 映射。"""
+    mapping = {}
+    for qn, test_files in source_to_tests.items():
+        nqn = _tm_normalize_qn(qn)
+        cases = []
+        if file_to_cases:
+            for tf in sorted(test_files):
+                cases.extend(file_to_cases.get(tf, []))
+        mapping[nqn] = {
+            "test_cover_count": len(test_files),
+            "test_files": sorted(test_files),
+            "test_cases": cases,
+        }
+    return mapping
+
+
+def update_inventory_test_mapping(inventory, mapping):
+    """将测试覆盖映射回写到 inventory（内存对象，不落盘）。
+
+    匹配：inventory.methods[].qualified_name 归一化后与 mapping key 匹配。
+    回写：test_cover_count>0 → 写 test_cover_count/test_files/test_cases/test_source；
+         usecase_count 取 max(原值, test_cover_count)；未匹配 → 保留原值。
+    返回 (updated_count, unmatched_count, updated_methods_list)。
+    """
+    updated = 0
+    unmatched = 0
+    updated_methods = []
+
+    for method in inventory.get("methods", []):
+        qn = method.get("qualified_name", "")
+        nqn = _tm_normalize_qn(qn)
+        if nqn in mapping:
+            new_cover = mapping[nqn]["test_cover_count"]
+            old_cover = method.get("test_cover_count", 0)
+            old_uc = method.get("usecase_count", 0)
+            if new_cover > 0:
+                method["test_cover_count"] = new_cover
+                method["test_files"] = mapping[nqn]["test_files"]
+                method["test_cases"] = mapping[nqn].get("test_cases", [])
+                method["test_source"] = "mcp_calls"
+                new_uc = max(old_uc, new_cover)
+                method["usecase_count"] = new_uc
+                updated += 1
+                updated_methods.append({
+                    "name": method.get("name"),
+                    "qn": qn,
+                    "old_cover": old_cover,
+                    "new_cover": new_cover,
+                    "old_uc": old_uc,
+                    "new_uc": new_uc,
+                    "test_files": mapping[nqn]["test_files"],
+                })
+        else:
+            unmatched += 1
+
+    return updated, unmatched, updated_methods
+
+
+def render_test_mapping_report(updated_methods, unmatched, project, test_summary):
+    """渲染 Markdown 格式的测试覆盖报告。"""
+    lines = [
+        "# 函数↔单元测试映射报告",
+        "",
+        f"- 项目: `{project}`",
+        f"- 测试模块: {test_summary['total_modules']}",
+        f"- 有 CALLS 关系: {test_summary['with_calls']}",
+        f"- 被测源码节点: {test_summary['covered_sources']}",
+        f"- 总 CALLS 边: {test_summary['total_calls']}",
+        "",
+        "## 已更新方法",
+        "",
+        f"共 {len(updated_methods)} 个方法的 `test_cover_count` 已从 MCP CALLS 关系更新。",
+        "",
+    ]
+
+    sorted_methods = sorted(updated_methods,
+                            key=lambda x: x["new_cover"], reverse=True)
+
+    by_count = defaultdict(list)
+    for m in sorted_methods:
+        by_count[m["new_cover"]].append(m)
+
+    for count in sorted(by_count.keys(), reverse=True):
+        methods = by_count[count]
+        lines.append(f"### 覆盖 {count} 个测试文件 ({len(methods)} 个方法)")
+        lines.append("")
+        lines.append("| 方法名 | qualified_name | usecase_count | 测试文件 |")
+        lines.append("|--------|---------------|---------------|----------|")
+        for m in methods:
+            files = ", ".join(os.path.basename(f) for f in m["test_files"])
+            lines.append(f"| {m['name']} | `{m['qn']}` | {m['new_uc']} | {files} |")
+        lines.append("")
+
+    if unmatched:
+        lines.append("## 未匹配方法")
+        lines.append("")
+        lines.append(f"共 {unmatched} 个 inventory 方法的 qualified_name "
+                     "在 MCP CALLS 映射中未找到。")
+        lines.append("可能原因：方法未被任何测试调用、或 qualified_name 格式差异。")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def load_test_mapping_from_file(path):
+    """从 JSON 文件加载已保存的测试映射（兼容新/旧/原始三种格式）。"""
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    mapping = {}
+    if isinstance(data, dict):
+        for key, value in data.items():
+            if isinstance(value, dict) and "test_cover_count" in value:
+                nqn = _tm_normalize_qn(key)
+                mapping[nqn] = value
+            elif isinstance(value, dict) and "usecase_count" in value:
+                nqn = _tm_normalize_qn(key)
+                mapping[nqn] = {
+                    "test_cover_count": value.get("usecase_count", 0),
+                    "test_files": value.get("test_files", []),
+                }
+            elif isinstance(value, (list, set)):
+                nqn = _tm_normalize_qn(key)
+                mapping[nqn] = {
+                    "test_cover_count": len(value),
+                    "test_files": sorted(value),
+                }
+    return mapping
+
+
+def cmd_test_mapping(args):
+    """test-mapping 子命令：MCP CALLS → test_* 字段回写 .ut-inventory.json。"""
+    if not args.mapping_in and not args.project:
+        print("❌ 必须指定 --project 或 --mapping-in（至少一项）", file=sys.stderr)
+        return 1
+    if not os.path.isfile(args.inventory):
+        print(f"❌ inventory 不存在: {args.inventory}", file=sys.stderr)
+        return 1
+
+    with open(args.inventory, "r", encoding="utf-8") as f:
+        try:
+            inventory = json.load(f)
+        except json.JSONDecodeError as e:
+            print(f"❌ inventory JSON 损坏: {e}", file=sys.stderr)
+            return 1
+
+    project_name = args.project or inventory.get("project", "")
+
+    if args.mapping_in:
+        print(f"\n📂 从文件加载映射: {args.mapping_in}")
+        mapping = load_test_mapping_from_file(args.mapping_in)
+        test_summary = {
+            "total_modules": 0,
+            "with_calls": 0,
+            "covered_sources": len(mapping),
+            "total_calls": sum(m["test_cover_count"] for m in mapping.values()),
+        }
+    else:
+        client = MCPClient(url=args.mcp_url)
+        print(f"🔗 Connecting to {args.mcp_url}...")
+        client.initialize()
+        print(f"✅ Session: {(client.session_id or 'stateless')[:12]}...")
+        print(f"📋 Project: {project_name}")
+
+        test_modules = discover_test_modules(client, project_name)
+        source_to_tests = collect_all_calls(client, project_name, test_modules)
+        file_to_cases = fetch_test_cases(client, project_name, test_modules)
+
+        print(f"\n📊 [4/4] 构建函数↔测试映射...")
+        mapping = build_test_mapping(source_to_tests, file_to_cases)
+
+        test_summary = {
+            "total_modules": len(test_modules),
+            "with_calls": len([m for m in test_modules if m["out_degree"] > 0]),
+            "covered_sources": len(mapping),
+            "total_calls": sum(len(v) for v in source_to_tests.values()),
+        }
+
+        if args.verbose:
+            print(f"\n{'=' * 60}")
+            print("详细映射:")
+            for qn, info in sorted(mapping.items(),
+                                   key=lambda x: x[1]["test_cover_count"],
+                                   reverse=True):
+                files = ", ".join(os.path.basename(f) for f in info["test_files"])
+                print(f"  {qn}: {info['test_cover_count']} tests → {files}")
+
+    print(f"\n🔧 回写 inventory...")
+    print(f"   映射中源码节点: {len(mapping)}")
+    print(f"   inventory 方法数: {len(inventory.get('methods', []))}")
+
+    updated, unmatched, updated_methods = update_inventory_test_mapping(inventory, mapping)
+
+    print(f"   已更新: {updated}")
+    print(f"   未匹配: {unmatched}")
+
+    if updated_methods:
+        top = sorted(updated_methods,
+                      key=lambda x: x["new_cover"], reverse=True)[:10]
+        print(f"\n   Top {min(10, len(top))} 覆盖最多的方法:")
+        for m in top:
+            files = ", ".join(os.path.basename(f) for f in m["test_files"])
+            print(f"     {m['name']}: {m['new_cover']} test_files, "
+                  f"usecase_count {m['old_uc']}→{m['new_uc']} ({files})")
+
+    zero_cover = [m for m in inventory.get("methods", [])
+                  if m.get("testable", True) and m.get("test_cover_count", 0) == 0
+                  and m.get("level") in ("high", "mid")]
+    if zero_cover:
+        print(f"\n   ⚠️  {len(zero_cover)} 个 high/mid 可测方法无测试覆盖:")
+        for m in zero_cover[:15]:
+            print(f"     {m.get('name')} ({m.get('level')}) in {m.get('file_path','?')}")
+        if len(zero_cover) > 15:
+            print(f"     ... 还有 {len(zero_cover) - 15} 个")
+
+    if args.mapping_out:
+        os.makedirs(os.path.dirname(args.mapping_out) or ".", exist_ok=True)
+        with open(args.mapping_out, "w", encoding="utf-8") as f:
+            json.dump(mapping, f, ensure_ascii=False, indent=2)
+        print(f"\n💾 映射已保存到 {args.mapping_out}")
+
+    if not args.dry_run:
+        bak = args.inventory + ".bak"
+        if os.path.isfile(args.inventory):
+            shutil.copyfile(args.inventory, bak)
+            print(f"💾 已备份到 {bak}")
+        with open(args.inventory, "w", encoding="utf-8") as f:
+            json.dump(inventory, f, ensure_ascii=False, indent=2)
+        print(f"✅ inventory 已写入 {args.inventory}")
+    else:
+        print(f"📋 dry-run: inventory 未写入")
+
+    if args.report:
+        os.makedirs(os.path.dirname(args.report) or ".", exist_ok=True)
+        report = render_test_mapping_report(updated_methods, unmatched,
+                                            project_name, test_summary)
+        with open(args.report, "w", encoding="utf-8") as f:
+            f.write(report)
+        print(f"✅ 报告已写入 {args.report}")
+
+    print(f"\n{'=' * 60}")
+    print(f"项目: {project_name}")
+    print(f"测试模块: {test_summary['total_modules']}")
+    print(f"有 CALLS 关系: {test_summary['with_calls']}")
+    print(f"被测源码节点: {test_summary['covered_sources']}")
+    print(f"总 CALLS 边: {test_summary['total_calls']}")
+    print(f"inventory 更新: {updated} / 未匹配: {unmatched}")
+    print(f"{'=' * 60}")
+    return 0
+
+
 def build_parser():
-    """构建顶层 argparse，含 scan / fetch / extract-branches 三个子命令。"""
+    """构建顶层 argparse，含 scan / fetch / extract-branches / test-mapping 四个子命令。"""
     parser = argparse.ArgumentParser(
         description="MCP 知识图谱 → .ut-inventory.json 端到端探测")
 
@@ -2034,6 +2812,11 @@ def build_parser():
     sp_fetch.add_argument("--existing", default=None,
                           help="旧 .ut-inventory.json 路径（--incremental 时必需，"
                                "从中提取人工标记回写到新输出；file_overrides 整体保留）")
+    sp_fetch.add_argument("--skip-test-mapping", action="store_true",
+                          help="跳过 test_* 覆盖回写（默认 fetch 会采集 CALLS 边"
+                               "回写 test_cover_count/test_files 等；增量模式本就"
+                               "从 overlay 保留 test_*，无需此步；首次建表如"
+                               "无 tests/ 目录可跳过省时）")
 
     # ── extract-branches 子命令（原 fetch-mcp-data.py 子命令） ──
     sp_eb = subparsers.add_parser(
@@ -2049,6 +2832,27 @@ def build_parser():
     sp_eb.add_argument("--json", action="store_true", help="额外打印完整 JSON")
     sp_eb.add_argument("-o", "--output", default=None, help="写 JSON 到文件")
 
+    # ── test-mapping 子命令（原 fetch-test-mapping.py） ──
+    sp_tm = subparsers.add_parser(
+        "test-mapping",
+        help="仅回写 test_* 字段（原 fetch-test-mapping.py）")
+    sp_tm.add_argument("--project", required=False,
+                       help="MCP 项目名（与 fetch --project 一致）；"
+                            "使用 --mapping-in 时可省略")
+    sp_tm.add_argument("--inventory", "-i", required=True,
+                       help=".ut-inventory.json 路径")
+    sp_tm.add_argument("--mapping-in", default=None,
+                       help="已保存的映射 JSON（跳过 MCP 查询，直接回写）")
+    sp_tm.add_argument("--mapping-out", default=None,
+                       help="保存映射到 JSON 文件（供后续 --mapping-in 使用）")
+    sp_tm.add_argument("--report", default=None,
+                       help="输出 Markdown 测试覆盖报告路径")
+    sp_tm.add_argument("--mcp-url", default=MCP_URL, help="MCP HTTP 端点")
+    sp_tm.add_argument("--dry-run", action="store_true",
+                       help="只打印映射结果不写回 inventory")
+    sp_tm.add_argument("--verbose", "-v", action="store_true",
+                       help="打印每个测试模块的详细 CALLS 目标")
+
     return parser
 
 
@@ -2056,7 +2860,9 @@ def main_no_exit(argv=None):
     """统一入口，供测试调用。"""
     parser = build_parser()
     args = parser.parse_args(argv)
-    dispatch = {"scan": cmd_scan, "fetch": cmd_fetch, "extract-branches": cmd_extract_branches}
+    dispatch = {"scan": cmd_scan, "fetch": cmd_fetch,
+                "extract-branches": cmd_extract_branches,
+                "test-mapping": cmd_test_mapping}
     result = dispatch[args.cmd](args)
     return result if result is not None else 0
 

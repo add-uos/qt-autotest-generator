@@ -4,7 +4,7 @@
 必须在这里显式确认。链路：
 
   CREATE   mcp-scan build_inventory（图谱 → 建表，usecase_count=0 初始）
-  UPDATE-A fetch-test-mapping update_inventory（外部工具：回写 test_* 字段）
+  UPDATE-A fetch-test-mapping update_inventory（Mode 1 fetch 采集 / 独立 test-mapping 回写 test_*）
   UPDATE-B mode2-ops usecase（Mode 2 写完测试 → 回写 usecase_count）
   UPDATE-C stale-test-cleanup（清理 stale 测试 → usecase_count + test_* 同步）
   READ     mode2-ops plan / utq / coverage-report
@@ -102,7 +102,7 @@ class TestCreateToRead:
             assert not missing, f"CREATE 输出缺 READ 依赖字段: {missing}"
 
 
-# ── UPDATE-A：外部 fetch-test-mapping 回写 test_* 字段 ────────────────
+# ── UPDATE-A：Mode 1 fetch / test-mapping 回写 test_* 字段 ──────────────
 
 class TestExternalMappingUpdate:
     def test_writes_test_fields(self, fetch_test_mapping):
@@ -181,7 +181,7 @@ class TestUpdateBToRead:
     def test_usecase_write_exits_todo(self, update_usecase_count, utq, tmp_path):
         """Mode 2 写完测试立即回写 usecase_count → utq todo 不再含该方法。
 
-        防重复写核心场景：外部 fetch-test-mapping 未跑（test_cover_count=0）。
+        防重复写核心场景：Mode 1 fetch 未采集 test_*（--skip-test-mapping / MCP 无 tests/ 索引）。
         """
         test_file = tmp_path / "test_calc.cpp"
         test_file.write_text(TEST_CPP, encoding="utf-8")
@@ -336,7 +336,7 @@ class TestFullPipeline:
 
 class TestReconcilePreservesExternalFields:
     """reconcile（git HEAD 漂移 → mcp-scan fetch --incremental）不得清空外部
-    fetch-test-mapping 回写的 test_* 覆盖字段。回归守护：修复前
+    fetch-test-mapping 采集的 test_* 覆盖字段。回归守护：修复前
     extract_human_overlay 白名单不含 test_*，全量重建后整组丢失。
     """
 
@@ -349,7 +349,7 @@ class TestReconcilePreservesExternalFields:
 
         # UPDATE-B：Mode 2 写完回写 usecase_count
         inv_v1["methods"][0]["usecase_count"] = 2
-        # UPDATE-A：外部 fetch-test-mapping 回写 test_* 字段
+        # UPDATE-A：Mode 1 fetch / test-mapping 回写 test_* 字段
         mapping = fetch_test_mapping.build_mapping(
             {"proj.src.Calc.add": {"autotests/test_calc.cpp"}})
         fetch_test_mapping.update_inventory(inv_v1, mapping)
