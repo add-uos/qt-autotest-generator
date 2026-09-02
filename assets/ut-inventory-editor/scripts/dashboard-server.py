@@ -1204,7 +1204,7 @@ class Handler(BaseHTTPRequestHandler):
         if not path:
             self._json({"error": "no local source path", "project": name}, 404)
             return
-        bd = find_build_dir(path)
+        bd = find_build_dir(path, name=name)
         if not bd:
             self._json({"error": "no build dir", "project": name}, 404)
             return

@@ -15,6 +15,18 @@ BASE_DIR  = SCRIPT_DIR.parent / "mcp-projects"
 REGISTRY  = SCRIPT_DIR.parent / "projects.json"
 
 
+def _cfg_mcp_url():
+    """MCP 地址优先级: 环境变量 QTAG_MCP_URL > config.json > 内置默认（与 fetch-mcp-data.py 一致）"""
+    p = SCRIPT_DIR.parent / "config.json"
+    try:
+        return json.loads(p.read_text("utf-8")).get("mcp_url") or ""
+    except (OSError, ValueError):
+        return ""
+
+
+MCP_URL = os.environ.get("QTAG_MCP_URL") or _cfg_mcp_url() or ""
+
+
 def require_registry_projects():
     """从 projects.json 注册表取启用项目 (mcp_name, gh_name, size)。缺失/为空时直接退出。"""
     try:
@@ -89,6 +101,8 @@ def collect_project(mcp_name, gh_name, skip_fetch_mcp=False, skip_tm=False):
                "--inventory", str(inventory_path),
                "--mapping-out", str(mapping_path),
                "--report", str(report_path)]
+        if MCP_URL:
+            cmd += ["--mcp-url", MCP_URL]
         log(f"Step 2: fetch-test-mapping.py ...")
         ok, elapsed, tail = run_step(cmd, "fetch-tm", proj_dir)
         results["steps"]["test_mapping"] = {"ok": ok, "elapsed": round(elapsed, 1)}
