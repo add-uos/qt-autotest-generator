@@ -45,6 +45,44 @@ function renderCfgRows() {
     tb.innerHTML = '';
     CFG.projects.projects.forEach(p => { const [tr, expTr] = cfgRow(p); tb.appendChild(tr); tb.appendChild(expTr); });
     $('#cfg-proj-count').textContent = `(${CFG.projects.projects.length} 项)`;
+    applyCfgFilter();
+}
+
+// ═══ 项目表搜索过滤 ═══
+function cfgRowText(tr) {
+    // 行内所有数据：单元格文本 + 输入框/下拉值 + title 属性（mcp 名在 name 格 title 里）
+    const parts = [tr.innerText || ''];
+    tr.querySelectorAll('input,select').forEach(el => { if (el.type !== 'checkbox') parts.push(el.value); });
+    tr.querySelectorAll('[title]').forEach(el => parts.push(el.title));
+    return parts.join(' ').toLowerCase();
+}
+
+function applyCfgFilter() {
+    const tb = $('#cfg-tbody');
+    const q = ($('#cfg-search-input')?.value || '').trim().toLowerCase();
+    const total = CFG ? CFG.projects.projects.length : 0;
+    let shown = 0;
+    [...tb.rows].forEach(tr => {
+        if (tr.classList.contains('cfg-expand-row')) return; // 随主行处理
+        const expTr = tr.nextElementSibling;
+        const hit = !q || cfgRowText(tr).includes(q) || (expTr && cfgRowText(expTr).includes(q));
+        tr.style.display = hit ? '' : 'none';
+        if (expTr && expTr.classList.contains('cfg-expand-row')) expTr.style.display = hit ? '' : 'none';
+        if (hit) shown++;
+    });
+    $('#cfg-proj-count').textContent = q ? `(匹配 ${shown} / 共 ${total} 项)` : `(${total} 项)`;
+}
+
+function toggleCfgSearch(show) {
+    const inp = $('#cfg-search-input');
+    const on = show ?? inp.classList.contains('hidden');
+    inp.classList.toggle('hidden', !on);
+    if (on) {
+        inp.focus();
+    } else {
+        inp.value = '';
+        applyCfgFilter();
+    }
 }
 
 function escAttr(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
@@ -260,6 +298,10 @@ function initSettingsEvents() {
     $('#cfg-add-project').onclick = addCfgProjectRow;
     $('#cfg-sync-mcp').onclick = syncFromMcp;
     $('#cfg-size-mode').onchange = e => localStorage.setItem('utie-size-mode', e.target.value);
+    // 项目表搜索：按钮展开/收起，输入实时过滤
+    $('#cfg-search-btn').onclick = () => toggleCfgSearch();
+    $('#cfg-search-input').oninput = applyCfgFilter;
+    $('#cfg-search-input').onkeydown = e => { if (e.key === 'Escape') toggleCfgSearch(false); };
     // 目录浏览对话框
     $('#fs-cancel').onclick = fsClose;
     $('#fs-confirm').onclick = () => { if (fsPick.mode === 'file' && !fsPick.selected) { toast('请先选择一个文件', 'warn'); return; } const picked = fsPick.selected ? fsPick.path + '/' + fsPick.selected : fsPick.path; if (fsPick.cb && picked) fsPick.cb(picked); fsClose(); };

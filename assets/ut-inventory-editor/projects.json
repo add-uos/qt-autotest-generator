@@ -703,8 +703,8 @@
         "branch": "master"
       },
       "source": {
-        "type": "mcp",
-        "path": ""
+        "type": "local",
+        "path": "/home/zhy/debug/dde-file-manager"
       },
       "build": {
         "system": "cmake",
@@ -715,7 +715,10 @@
         "env": {
           "QT_QPA_PLATFORM": "offscreen"
         },
-        "timeout": 600
+        "timeout": 600,
+        "test_dir": "autotests",
+        "script": "autotests/run-ut.sh",
+        "build_dir": "build-autotests"
       }
     },
     {

@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>UT Inventory Editor</title>
+<title>UT Cockpit</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='none' stroke='%2322c55e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8.5 2h7'/><path d='M12 2v4.34a2 2 0 0 1-.56 1.41L4.8 18.2a3 3 0 0 0 2.3 4.8h9.8a3 3 0 0 0 2.3-4.8L12.56 7.75a2 2 0 0 1-.56-1.41V2'/><path d='M6.56 14h10.88'/></svg>"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
@@ -11,7 +12,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" id="hljs-theme-light" media="(prefers-color-scheme: light)"/>
 <script src="https://cdn.tailwindcss.com"></script>
 <script>tailwind.config={theme:{extend:{fontFamily:{mono:['JetBrains Mono','ui-monospace','monospace'],sans:['IBM Plex Sans','system-ui','sans-serif']}}}};</script>
-<script src="https://unpkg.com/lucide@0.344.0"></script>
+<script src="vendor/lucide.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script>(function(){try{var s=localStorage.getItem('utie-theme');var d=window.matchMedia('(prefers-color-scheme:light)').matches?'light':'dark';document.documentElement.setAttribute('data-theme',s||d)}catch(e){document.documentElement.setAttribute('data-theme','dark')}try{var fs=localStorage.getItem('utie-fs')||'medium';document.documentElement.setAttribute('data-fs',fs)}catch(e){document.documentElement.setAttribute('data-fs','medium')}})();</script>
 <link rel="stylesheet" href="styles.css">
@@ -22,7 +23,7 @@
 <div class="flex items-center justify-between gap-3 px-4 py-2.5 flex-wrap">
 <div class="flex items-center gap-2.5">
 <i data-lucide="flask-conical" class="icon text-[22px]" style="color:var(--accent)"></i>
-<h1 class="detail-heading font-bold tracking-tight">UT Inventory Editor</h1>
+<h1 class="detail-heading font-bold tracking-tight">UT Cockpit</h1>
 <span id="project-name" class="detail-small text-[var(--text-muted)] hidden sm:inline"></span>
 </div>
 <div class="flex items-center gap-2">
@@ -255,7 +256,11 @@
 <option value="keep">保留手工标注</option>
 </select></label>
 </div>
-<p class="detail-small text-[var(--text-muted)]" style="margin:0 0 8px">本地路径填后可用于「探测」构建系统；测试命令留空则按构建系统默认模板。数据保存于 projects.json。</p>
+<div style="display:flex;align-items:center;gap:8px;margin:0 0 8px">
+<p class="detail-small text-[var(--text-muted)]" style="margin:0;flex:1">本地路径填后可用于「探测」构建系统；测试命令留空则按构建系统默认模板。数据保存于 projects.json。</p>
+<input id="cfg-search-input" class="cfg-input hidden" type="search" placeholder="搜索项目名/路径/分支/脚本…" spellcheck="false" autocomplete="off" style="width:240px;padding:3px 8px"/>
+<button class="btn btn-sm btn-ghost" id="cfg-search-btn" title="搜索过滤项目列表">🔍 搜索</button>
+</div>
 <div class="cfg-table-wrap"><table class="cfg-table" id="cfg-table"><thead><tr>
 <th style="width:26px"></th><th style="width:160px">项目</th><th style="width:52px">规模</th><th style="width:86px">分支</th><th style="width:64px">来源</th><th>本地路径 (source.path)</th><th style="width:90px">构建</th><th style="width:70px">测试目录</th><th style="width:90px">构建目录</th><th>测试脚本</th><th>测试命令 (可空=默认)</th><th style="width:56px"></th>
 </tr></thead><tbody id="cfg-tbody"></tbody></table></div>

@@ -1366,7 +1366,7 @@ class Handler(BaseHTTPRequestHandler):
                         "phases": _get_build_phases(name, path, bd)})
         elif p.startswith("/api/coverage/"):
             self._serve_coverage(p, urlparse(self.path).query)
-        elif p in ("/styles.css",) or p.startswith("/js/"):
+        elif p in ("/styles.css",) or p.startswith("/js/") or p.startswith("/vendor/"):
             # 静态资源（拆分后的前端模块）
             rel = p.lstrip("/")
             f = (self.root_dir / rel).resolve()
