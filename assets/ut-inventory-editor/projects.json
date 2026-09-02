@@ -93,8 +93,8 @@
         "branch": "master"
       },
       "source": {
-        "type": "mcp",
-        "path": ""
+        "type": "local",
+        "path": "/home/zhy/debug/deepin-picker"
       },
       "build": {
         "system": "cmake",
@@ -105,7 +105,10 @@
         "env": {
           "QT_QPA_PLATFORM": "offscreen"
         },
-        "timeout": 600
+        "timeout": 600,
+        "test_dir": "autotests",
+        "script": "autotests/run-ut.sh",
+        "build_dir": "build-autotests"
       },
       "nodes": 517
     },
@@ -197,24 +200,23 @@
         "branch": "master"
       },
       "source": {
-        "type": ["mcp", "local"],
+        "type": [
+          "mcp",
+          "local"
+        ],
         "path": "/home/zhy/debug/deepin-image-viewer"
       },
       "build": {
         "system": "cmake",
         "framework": "gtest",
         "build_dir": "build",
-        "phases": {
-          "configure": "cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_SAFETYTEST_ARG=\"CMAKE_SAFETYTEST_ARG_ON\" ..",
-          "build": "make -j$(nproc)",
-          "test": "./tests/deepin-image-viewer-test --gtest_output=xml:./report/report_deepin-image-viewer.xml",
-          "coverage": "lcov -d . -c -o coverage.info && genhtml -o html coverage.info",
-          "summary": ""
-        },
         "env": {
           "QT_QPA_PLATFORM": "offscreen"
         },
-        "timeout": 600
+        "timeout": 600,
+        "configure": "cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_SAFETYTEST_ARG=\"CMAKE_SAFETYTEST_ARG_ON\" ..",
+        "build_cmd": "make -j$(nproc)",
+        "test_cmd": "./tests/deepin-image-viewer-test --gtest_output=xml:./report/report_deepin-image-viewer.xml"
       },
       "nodes": 2450
     },
@@ -488,24 +490,23 @@
         "branch": "master"
       },
       "source": {
-        "type": ["mcp", "local"],
+        "type": [
+          "mcp",
+          "local"
+        ],
         "path": "/home/zhy/debug/deepin-calculator"
       },
       "build": {
         "system": "cmake",
         "framework": "gtest",
         "build_dir": "build-ut",
-        "phases": {
-          "configure": "cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_SAFETYTEST_ARG=\"CMAKE_SAFETYTEST_ARG_ON\" ..",
-          "build": "make -j$(nproc)",
-          "test": "./tests/deepin-calculator-test --gtest_output=xml:./report/report_deepin-calculator.xml",
-          "coverage": "lcov -d . -c -o coverage.info && genhtml -o html coverage.info",
-          "summary": ""
-        },
         "env": {
           "QT_QPA_PLATFORM": "offscreen"
         },
-        "timeout": 600
+        "timeout": 600,
+        "configure": "cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_SAFETYTEST_ARG=\"CMAKE_SAFETYTEST_ARG_ON\" ..",
+        "build_cmd": "make -j$(nproc)",
+        "test_cmd": "./tests/deepin-calculator-test --gtest_output=xml:./report/report_deepin-calculator.xml"
       },
       "nodes": 3492
     },

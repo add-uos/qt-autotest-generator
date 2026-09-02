@@ -321,6 +321,22 @@ def save_config(body):
     return True, "已保存（端口等改动重启服务后生效）"
 
 
+def _normalize_project_phases(p):
+    """归一化项目 build：把旧 phases 结构折算回 flat 字段并删除 phases，
+    使表格成为唯一事实来源（flat: configure/build_cmd/test_cmd）。
+    coverage/summary 命令交回 infer_phases 默认（标准化命令，不暴露到表格）。"""
+    b = p.get("build") or {}
+    phases = b.pop("phases", None)
+    if isinstance(phases, dict):
+        if phases.get("configure") and not b.get("configure"):
+            b["configure"] = phases["configure"]
+        if phases.get("build") and not b.get("build_cmd"):
+            b["build_cmd"] = phases["build"]
+        if phases.get("test") and not b.get("test_cmd"):
+            b["test_cmd"] = phases["test"]
+    p["build"] = b
+
+
 def save_registry(body):
     """保存项目注册表 projects.json（结构校验 + 备份）。"""
     if not isinstance(body, dict) or not isinstance(body.get("projects"), list):
@@ -332,6 +348,7 @@ def save_registry(body):
         if p["name"] in names:
             return False, f"项目名重复: {p['name']}"
         names.add(p["name"])
+        _normalize_project_phases(p)  # phases→flat 迁移，统一 schema
         for sec in ("git", "source", "build"):
             if sec in p and not isinstance(p[sec], dict):
                 return False, f"{p['name']}.{sec} 必须是对象"
@@ -370,19 +387,38 @@ def detect_build(path):
     if pros and not system:
         system = "qmake"
         found.append(pros[0].name)
-    # 测试目录推测
-    test_dir = ""
-    for cand in ("autotests", "tests", "test"):
-        if (root / cand).is_dir():
-            test_dir = cand
-            break
+    # 测试目录推测（返回全部候选供前端下拉）
+    test_dir_candidates = [c for c in ("autotests", "tests", "test")
+                          if (root / c).is_dir()]
+    test_dir = test_dir_candidates[0] if test_dir_candidates else ""
     gtest = any((root / test_dir).rglob("*test*.cpp")) if test_dir else False
+    # 构建目录候选：真实存在的 build-* 目录（相对名）
+    build_dir_candidates = sorted(p.name for p in root.glob("build-*") if p.is_dir())
+ # 选一个推荐 build_dir：优先有 report/*.xml（真实测试产物），否则取第一个
+    build_dir = ""
+    for d in build_dir_candidates:
+        if any((root / d).glob("report/*.xml")):
+            build_dir = d
+            break
+    if not build_dir and build_dir_candidates:
+        build_dir = build_dir_candidates[0]
+    # 测试脚本探测（相对项目根）
+    script = ""
+    for cand in ("autotests/run-ut.sh", "tests/run-ut.sh", "autotests/run-tests.sh",
+                 "tests/test-prj-running.sh", "test/test-prj-running.sh"):
+        if (root / cand).is_file():
+            script = cand
+            break
     return {
         "ok": bool(system),
         "msg": "" if system else "未识别到构建文件（CMakeLists.txt/.pro/meson.build/Makefile）",
         "system": system or "custom",
         "framework": "gtest" if gtest else "gtest",
         "test_dir": test_dir,
+        "test_dir_candidates": test_dir_candidates,
+        "build_dir": build_dir,
+        "build_dir_candidates": build_dir_candidates,
+        "script": script,
         "found": found,
         "name_guess": root.name,
     }
@@ -414,9 +450,31 @@ def _project_build_dir_config(name):
     return None
 
 
-def _find_project_script(project_path):
-    """探测项目的测试脚本（tests/test-prj-running.sh）。"""
-    for cand in ("tests/test-prj-running.sh", "test/test-prj-running.sh"):
+def _test_dir_name(name):
+    """从注册表读 build.test_dir（测试目录名，如 autotests），用于派生 build-<test_dir> 候选。"""
+    e = registry_index().get(name) if name else None
+    if e:
+        b = e.get("build") or {}
+        return (b.get("test_dir") or "").strip() or None
+    return None
+
+
+def _find_project_script(project_path, name=None):
+    """探测项目的测试脚本。
+    支持 registry build.script 显式指定；否则按常见命名探测：
+    autotests/run-ut.sh (ATUT 约定)、tests/run-ut.sh、autotests/run-tests.sh、
+    tests/test-prj-running.sh 等。"""
+    e = registry_index().get(name) if name else None
+    if e:
+        s = (e.get("build") or {}).get("script") or ""
+        s = s.strip()
+        if s:
+            f = Path(project_path) / s
+            if f.is_file():
+                return str(f)
+    for cand in ("autotests/run-ut.sh", "tests/run-ut.sh",
+                 "autotests/run-tests.sh", "tests/test-prj-running.sh",
+                 "test/test-prj-running.sh"):
         f = Path(project_path) / cand
         if f.is_file():
             return str(f)
@@ -424,26 +482,55 @@ def _find_project_script(project_path):
 
 
 def find_build_dir(project_path, candidates=None, name=None):
-    """探测项目的构建目录。优先 registry 配置，其次有产物/CMakeCache 的，最后任意存在的。"""
+    """探测项目的构建目录。
+    优先级：① 有真实测试产物(report/*.xml)的目录（避免被旧 build-ut 里空壳
+          ut-summary.json 误导）② 有 ut-summary/CMakeCache 的目录
+          ③ registry 显式 build_dir 配置且目录存在（即使无产物，供 run/build 使用）
+          ④ 任意存在的候选
+    候选有序表：registry 显式 build_dir → build-<test_dir>(ATUT 约定) → 默认候选。
+    这样能识别 run-ut.sh 产出的 build-autotests，也兼容 build-ut 旧约定。"""
     if not project_path:
         return None
     root = Path(project_path).expanduser()
     if not root.is_dir():
         return None
-    # 优先：registry 显式配置
     cfg_dir = _project_build_dir_config(name)
-    if cfg_dir and (root / cfg_dir).is_dir():
-        return cfg_dir
+    test_dir = _test_dir_name(name)
     if candidates is None:
         candidates = load_config().get("test", {}).get(
             "build_dir_candidates", ["build-ut", "build-test", "build-ut-m3", "build"])
-    # 有测试产物或 CMakeCache 的
+    # 候选有序表：显式配置 → build-<test_dir>(ATUT) → 默认候选，去重
+    ordered = []
+    if cfg_dir:
+        ordered.append(cfg_dir)
+    if test_dir:
+        td = f"build-{test_dir}"
+        if td not in ordered:
+            ordered.append(td)
     for d in candidates:
+        if d not in ordered:
+            ordered.append(d)
+    def _has_real_tests(p):
+        return any(p.glob("report/*.xml"))
+    def _has_artifacts(p):
+        return ((p / "ut-summary.json").exists()
+                or _has_real_tests(p)
+                or (p / "CMakeCache.txt").exists())
+    # ① 有真实测试产物(report/*.xml)的目录优先，避免旧空壳 summary 误导
+    for d in ordered:
         p = root / d
-        if p.is_dir() and ((p / "ut-summary.json").exists() or any(p.glob("report/*.xml")) or (p / "CMakeCache.txt").exists()):
+        if p.is_dir() and _has_real_tests(p):
             return d
-    # 退而求其次：任意存在的候选
-    for d in candidates:
+    # ② 有 ut-summary 或 CMakeCache 的目录
+    for d in ordered:
+        p = root / d
+        if p.is_dir() and _has_artifacts(p):
+            return d
+    # ③ registry 显式配置且目录存在（即使无产物，也供 run/build 使用）
+    if cfg_dir and (root / cfg_dir).is_dir():
+        return cfg_dir
+    # ④ 任意存在的候选
+    for d in ordered:
         if (root / d).is_dir():
             return d
     return None
@@ -497,6 +584,38 @@ def parse_gtest_xml(xml_path):
     return suites, failed_cases, timestamp
 
 
+def _find_summary_path(root, build_dir, name=None):
+    """查找 ut-summary.json：优先选中的 build_dir，其次各候选构建目录。
+    适配 summary 与构建产物分布在不同目录的情况（如构建在 build/、
+    summary+coverage 在 build-ut/）。返回 (Path|None, summary_bd)。"""
+    bd = root / build_dir
+    sp = bd / "ut-summary.json"
+    if sp.is_file():
+        return sp, bd
+    cands = load_config().get("test", {}).get(
+        "build_dir_candidates", ["build-ut", "build-test", "build-ut-m3", "build"])
+    cfg = _project_build_dir_config(name)
+    test_dir = _test_dir_name(name)
+    ordered = []
+    if cfg:
+        ordered.append(cfg)
+    if test_dir:
+        td = f"build-{test_dir}"
+        if td not in ordered:
+            ordered.append(td)
+    for d in cands:
+        if d not in ordered:
+            ordered.append(d)
+    for d in ordered:
+        if d == build_dir:
+            continue
+        p = root / d
+        f = p / "ut-summary.json"
+        if f.is_file():
+            return f, p
+    return None, bd
+
+
 def collect_test_results(name):
     """读本地项目测试结果（ut-summary + gtest XML + html 可用性）。
     ut-summary.json 缺失时从 gtest XML 聚合 + coverage.info 解析。返回 dict 或 None。"""
@@ -508,17 +627,22 @@ def collect_test_results(name):
         return {"project": name, "local_path": path, "build_dir": None,
                 "available": False, "reason": "no build dir"}
     bd = Path(path) / build_dir
-    # gtest XML（取最新）
+    # gtest XML（per-target 多文件：聚合全部套件，last_run 取最新时间戳）
     suites, failed_cases, last_run = [], [], None
     report_dir = bd / "report"
     if report_dir.is_dir():
         xmls = sorted(report_dir.glob("*.xml"), key=lambda f: f.stat().st_mtime, reverse=True)
-        if xmls:
-            suites, failed_cases, last_run = parse_gtest_xml(xmls[0])
+        for xf in xmls:
+            s, fc, ts = parse_gtest_xml(xf)
+            suites.extend(s)
+            failed_cases.extend(fc)
+            if ts and (last_run is None or ts > last_run):
+                last_run = ts
     # ut-summary.json（有则用，无则从 gtest XML + coverage.info 现算）
+    # 优先读选中 build_dir 下的；缺失则在候选目录里找（适配 summary 与构建产物分离）
     summary = {}
-    sp = bd / "ut-summary.json"
-    if sp.is_file():
+    sp, summary_bd = _find_summary_path(Path(path), build_dir, name)
+    if sp:
         try:
             summary = json.loads(sp.read_text("utf-8"))
         except (OSError, ValueError):
@@ -531,16 +655,22 @@ def collect_test_results(name):
         total = sum(s["tests"] for s in suites)
         failed = sum(s["failures"] for s in suites)
         tc = {"total": total, "passed": total - failed, "failed": failed}
-    # fallback: 覆盖率从 coverage.info 解析
+    # fallback: 覆盖率从 coverage.info 解析（选中目录或 summary 所在目录）
     if not lc or not fc:
         info = _parse_lcov_info_summary(bd / "coverage.info")
+        if info is None and summary_bd != bd:
+            info = _parse_lcov_info_summary(summary_bd / "coverage.info")
         if info:
             if not lc:
                 lc = info["line"]
             if not fc:
                 fc = info["function"]
-    # coverage html
+    # coverage html（优先选中目录，其次 summary 所在目录）
     html_dir = bd / "html"
+    if not (html_dir.is_dir() and (html_dir / "index-sort-f.html").is_file()) and summary_bd != bd:
+        alt = summary_bd / "html"
+        if alt.is_dir() and (alt / "index-sort-f.html").is_file():
+            html_dir = alt
     cov_avail = html_dir.is_dir() and (html_dir / "index-sort-f.html").is_file()
     return {
         "project": name,
@@ -596,13 +726,22 @@ def infer_phases(project_path, build_dir, project_name):
         "configure": "cmake -DCMAKE_BUILD_TYPE=Debug ..",
         "build": f"make -j{min(nproc, 16)}",
     }
-    # test: 探测测试二进制
+    # test: 探测测试二进制（ATUT 约定 <test_dir>/src/test_*，兼容 tests/、build 根 ut_*、
+    # 以及 deepin-image-viewer 的 <name>-test 后缀命名）
+    def _is_test_bin(f):
+        nm = f.name
+        return (nm.startswith("test_") or nm.endswith("-test")
+                or nm.endswith("_test"))
     test_cmd = ""
-    tests_dir = build_path / "tests"
-    if tests_dir.is_dir():
-        for f in tests_dir.iterdir():
-            if f.is_file() and os.access(f, os.X_OK) and ("-test" in f.name or f.name.startswith("ut_")):
-                test_cmd = f"./tests/{f.name} --gtest_output=xml:./report/report_{project_name}.xml"
+    test_dir = _test_dir_name(project_name) or "tests"
+    for cand_dir in (f"{test_dir}/src", "tests", "test"):
+        d = build_path / cand_dir
+        if d.is_dir():
+            for f in sorted(d.iterdir()):
+                if f.is_file() and os.access(f, os.X_OK) and _is_test_bin(f):
+                    test_cmd = f"./{cand_dir}/{f.name} --gtest_output=xml:./report/report_{project_name}.xml"
+                    break
+            if test_cmd:
                 break
     if not test_cmd and (build_path / "CTestTestfile.cmake").exists():
         test_cmd = "ctest --output-on-failure"
@@ -722,6 +861,37 @@ class TestRunner:
         if not path:
             self._finish(name, "error", result={"error": "no local source path"})
             return
+        e = registry_index().get(name) or {}
+        build_cfg = e.get("build") or {}
+        env = dict(os.environ)
+        env.update(build_cfg.get("env") or {})
+        timeout = build_cfg.get("timeout") or self.default_timeout
+        # 方案A：配了 build.script 时所有模式走脚本 --from-step 映射
+        # （脚本自己最懂项目，旁路服务端推断的 cmake/make/gtest 命令）
+        script = (build_cfg.get("script") or "").strip()
+        if script:
+            sp = Path(path) / script
+            if not sp.is_file():
+                self._finish(name, "failed", result={"error": f"脚本不存在: {script}"})
+                return
+            # script 模式 = from-step 1（先 clean 再全跑）；其余按步骤映射
+            # run-ut.sh 步骤: 1 Prepare 2 Configure 3 Compile 4 Test 5 Coverage 6 Summary
+            from_step = {"script": 1, "full": 2, "build+test": 3,
+                         "test-only": 4, "test+coverage": 4,
+                         "coverage-only": 5}.get(mode, 2)
+            cmd = f"bash {sp}"
+            if from_step != 1:
+                cmd += f" --from-step {from_step}"
+            self._update(name, state="running", phase="script", progress="",
+                         log_tail=f"$ {cmd}")
+            ok = self._exec(name, cmd, path, env, timeout, "script")
+            with self.lock:
+                r = self.running.get(name)
+                if r and r["state"] == "stopped":
+                    return
+            res = collect_test_results(name)
+            self._finish(name, "done" if ok else "failed", result=res)
+            return
         build_dir = find_build_dir(path, name=name) or _project_build_dir_config(name) or "build-ut"
         bd = Path(path) / build_dir
         # test-only / coverage-only 模式要求 build_dir 已存在
@@ -730,24 +900,19 @@ class TestRunner:
                 "error": f"构建目录 {build_dir} 不存在，请先用 full 或 build+test 模式编译"})
             return
         phases = _get_build_phases(name, path, build_dir)
-        e = registry_index().get(name) or {}
-        build_cfg = e.get("build") or {}
-        env = dict(os.environ)
-        env.update(build_cfg.get("env") or {})
-        timeout = build_cfg.get("timeout") or self.default_timeout
 
         def clean(*subs):
             for sub in subs:
                 shutil.rmtree(bd / sub, ignore_errors=True)
 
         for phase in phase_seq:
-            # script 模式：直接跑项目脚本（tests/test-prj-running.sh）
+            # script 模式：直接跑项目脚本（autotests/run-ut.sh 等）
             if phase == "script":
-                script = _find_project_script(path)
+                script = _find_project_script(path, name)
                 if not script:
                     self._finish(name, "failed", result={
                         "phase": "script",
-                        "error": "未找到 tests/test-prj-running.sh 脚本"})
+                        "error": "未找到项目测试脚本（autotests/run-ut.sh 等）"})
                     return
                 cmd = f"bash {script}"
                 self._update(name, state="running", phase="script", progress="",

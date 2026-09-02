@@ -254,7 +254,8 @@ button{font-family:inherit}
 .dash-drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:84;opacity:0;pointer-events:none;transition:opacity .3s}
 .dash-drawer-overlay.open{opacity:1;pointer-events:auto}
 .dash-drawer-head{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border-soft)}
-.dash-drawer-body{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:14px}
+.dash-drawer-body{flex:1;overflow-y:auto;min-height:0;padding:14px 16px;display:flex;flex-direction:column;gap:14px}
+.dash-drawer-body>*{flex-shrink:0}
 .pie-wrap{display:flex;align-items:center;gap:14px}
 .pie{width:110px;height:110px;border-radius:50%;flex:none}
 .pie-legend{display:flex;flex-direction:column;gap:4px;font-size:calc(var(--fs)*.786)}
@@ -292,6 +293,17 @@ button{font-family:inherit}
 .test-fail .fn{color:var(--exempt);font-weight:600}
 .test-fail .msg{color:var(--text-dim);white-space:pre-wrap;word-break:break-word;max-height:120px;overflow-y:auto}
 .cov-head{display:flex;align-items:center;gap:8px;margin-top:4px}.cov-head span{flex:1}.coverage-iframe{width:100%;height:min(520px,60vh);border:1px solid var(--border-soft);border-radius:10px;background:var(--bg)}
+.cov-path{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'JetBrains Mono',monospace;font-size:calc(var(--fs)*.714);color:var(--text-muted);min-width:0}
+.collapsible{border:1px solid var(--border-soft);border-radius:9px;background:var(--bg);overflow:hidden}
+.collapsible-head{display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;font-size:calc(var(--fs)*.929);font-weight:600;color:var(--text);user-select:none;transition:background .15s}
+.collapsible-head:hover{background:var(--bg-hover)}
+.collapsible-head .ctitle{flex:1}
+.collapsible-head .chev{width:16px;height:16px;transition:transform .2s;flex:none;color:var(--text-muted)}
+.collapsible:not(.collapsed) .collapsible-head .chev{transform:rotate(90deg)}
+.collapse-btn{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:none;border-radius:7px;background:transparent;color:var(--text-muted);cursor:pointer;flex:none}
+.collapse-btn:hover{background:var(--bg-elev2);color:var(--text)}
+.collapsible-body{display:flex;flex-direction:column;gap:6px;padding:0 12px 10px}
+.collapsible.collapsed .collapsible-body{display:none}
 .test-card-row{display:flex;align-items:center;gap:6px;font-size:calc(var(--fs)*.643);color:var(--text-muted);font-variant-numeric:tabular-nums}
 .test-card-row .tc-dot{width:6px;height:6px;border-radius:50%;flex:none}
 .test-card-row .tc-dot.ok{background:var(--high)}
@@ -361,6 +373,24 @@ button{font-family:inherit}
 .cfg-detect-btn{white-space:nowrap}
 .cfg-row-off .cfg-proj-name{opacity:.45;text-decoration:line-through}
 .cfg-toast-ok{color:var(--accent)}
+.cfg-expand-btn{font-size:calc(var(--fs)*1.07);line-height:1;padding:0 6px}
+.cfg-expand-row{background:var(--bg-elev)}
+.cfg-expand-inner{padding:0}
+.cfg-panel{padding:12px 16px 14px;border:1px solid var(--border);border-radius:0 0 8px 8px;background:var(--bg-elev);display:flex;flex-direction:column;gap:10px}
+.cfg-panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-bottom:6px;border-bottom:1px solid var(--border-soft)}
+.cfg-panel-title{font-size:calc(var(--fs)*.857);font-weight:600;color:var(--text)}
+.cfg-panel-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px 18px}
+.cfg-cfgfield{display:grid;grid-template-columns:78px 1fr;align-items:center;gap:8px}
+.cfg-cfgfield label{font-size:calc(var(--fs)*.786);color:var(--text-muted);text-align:right}
+.cfg-cfgfield input[type=text],.cfg-cfgfield select{background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:5px 8px;color:var(--text);font-size:calc(var(--fs)*.821);outline:none}
+.cfg-cfgfield input:focus,.cfg-cfgfield select:focus{border-color:var(--accent)}
+.cfg-cfgfield .cfg-val{font-family:var(--font-mono);font-size:calc(var(--fs)*.821);color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cfg-cfgfield .cfg-path-ctrl{display:flex;gap:4px}
+.cfg-cfgfield .cfg-path-ctrl input{flex:1}
+.cfg-cfgfield-wide{grid-column:1 / -1}
+.cfg-cfgfield-wide .cfg-val,.cfg-cfgfield-wide input{font-family:var(--font-mono)}
+.cfg-panel-actions{display:flex;justify-content:flex-end;gap:8px;padding-top:6px;border-top:1px solid var(--border-soft)}
+.cfg-check{width:18px;height:18px}
 
 /* ═══ 目录浏览对话框 ═══ */
 .fs-list{max-height:52vh;min-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;background:var(--bg);padding:4px}

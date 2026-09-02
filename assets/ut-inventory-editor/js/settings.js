@@ -43,7 +43,7 @@ function renderCfgRows() {
     const tb = $('#cfg-tbody');
     if (!CFG) { tb.innerHTML = ''; return; }
     tb.innerHTML = '';
-    CFG.projects.projects.forEach(p => tb.appendChild(cfgRow(p)));
+    CFG.projects.projects.forEach(p => { const [tr, expTr] = cfgRow(p); tb.appendChild(tr); tb.appendChild(expTr); });
     $('#cfg-proj-count').textContent = `(${CFG.projects.projects.length} 项)`;
 }
 
@@ -65,56 +65,125 @@ function cfgRow(p) {
 <td><select data-f="build_system">
   ${['cmake', 'qmake', 'meson', 'make', 'custom'].map(s => `<option value="${s}" ${(b.system || 'cmake') === s ? 'selected' : ''}>${s}</option>`).join('')}
 </select></td>
-<td><input type="text" data-f="test_cmd" value="${escAttr(b.test_cmd || '')}" placeholder="空=ctest 默认"/></td>
+<td><input type="text" data-f="test_dir" value="${escAttr(b.test_dir || '')}" placeholder="autotests" style="width:64px"/></td>
+<td><input type="text" data-f="build_dir" value="${escAttr(b.build_dir || '')}" placeholder="build-ut" style="width:80px"/></td>
+<td class="cfg-path"><div style="display:flex;gap:4px"><input type="text" data-f="script" value="${escAttr(b.script || '')}" placeholder="autotests/run-ut.sh"/><button class="btn btn-sm btn-ghost fs-pick-script-btn" title="浏览选择测试脚本">…</button></div></td>
+<td><input type="text" data-f="test_cmd" value="${escAttr(b.test_cmd || '')}" placeholder="空=默认/脚本"/></td>
 <td style="white-space:nowrap">
   <button class="btn btn-sm btn-ghost cfg-detect-btn" title="按本地路径探测构建系统">🔍</button>
   <button class="btn btn-sm btn-ghost cfg-del-btn" title="移除此行（保存后生效）" style="color:var(--exempt)">✕</button>
+  <button class="btn btn-sm btn-ghost cfg-expand-btn" title="展开编辑面板">⋯</button>
 </td>`;
-    // 双向绑定到 CFG.projects.projects（删除时按对象身份定位，避免 idx 失效）
-    tr.querySelectorAll('[data-f]').forEach(el => {
-        const f = el.dataset.f;
-        const handler = () => {
-            let v = el.type === 'checkbox' ? el.checked : el.value;
-            if (f === 'enabled') { p.enabled = v; tr.classList.toggle('cfg-row-off', !v); }
-            else if (f === 'size') p.size = v.toUpperCase().slice(0, 2);
-            else if (f === 'branch') { p.git = p.git || {}; p.git.branch = v; }
-            else if (f === 'source_type') { p.source = p.source || {}; p.source.type = v; }
-            else if (f === 'path') { p.source = p.source || {}; p.source.path = v.trim(); }
-            else if (f === 'build_system') { p.build = p.build || {}; p.build.system = v; }
-            else if (f === 'test_cmd') { p.build = p.build || {}; p.build.test_cmd = v.trim(); }
-        };
-        el.onchange = handler;
-        if (el.type === 'text') el.oninput = handler;
-    });
-    // 删除行（按对象身份定位）
-    tr.querySelector('.cfg-del-btn').onclick = () => {
+    // 展开编辑面板：多列带标签，输入框更宽敞
+    const expTr = document.createElement('tr');
+    expTr.className = 'cfg-expand-row hidden';
+    expTr.innerHTML = `<td colspan="12" class="cfg-expand-inner">
+      <div class="cfg-panel">
+        <div class="cfg-panel-head">
+          <span class="cfg-panel-title">📝 <b>${escAttr(p.name)}</b> — 编辑项目配置</span>
+          <button class="btn btn-sm btn-ghost cfg-panel-close" title="收起">✕</button>
+        </div>
+        <div class="cfg-panel-grid">
+          <div class="cfg-cfgfield"><label>项目名</label><span class="cfg-val">${escAttr(p.name)}</span></div>
+          <div class="cfg-cfgfield"><label>启用</label><input type="checkbox" data-f="enabled" ${p.enabled !== false ? 'checked' : ''} class="cfg-check"/></div>
+          <div class="cfg-cfgfield"><label>规模</label><input type="text" data-f="size" value="${escAttr(p.size || '?')}"/></div>
+          <div class="cfg-cfgfield"><label>分支</label><input type="text" data-f="branch" value="${escAttr(git.branch || 'master')}"/></div>
+          <div class="cfg-cfgfield"><label>来源</label><select data-f="source_type">${['mcp','local'].map(t=>`<option value="${t}" ${src.type===t?'selected':''}>${t}</option>`).join('')}</select></div>
+          <div class="cfg-cfgfield"><label>本地路径</label><div class="cfg-path-ctrl"><input type="text" data-f="path" value="${escAttr(src.path || '')}" placeholder="/home/you/code/project"/><button class="btn btn-sm btn-ghost fs-pick-btn">…</button></div></div>
+          <div class="cfg-cfgfield"><label>构建系统</label><select data-f="build_system">${['cmake','qmake','meson','make','custom'].map(s=>`<option value="${s}" ${(b.system||'cmake')===s?'selected':''}>${s}</option>`).join('')}</select></div>
+          <div class="cfg-cfgfield"><label>测试目录</label><input type="text" data-f="test_dir" value="${escAttr(b.test_dir || '')}" placeholder="autotests"/></div>
+          <div class="cfg-cfgfield"><label>构建目录</label><input type="text" data-f="build_dir" value="${escAttr(b.build_dir || '')}" placeholder="build-ut"/></div>
+          <div class="cfg-cfgfield"><label>测试脚本</label><div class="cfg-path-ctrl"><input type="text" data-f="script" value="${escAttr(b.script || '')}" placeholder="autotests/run-ut.sh"/><button class="btn btn-sm btn-ghost fs-pick-script-btn">…</button></div></div>
+          <div class="cfg-cfgfield cfg-cfgfield-wide"><label>测试命令</label><input type="text" data-f="test_cmd" value="${escAttr(b.test_cmd || '')}" placeholder="空=默认/脚本"/></div>
+        </div>
+        <div class="cfg-panel-actions">
+          <button class="btn btn-sm btn-ghost cfg-detect-btn">🔍 探测构建</button>
+          <button class="btn btn-sm btn-ghost cfg-del-btn" style="color:var(--exempt)">✕ 删除</button>
+        </div>
+      </div>
+    </td>`;
+    // 通用双向绑定（紧凑行 + 面板共用同一套逻辑，绑定到同一个 p 对象）
+    function bindDataF(row) {
+        row.querySelectorAll('[data-f]').forEach(el => {
+            const f = el.dataset.f;
+            const handler = () => {
+                let v = el.type === 'checkbox' ? el.checked : el.value;
+                if (f === 'enabled') { p.enabled = v; tr.classList.toggle('cfg-row-off', !v); }
+                else if (f === 'size') p.size = v.toUpperCase().slice(0, 2);
+                else if (f === 'branch') { p.git = p.git || {}; p.git.branch = v; }
+                else if (f === 'source_type') { p.source = p.source || {}; p.source.type = v; }
+                else if (f === 'path') { p.source = p.source || {}; p.source.path = v.trim(); }
+                else if (f === 'build_system') { p.build = p.build || {}; p.build.system = v; }
+                else if (f === 'test_dir') { p.build = p.build || {}; p.build.test_dir = v.trim(); }
+                else if (f === 'build_dir') { p.build = p.build || {}; p.build.build_dir = v.trim(); }
+                else if (f === 'script') { p.build = p.build || {}; p.build.script = v.trim(); }
+                else if (f === 'test_cmd') { p.build = p.build || {}; p.build.test_cmd = v.trim(); }
+            };
+            el.onchange = handler;
+            if (el.type === 'text') el.oninput = handler;
+        });
+    }
+    bindDataF(tr);
+    bindDataF(expTr);
+    // 展开/收起：同一时刻只展开一个面板
+    function expandPanel(show) {
+        expTr.classList.toggle('hidden', !show);
+    }
+    tr.querySelector('.cfg-expand-btn').onclick = e => {
+        e.stopPropagation();
+        const wasOpen = !expTr.classList.contains('hidden');
+        // 关闭所有其它面板
+        tr.closest('table').querySelectorAll('.cfg-expand-row').forEach(r => r.classList.add('hidden'));
+        if (!wasOpen) expandPanel(true);
+    };
+    expTr.querySelector('.cfg-panel-close').onclick = e => { e.stopPropagation(); expandPanel(false); };
+    // 删除行（紧凑行 + 面板按钮共用）
+    function doDel() {
         const i = CFG.projects.projects.indexOf(p);
         if (i >= 0) CFG.projects.projects.splice(i, 1);
-        tr.remove();
+        tr.remove(); expTr.remove();
         $('#cfg-proj-count').textContent = `(${CFG.projects.projects.length} 项)`;
         toast(`已移除 ${p.name}（点「保存项目表」生效）`);
-    };
-    // 浏览选择目录
-    const pathInput = tr.querySelector('[data-f=path]');
-    tr.querySelector('.fs-pick-btn').onclick = () => openFsPicker(p.source?.path || '', v => {
+    }
+    tr.querySelector('.cfg-del-btn').onclick = doDel;
+    expTr.querySelector('.cfg-del-btn').onclick = doDel;
+    // 浏览选择目录（紧凑行 + 面板）
+    function syncPathInputs(v) {
         p.source = p.source || {}; p.source.type = 'local'; p.source.path = v;
-        pathInput.value = v;
-    });
-    // 探测
-    tr.querySelector('.cfg-detect-btn').onclick = async () => {
+        tr.querySelectorAll('[data-f=path]').forEach(el => el.value = v);
+    }
+    tr.querySelector('.fs-pick-btn').onclick = () => openFsPicker(p.source?.path || '', syncPathInputs);
+    expTr.querySelector('.fs-pick-btn').onclick = () => openFsPicker(p.source?.path || '', syncPathInputs);
+    // 浏览选择测试脚本（file 模式，折算成相对项目根路径）
+    function syncScriptInputs(v) {
+        const base = (p.source?.path || '').replace(/\/$/, '');
+        let rel = v.startsWith(base + '/') ? v.slice(base.length + 1) : v;
+        p.build = p.build || {}; p.build.script = rel;
+        tr.querySelectorAll('[data-f=script]').forEach(el => el.value = rel);
+    }
+    tr.querySelector('.fs-pick-script-btn').onclick = () => openFsPicker(p.source?.path || '', syncScriptInputs, {file: true});
+    expTr.querySelector('.fs-pick-script-btn').onclick = () => openFsPicker(p.source?.path || '', syncScriptInputs, {file: true});
+    // 探测：一键填满 build_system/test_dir/build_dir/script（同步到两行的输入框）
+    function doDetect() {
         const path = (p.source?.path || '').trim();
         if (!path) { toast('先填本地路径再探测', 'warn'); return; }
-        try {
-            const r = await dashJson('/api/config/detect', { method: 'POST', body: JSON.stringify({ path }) });
+        dashJson('/api/config/detect', { method: 'POST', body: JSON.stringify({ path }) }).then(r => {
             if (!r.ok) { toast('探测失败: ' + r.msg, 'err'); return; }
             p.build = p.build || {};
             p.build.system = r.system;
             if (r.test_dir) p.build.test_dir = r.test_dir;
-            tr.querySelector('[data-f=build_system]').value = r.system;
-            toast(`🔍 ${r.name_guess}: ${r.system}${r.test_dir ? ' · ' + r.test_dir : ''} (${(r.found || []).join(', ')})`);
-        } catch (e) { toast('探测失败: ' + e.message, 'err'); }
-    };
-    return tr;
+            if (r.build_dir) p.build.build_dir = r.build_dir;
+            if (r.script) p.build.script = r.script;
+            tr.querySelectorAll('[data-f=build_system]').forEach(el => el.value = r.system);
+            if (r.test_dir) tr.querySelectorAll('[data-f=test_dir]').forEach(el => el.value = r.test_dir);
+            if (r.build_dir) tr.querySelectorAll('[data-f=build_dir]').forEach(el => el.value = r.build_dir);
+            if (r.script) tr.querySelectorAll('[data-f=script]').forEach(el => el.value = r.script);
+            toast(`🔍 ${r.name_guess}: ${r.system} · ${r.build_dir || '-'} · ${r.script || '-'} (${(r.found || []).join(', ')})`);
+        }).catch(e => toast('探测失败: ' + e.message, 'err'));
+    }
+    tr.querySelector('.cfg-detect-btn').onclick = doDetect;
+    expTr.querySelector('.cfg-detect-btn').onclick = doDetect;
+    return [tr, expTr];
 }
 
 async function saveGlobalCfg() {
@@ -193,7 +262,7 @@ function initSettingsEvents() {
     $('#cfg-size-mode').onchange = e => localStorage.setItem('utie-size-mode', e.target.value);
     // 目录浏览对话框
     $('#fs-cancel').onclick = fsClose;
-    $('#fs-confirm').onclick = () => { const picked = fsPick.selected ? fsPick.path + '/' + fsPick.selected : fsPick.path; if (fsPick.cb && picked) fsPick.cb(picked); fsClose(); };
+    $('#fs-confirm').onclick = () => { if (fsPick.mode === 'file' && !fsPick.selected) { toast('请先选择一个文件', 'warn'); return; } const picked = fsPick.selected ? fsPick.path + '/' + fsPick.selected : fsPick.path; if (fsPick.cb && picked) fsPick.cb(picked); fsClose(); };
     $('#fs-home').onclick = () => fsLoad('~');
     $('#fs-up').onclick = () => fsLoad((fsPick.path || '/') + '/..');
     $('#fs-show-hidden').onchange = e => { fsPick.showHidden = e.target.checked; localStorage.setItem('utie-fs-hidden', fsPick.showHidden ? '1' : '0'); renderFsList(); };
@@ -202,11 +271,13 @@ function initSettingsEvents() {
 }
 
 // ═══ 目录浏览对话框 ═══
-const fsPick = { path: '', selected: '', cb: null, entries: [], showHidden: localStorage.getItem('utie-fs-hidden') === '1' };
+const fsPick = { path: '', selected: '', cb: null, entries: [], mode: 'dir', showHidden: localStorage.getItem('utie-fs-hidden') === '1' };
 
-async function openFsPicker(startPath, onPick) {
+async function openFsPicker(startPath, onPick, opts = {}) {
     if (!S.dash.server) { toast('目录浏览需要伴随服务运行中', 'warn'); return; }
     fsPick.cb = onPick;
+    fsPick.mode = opts.file ? 'file' : 'dir';
+    $('#fs-picker-modal').querySelector('h3').textContent = opts.file ? '📄 选择测试脚本' : '📁 选择项目本地路径';
     $('#fs-show-hidden').checked = fsPick.showHidden;
     $('#fs-picker-modal').classList.remove('hidden');
     fsLoad(startPath || '~');
@@ -241,8 +312,9 @@ function renderFsList() {
             row.classList.add('selected');
             fsPick.selected = e.name;
         };
-        // 双击进入目录
+        // 双击：目录→进入；文件(file 模式)→直接确认选择
         if (e.dir) row.ondblclick = () => fsLoad(fsPick.path + '/' + e.name);
+        else if (fsPick.mode === 'file') row.ondblclick = () => { if (fsPick.cb) fsPick.cb(fsPick.path + '/' + e.name); fsClose(); };
         list.appendChild(row);
     });
 }

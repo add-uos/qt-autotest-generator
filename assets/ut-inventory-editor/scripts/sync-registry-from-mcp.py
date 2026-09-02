@@ -110,6 +110,7 @@ def build_default_entry(gh, mcp, nodes, size, branch, defaults):
         "source": {"type": "mcp", "path": ""},
         "build": {"system": "cmake", "framework": "gtest", "configure": "",
                   "build_cmd": "", "test_cmd": "",
+                  "test_dir": defaults.get("test_dir", "autotests"),
                   "env": {"QT_QPA_PLATFORM": "offscreen"}, "timeout": 600},
     }
 
