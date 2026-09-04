@@ -35,6 +35,7 @@ _SCRIPT_FILES = {
     "verify_build": "verify-build.py",
     "self_check_structural": "self-check-structural.py",
     "utq": "utq.py",
+    "test_review": "test-review.py",
 }
 
 
@@ -128,6 +129,11 @@ def self_check_structural():
 @pytest.fixture(scope="session")
 def utq():
     return _load_module("utq", "utq.py")
+
+
+@pytest.fixture(scope="session")
+def test_review():
+    return _load_module("test_review", "test-review.py")
 
 
 @pytest.fixture(scope="session")

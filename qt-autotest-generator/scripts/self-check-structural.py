@@ -55,6 +55,8 @@ EXPECT_CALL_RE = re.compile(r'EXPECT_CALL')
 NO_FATAL_RE = re.compile(r'EXPECT_NO_FATAL_FAILURE')
 NO_THROW_RE = re.compile(r'EXPECT_NO_THROW')
 EXPECT_BOOL_RE = re.compile(r'EXPECT_TRUE\(|EXPECT_FALSE\(')
+EXPECT_TRIVIAL_RE = re.compile(r'\b(?:EXPECT|ASSERT)_(?:TRUE|FALSE)\s*\(\s*(?:true|false)\s*\)')
+ASSERT_MACRO_RE = re.compile(r'\b(?:EXPECT|ASSERT)_\w+')
 EXPECT_ANY_RE = re.compile(r'EXPECT_')
 
 INHERIT_TEST_RE = re.compile(r'class\s+\w+\s*:\s*public\s+::testing::Test')
@@ -174,9 +176,14 @@ def check_naming(blocks):
     return v
 
 
+def _has_other_assert(text):
+    """剔除字面量布尔断言后，行内是否还残留其他断言宏。"""
+    return bool(ASSERT_MACRO_RE.search(text))
+
+
 def _classify_assert_line(line):
-    """返回行内断言计数增量： (expect, nofatal, gmock, bool_only, other)。"""
-    expect = nofatal = gmock = bool_only = other = 0
+    """返回行内断言计数增量： (expect, nofatal, gmock, bool_only, other, trivial)。"""
+    expect = nofatal = gmock = bool_only = other = trivial = 0
     if EXPECT_CALL_RE.search(line):
         gmock += 1
     if NO_FATAL_RE.search(line):
@@ -185,11 +192,16 @@ def _classify_assert_line(line):
     if EXPECT_ANY_RE.search(line) and not EXPECT_CALL_RE.search(line) \
             and not NO_FATAL_RE.search(line) and not NO_THROW_RE.search(line):
         expect += 1
-        if EXPECT_BOOL_RE.search(line):
+        # 字面量布尔（EXPECT_TRUE(true)/ASSERT_FALSE(false)）是占位断言，不算真验证；
+        # 同行还有其他断言宏时不计 trivial（保持逐行单断言模型）
+        if EXPECT_TRIVIAL_RE.search(line) and not _has_other_assert(EXPECT_TRIVIAL_RE.sub("", line)):
+            trivial += 1
+            bool_only += 1
+        elif EXPECT_BOOL_RE.search(line):
             bool_only += 1
         else:
             other += 1
-    return expect, nofatal, gmock, bool_only, other
+    return expect, nofatal, gmock, bool_only, other, trivial
 
 
 def check_assertion(blocks):
@@ -199,10 +211,10 @@ def check_assertion(blocks):
         body = b["body"]
         case = b["case"]
         sl = b["start_line"]
-        expect = nofatal = gmock = bool_only = other = 0
+        expect = nofatal = gmock = bool_only = other = trivial = 0
         for line in body.split('\n'):
-            e, nf, gm, bo, ot = _classify_assert_line(line)
-            expect += e; nofatal += nf; gmock += gm; bool_only += bo; other += ot
+            e, nf, gm, bo, ot, tv = _classify_assert_line(line)
+            expect += e; nofatal += nf; gmock += gm; bool_only += bo; other += ot; trivial += tv
 
         if expect == 0 and nofatal == 0 and gmock == 0:
             v.append(_v("assertion", "error", "空断言（无任何 EXPECT_*）",
@@ -216,8 +228,12 @@ def check_assertion(blocks):
         elif expect < 2:
             v.append(_v("assertion", "error", f"有效断言不足（{expect}<2）",
                         case=case, line=sl, rule="LOW_ASSERT"))
-        # SOLE_BOOL：唯一有效断言为布尔期望（可疑，warning）
-        if bool_only > 0 and other == 0 and expect > 0:
+        # SOLE_BOOL：唯一有效断言为布尔期望（可疑，warning）；
+        # TRIVIAL：唯一有效断言为字面量布尔（EXPECT_TRUE(true)），占位断言，critical
+        if expect > 0 and other == 0 and trivial > 0:
+            v.append(_v("assertion", "error", "唯一有效断言为字面量布尔（EXPECT_TRUE(true)），未验证任何行为",
+                        case=case, line=sl, rule="TRIVIAL_ASSERT"))
+        elif bool_only > 0 and other == 0 and expect > 0:
             v.append(_v("assertion", "warning", "唯一有效断言为布尔期望（复核源码分支）",
                         case=case, line=sl, rule="SOLE_BOOL_ASSERT"))
     return v

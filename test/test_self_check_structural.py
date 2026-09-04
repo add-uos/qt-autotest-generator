@@ -197,6 +197,33 @@ class TestAssertion:
         bool_v = next(x for x in v if x["rule"] == "SOLE_BOOL_ASSERT")
         assert bool_v["severity"] == "warning"
 
+    def test_trivial_assert_only(self, self_check_structural):
+        # 唯一断言为字面量布尔 → TRIVIAL_ASSERT（critical），且不再报 SOLE_BOOL
+        body = "    dialog->updateDeviceList();\n    EXPECT_TRUE(true);\n"
+        v = self_check_structural.check_assertion(self._blk(body))
+        rules = {x["rule"] for x in v}
+        assert "TRIVIAL_ASSERT" in rules and "SOLE_BOOL_ASSERT" not in rules
+        tv = next(x for x in v if x["rule"] == "TRIVIAL_ASSERT")
+        assert tv["severity"] == "error"
+
+    def test_two_trivial_asserts(self, self_check_structural):
+        # 两条字面量布尔凑数绕过 LOW_ASSERT（expect=2）→ 仍被 TRIVIAL_ASSERT 抓住
+        body = "    EXPECT_TRUE(true);\n    EXPECT_FALSE(false);\n"
+        v = self_check_structural.check_assertion(self._blk(body))
+        rules = {x["rule"] for x in v}
+        assert "TRIVIAL_ASSERT" in rules and "LOW_ASSERT" not in rules
+
+    def test_assert_true_literal_counts_as_trivial(self, self_check_structural):
+        # ASSERT_ 前缀变体同样识别
+        body = "    ASSERT_TRUE(true);\n    ASSERT_EQ(1, x());\n    EXPECT_NE(2, y());\n"
+        v = self_check_structural.check_assertion(self._blk(body))
+        assert "TRIVIAL_ASSERT" not in {x["rule"] for x in v}
+
+    def test_trivial_plus_real_no_trivial_rule(self, self_check_structural):
+        # 字面量布尔混有真实断言 → 不报 TRIVIAL/SOLE_BOOL（真实断言占主导）
+        body = "    EXPECT_TRUE(true);\n    EXPECT_EQ(1, obj->val());\n    EXPECT_NE(2, obj->other());\n"
+        assert self_check_structural.check_assertion(self._blk(body)) == []
+
     def test_expect_call_plus_valid_passes(self, self_check_structural):
         # EXPECT_CALL + 2 个有效断言 → 通过（CALL 不计入但有效断言够）
         body = "    EXPECT_CALL(mock, foo());\n    EXPECT_EQ(1, 1);\n    EXPECT_EQ(2, 2);\n"

@@ -138,6 +138,7 @@ uncovered_functions = snapshot["uncovered_functions"]
 - **唯一断言禁令**：扫描以 `EXPECT_NO_FATAL_FAILURE(...)` 为**唯一**断言的用例（用例体内无其他有效 `EXPECT_*`）→ 违规，逻辑全错也通过，**最危险**
 - **空断言检测**：用例调用了待测方法但函数体内无任何有效 `EXPECT_*`（只有 `stub.set_lamda`、`EXPECT_CALL` 或纯调用）→ 违规，等于没测
 - **纯 gMock 期望禁令**：用例只有 `EXPECT_CALL`/`ON_CALL` 而无任何传统 `EXPECT_EQ`/`EXPECT_TRUE`/`EXPECT_FALSE` 等断言验证返回值/对象状态 → 违规（gMock 验证了依赖被调用，但未验证 SUT 自身行为）
+- **字面量布尔断言禁令**：用例唯一有效断言为 `EXPECT_TRUE(true)` / `ASSERT_FALSE(false)` 等字面量布尔 → 违规（critical，与空断言同责：占位断言未验证任何行为）；混有真实断言时不报，非字面量布尔归下一条“布尔期望边”只作可疑警告
 - **布尔期望边**：单独 `EXPECT_TRUE(ret);` / `EXPECT_FALSE(ret);` 作唯一有效断言且无注释说明期望分支 → 标记可疑（不强判违规，但流转 test-writer.md 复核是否对应源码分支期望）
 - **副作用断言缺失**：方法有写状态/发信号/调下游的副作用（图谱 `trace_path` 出向调用或源码 `emit` 显示），但用例只断言返回值、无 `QSignalSpy.count()` / stub 调用计数 / 对象状态前后对比 → 违规
 - **返回值断言缺失**：方法有返回值（图谱 `get_code_snippet` 返回类型非 `void`）但用例未断言返回值的具体期望值（只断言不崩溃或无任何返回值检查）→ 违规
@@ -180,6 +181,21 @@ awk '
     if (/EXPECT_/ && !/EXPECT_TRUE\(/ && !/EXPECT_FALSE\(/ && !/EXPECT_NO_FATAL_FAILURE/ && !/EXPECT_NO_THROW/ && !/EXPECT_CALL/) other++
     if (opened && depth<=0) {
       if (bool_only>0 && other==0) print "SOLE_BOOL_ASSERT: " name
+      in_block=0
+    }
+  }
+' "$TEST_FILE"
+
+# 5. 字面量布尔断言（EXPECT_TRUE(true) 等）——字面量不计入 other；仅字面量 → TRIVIAL_ASSERT
+awk '
+  /^TEST_[FP]\(/ { in_block=1; name=$0; trivial=0; other=0; depth=0; opened=0 }
+  in_block {
+    n=gsub(/{/, "{"); d=gsub(/}/, "}"); depth += n - d
+    if (n>0) opened=1
+    if (/\b(EXPECT|ASSERT)_(TRUE|FALSE)\s*\(\s*(true|false)\s*\)/) trivial++
+    else if (/\b(EXPECT|ASSERT)_/ && !/EXPECT_NO_FATAL_FAILURE/ && !/EXPECT_NO_THROW/ && !/EXPECT_CALL/) other++
+    if (opened && depth<=0) {
+      if (trivial>0 && other==0) print "TRIVIAL_ASSERT: " name
       in_block=0
     }
   }

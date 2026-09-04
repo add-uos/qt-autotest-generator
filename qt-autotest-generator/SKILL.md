@@ -1,8 +1,8 @@
 ---
 name: qt-autotest-generator
-description: "Qt CMake 项目 GTest 单元测试自动生成与质量闭环。基于 codebase-memory-mcp 知识图谱，支持：开发预检与本地图谱同步（Mode 0）、函数重要性探测与分级（Mode 1）、按分级补全 GTest 用例（Mode 2，编译验证+覆盖率门禁）、覆盖率采集与汇总（Mode 3）、变异测试（Mode 4，可选，验证测试有效性）、源码缺陷导出与统计（Mode 5，可选，用例级标红清单）。触发于：生成单测/补全测试/扫描函数重要性/采集覆盖率/变异测试/导出源码缺陷/dev preflight/本地模式/unpushed/add gtest/coverage gap/fix test failures/mutation score/defect report 等。硬门禁：codebase-memory-mcp 知识图谱（Mode 0 显式本地，其余远端唯一、不回退），无图谱不执行。不触发于：非 Qt 或非 CMake 项目、Qt Test/Catch2/doctest、仅运行测试/配 CI/不生成测试代码。"
+description: "Qt CMake 项目 GTest 单元测试自动生成与质量闭环。基于 codebase-memory-mcp 知识图谱，支持：开发预检与本地图谱同步（Mode 0）、函数重要性探测与分级（Mode 1）、按分级补全 GTest 用例（Mode 2，编译验证+覆盖率门禁）、覆盖率采集与汇总（Mode 3）、变异测试（Mode 4，可选，验证测试有效性）、源码缺陷导出与统计（Mode 5，可选，用例级标红清单）、测试质量审查（Mode 6，只读，审查已有/他人提交的测试）。触发于：生成单测/补全测试/扫描函数重要性/采集覆盖率/变异测试/导出源码缺陷/审查测试质量/review tests/审查 commit 里的测试/未缓存测试/dev preflight/本地模式/unpushed/add gtest/coverage gap/fix test failures/mutation score/defect report 等。硬门禁：codebase-memory-mcp 知识图谱（Mode 0 显式本地，其余远端唯一、不回退；Mode 6 只读审查除外，无 MCP 硬依赖）。不触发于：非 Qt 或非 CMake 项目、Qt Test/Catch2/doctest、仅运行测试/配 CI/不生成测试代码。"
 metadata:
-  version: "3.4.1"
+  version: "3.4.2"
 user-invocable: true
 argument-hint: "[项目路径 / 模块路径 / 类名]"
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash
@@ -76,6 +76,7 @@ Mode 5 为**可选增强**，在 Mode 2 闭环中实时持久化发现的源码�
 - **Mode 3**：采集覆盖率、统计覆盖率、生成覆盖率报告、collect coverage、coverage report、coverage summary
 - **Mode 4**：变异测试、mutation testing、mutation score、验证测试有效性、测试能不能发现问题、测试够不够好、变异得分、high 级方法有效性
 - **Mode 5**：导出源码缺陷、统计源码缺陷、defect report、缺陷清单、导出缺陷数据、源码缺陷标红清单
+- **Mode 6**：审查测试质量、review tests、审查这个 commit 的测试、测试写得怎么样、审查未缓存测试、uncached tests、test review、只读审查（注意：本模式只出报告，不修改/生成任何测试或源码）
 
 **不触发于**：非 Qt 或非 CMake 项目、Qt Test/Catch2/doctest 框架、仅运行测试/配 CI/看日志、集成测试/性能测试/UI 自动化
 
@@ -166,6 +167,17 @@ Mode 5 **不跑测试、不编译、不改测试代码、不改源码**（与 Mo
 
 ---
 
+## Mode 6 · 测试质量审查（只读，可选）
+
+1. **`Read`** `references/test-review.md` → 调用 `scripts/test-review.py review`
+2. 选择输入场景：A）`--commit <sha|a..b>` 审查某次（段）提交涉及的测试；B）`--uncached` 或 `--files` 审查未登记/指定的存量测试
+3. 脚本内部依次执行：结构规范自检（self-check-structural.py）→ 分支白盒（mcp-scan.py extract-branches，可降级）→ 数值评分（qt-autotest-scorer，可选依赖）
+4. 产出：`<outdir>/test-review-<label>.md` + `.json` 审查报告（裁决 FAIL/WARN/PASS/ERROR + P0/P1/P2 建议清单）
+
+Mode 6 **只读**：不生成/不修改测试与源码、不编译、不运行、不 checkout（commit 内容提取到 review-workspace 快照）。规则裁决一票否决项（critical）：空断言/字面量布尔占位断言/唯一 NO_FATAL/纯 gMock 期望/分支漏测/函数覆盖率不足。改进建议随报告交付（P0/P1/P2 + 规范文档小节路由），按建议修复后可重跑本审查验证裁决收敛——**本模式只出报告，不改任何代码**。无 MCP 硬依赖（无图谱也可审结构维度）。详见 `references/test-review.md`。
+
+---
+
 ## 核心原则（Iron Laws）
 
 1. **知识图谱 MCP 硬门禁** —— 无图谱索引不执行
@@ -204,6 +216,7 @@ Mode 5 **不跑测试、不编译、不改测试代码、不改源码**（与 Mo
 | inventory 状态筛查 | `scripts/utq.py`（查未测/弱覆盖/单函数详情/测试文件反查，详见 `references/utq-usage.md`） |
 | 分支清单交叉验证 | `scripts/mcp-scan.py extract-branches`（self-checker §2c，MCP `get_code_snippet` 反查真实分支做差集） |
 | 缺陷数据文件 | `.ut-defects.json`（本地，不入 git） |
+| 测试质量审查 | `scripts/test-review.py`（Mode 6，只读，commit/未缓存测试两场景，`--strict` 可作 CI 门禁） |
 
 ---
 
@@ -231,7 +244,7 @@ Mode 5 **不跑测试、不编译、不改测试代码、不改源码**（与 Mo
 ## Agent 自用工作流检查清单
 
 ```
-□ 已区分 Mode 0（预检）/ Mode 1（分析）/ Mode 2（编写）/ Mode 3（采集）/ Mode 4（变异，可选）/ Mode 5（缺陷导出，可选），未混跑
+□ 已区分 Mode 0（预检）/ Mode 1（分析）/ Mode 2（编写）/ Mode 3（采集）/ Mode 4（变异，可选）/ Mode 5（缺陷导出，可选）/ Mode 6（质量审查，只读），未混跑
 □ 已执行 reconcile（比对 git HEAD 与 inventory.base_sha，按差异路由；首次运行无 inventory 直接进入环境检查）
 □ Mode 0：已 Read references/dev-preflight.md；本地 MCP 可用且图谱已同步到本地 HEAD；已设置 mode_0_active 标志
 □ Mode 1：已 Read references/environment-check.md + references/inventory.md；产出 .ut-inventory.json
@@ -250,4 +263,5 @@ Mode 5 **不跑测试、不编译、不改测试代码、不改源码**（与 Mo
 □ 全部批次提交完成（Mode 2 结束）：最终退出前已统一生成一次 Mode 3 覆盖率报告 + Mode 5 缺陷导出（不在每笔提交后触发）
 □ Mode 4（可选）：已 Read references/mutation-testing.md；变异后 git diff --exit-code 通过；存活变异体清单已交付（回 Mode 2 补强）
 □ Mode 5（可选）：缺陷已落盘 .ut-defects.json（不入 git）；导出 defects-summary.md 标红清单
+□ Mode 6（可选）：已 Read references/test-review.md；全程只读（git status 干净，未 checkout）；审查报告已交付；建议清单已随报告交付，未在审查中修改任何测试/源码
 ```
