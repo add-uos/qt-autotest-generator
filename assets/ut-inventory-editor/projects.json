@@ -209,14 +209,15 @@
       "build": {
         "system": "cmake",
         "framework": "gtest",
-        "build_dir": "build",
+        "build_dir": "build-ut",
         "env": {
           "QT_QPA_PLATFORM": "offscreen"
         },
         "timeout": 600,
         "configure": "cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_SAFETYTEST_ARG=\"CMAKE_SAFETYTEST_ARG_ON\" ..",
         "build_cmd": "make -j$(nproc)",
-        "test_cmd": "./tests/deepin-image-viewer-test --gtest_output=xml:./report/report_deepin-image-viewer.xml"
+        "test_cmd": "./tests/deepin-image-viewer-test --gtest_output=xml:./report/report_deepin-image-viewer.xml",
+        "script": "tests/test-prj-running.sh"
       },
       "nodes": 2450
     },
@@ -506,7 +507,8 @@
         "timeout": 600,
         "configure": "cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_SAFETYTEST_ARG=\"CMAKE_SAFETYTEST_ARG_ON\" ..",
         "build_cmd": "make -j$(nproc)",
-        "test_cmd": "./tests/deepin-calculator-test --gtest_output=xml:./report/report_deepin-calculator.xml"
+        "test_cmd": "./tests/deepin-calculator-test --gtest_output=xml:./report/report_deepin-calculator.xml",
+        "script": "tests/test-prj-running.sh"
       },
       "nodes": 3492
     },
@@ -624,8 +626,8 @@
         "branch": "master"
       },
       "source": {
-        "type": "mcp",
-        "path": ""
+        "type": "local",
+        "path": "/home/zhy/debug/deepin-reader"
       },
       "build": {
         "system": "cmake",
@@ -636,7 +638,10 @@
         "env": {
           "QT_QPA_PLATFORM": "offscreen"
         },
-        "timeout": 600
+        "timeout": 600,
+        "script": "tests/test-prj-running.sh",
+        "test_dir": "tests",
+        "build_dir": "build-ut"
       },
       "nodes": 26773
     },
@@ -758,8 +763,8 @@
         "branch": "develop/snipe"
       },
       "source": {
-        "type": "mcp",
-        "path": ""
+        "type": "local",
+        "path": "/home/zhy/debug/deepin-voice-note"
       },
       "build": {
         "system": "cmake",
@@ -770,7 +775,10 @@
         "env": {
           "QT_QPA_PLATFORM": "offscreen"
         },
-        "timeout": 600
+        "timeout": 600,
+        "script": "tests/test-prj-running.sh",
+        "test_dir": "tests",
+        "build_dir": "build-ut"
       }
     },
     {
@@ -784,8 +792,8 @@
         "branch": "master"
       },
       "source": {
-        "type": "mcp",
-        "path": ""
+        "type": "local",
+        "path": "/home/zhy/debug/deepin-screen-recorder"
       },
       "build": {
         "system": "cmake",
@@ -796,7 +804,10 @@
         "env": {
           "QT_QPA_PLATFORM": "offscreen"
         },
-        "timeout": 600
+        "timeout": 600,
+        "test_dir": "tests",
+        "build_dir": "build-ut",
+        "script": "tests/test-prj-running.sh"
       }
     },
     {
@@ -914,8 +925,8 @@
         "branch": "master"
       },
       "source": {
-        "type": "mcp",
-        "path": ""
+        "type": "local",
+        "path": "/home/zhy/debug/deepin-editor"
       },
       "build": {
         "system": "cmake",
@@ -926,7 +937,10 @@
         "env": {
           "QT_QPA_PLATFORM": "offscreen"
         },
-        "timeout": 600
+        "timeout": 600,
+        "script": "tests/test-prj-running.sh",
+        "test_dir": "tests",
+        "build_dir": "build-ut"
       }
     },
     {

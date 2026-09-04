@@ -185,26 +185,25 @@ function renderDrawerRunPanel(name){
   const isActive=st&&(st.state==='running'||st.state==='queued');
   const modes=Object.entries(TEST_MODE_LABELS);
   let html='<div class="test-run-panel">';
-  html+='<div class="test-mode-row"><span class="test-mode-label">模式:</span>';
+  html+='<div class="test-run-topline"><span class="test-mode-label">模式:</span>';
   for(const[m,l]of modes){
     const cls=(S.dash.testMode===m?'active':'')+(isActive?' disabled':'');
     html+=`<button class="test-mode-btn ${cls}" data-drawer-mode="${m}" ${isActive?'disabled':''}>${l}</button>`;
   }
-  html+='</div>';
-  html+='<div class="test-run-actions">';
+  html+='<span class="test-run-actions">';
   if(isActive){
     html+=`<button class="btn btn-sm" id="dash-test-stop"><i data-lucide="square" class="icon"></i> 停止</button>`;
     html+=`<span class="test-phase-badge">${st.label||st.phase||'运行中'} ${st.progress||''}</span>`;
     html+=`<span class="detail-small text-[var(--text-muted)]">${st.elapsed||0}s</span>`;
   }else{
-    html+=`<button class="btn btn-sm btn-primary" id="dash-test-run"><i data-lucide="play" class="icon"></i> 运行测试</button>`;
     if(st&&st.state==='done'){
       html+=`<span class="test-phase-badge done">✓ 完成</span>`;
     }else if(st&&st.state==='failed'){
       html+=`<span class="test-phase-badge fail">✗ 失败</span>`;
     }
+    html+=`<button class="btn btn-sm btn-primary" id="dash-test-run"><i data-lucide="play" class="icon"></i> 运行测试</button>`;
   }
-  html+='</div>';
+  html+='</span></div>';
   // 进度条（build 阶段有百分比时）
   if(isActive&&st.progress){
     const pct=parseInt(st.progress)||0;

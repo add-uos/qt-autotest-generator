@@ -26,6 +26,7 @@ import argparse
 import importlib.util
 import json
 import os
+import queue
 import re
 import shutil
 import socket
@@ -879,12 +880,16 @@ class TestRunner:
             from_step = {"script": 1, "full": 2, "build+test": 3,
                          "test-only": 4, "test+coverage": 4,
                          "coverage-only": 5}.get(mode, 2)
+            # cwd=脚本所在目录：老式脚本(test-prj-running.sh)用 ../build 等相对 cwd 的路径，
+            # 必须 cwd=脚本目录；ATUT run-ut.sh 自定位($SCRIPT_DIR/$PROJECT_ROOT)不受影响。
+            # --from-step 仅 ATUT 脚本支持；老式脚本不识别，不传。
+            supports_step = "--from-step" in sp.read_text(encoding="utf-8", errors="ignore")
             cmd = f"bash {sp}"
-            if from_step != 1:
+            if from_step != 1 and supports_step:
                 cmd += f" --from-step {from_step}"
             self._update(name, state="running", phase="script", progress="",
                          log_tail=f"$ {cmd}")
-            ok = self._exec(name, cmd, path, env, timeout, "script")
+            ok = self._exec(name, cmd, sp.parent, env, timeout, "script")
             with self.lock:
                 r = self.running.get(name)
                 if r and r["state"] == "stopped":
@@ -973,20 +978,43 @@ class TestRunner:
                 self.running[name]["process"] = proc
         log_lines = []
         t0 = time.time()
-        try:
-            for line in proc.stdout:
-                line = line.rstrip()
-                log_lines.append(line)
-                if len(log_lines) > 500:
-                    log_lines = log_lines[-500:]
-                progress = self._parse_progress(line, phase)
-                self._update(name, phase=phase, progress=progress,
-                             log_tail="\n".join(log_lines[-30:]),
-                             elapsed=round(time.time() - t0, 1))
-            proc.wait(timeout=max(5, timeout - (time.time() - t0)))
-        except subprocess.TimeoutExpired:
+        # 后台线程读 stdout → queue：主循环可轮询超时，
+        # 避免测试挂死无输出时 for-line 阻塞导致 timeout 失效
+        q: "queue.Queue[str | None]" = queue.Queue()
+        def _pump():
+            try:
+                for line in proc.stdout:
+                    q.put(line)
+            finally:
+                q.put(None)
+        threading.Thread(target=_pump, daemon=True).start()
+        timed_out = False
+        while True:
+            try:
+                line = q.get(timeout=1.0)
+            except queue.Empty:
+                if time.time() - t0 > timeout:
+                    timed_out = True
+                    break
+                continue          # 进程仍活着但暂无输出
+            if line is None:
+                break             # stdout EOF
+            line = line.rstrip()
+            log_lines.append(line)
+            if len(log_lines) > 500:
+                log_lines = log_lines[-500:]
+            progress = self._parse_progress(line, phase)
+            self._update(name, phase=phase, progress=progress,
+                         log_tail="\n".join(log_lines[-30:]),
+                         elapsed=round(time.time() - t0, 1))
+        if timed_out:
             self._kill(proc)
             self._update(name, log_tail="\n".join(log_lines[-30:]) + "\n⏱ 超时终止")
+            return False
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            self._kill(proc)
             return False
         return proc.returncode == 0
 
@@ -1436,6 +1464,18 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": "not found"}, 404)
 
 
+class QuietThreadingHTTPServer(ThreadingHTTPServer):
+    """客户端提前断开（页面刷新/关闭时取消轮询请求）属正常现象，
+    BrokenPipe/ConnectionReset 静默处理，避免日志被 traceback 刷屏；其余错误照常打印。"""
+
+    def handle_error(self, request, client_address):
+        _, exc, _tb = sys.exc_info()
+        if isinstance(exc, (BrokenPipeError, ConnectionResetError, TimeoutError)):
+            self.close_request(request)
+            return
+        super().handle_error(request, client_address)
+
+
 def main():
     ap = argparse.ArgumentParser(description="UT 看板伴随服务")
     ap.add_argument("--port", type=int, default=None, help="覆盖 config.json 端口")
@@ -1458,7 +1498,7 @@ def main():
     httpd = None
     for _ in range(10):
         try:
-            httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+            httpd = QuietThreadingHTTPServer(("127.0.0.1", port), Handler)
             break
         except OSError as e:
             if e.errno == 98:  # Address already in use

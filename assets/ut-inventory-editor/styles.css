@@ -333,13 +333,13 @@ i[data-lucide]:empty{display:none}
 .test-phase-badge.fail{background:rgba(239,68,68,.12);color:var(--exempt);border-color:rgba(239,68,68,.25)}
 .test-phase-badge.done{background:rgba(56,189,248,.12);color:var(--info);border-color:rgba(56,189,248,.25)}
 .test-run-panel{display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--border-soft);border-radius:8px;background:var(--bg-elev2)}
-.test-mode-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.test-run-topline{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .test-mode-label{font-size:calc(var(--fs)*.786);color:var(--text-dim);margin-right:4px}
 .test-mode-btn{padding:4px 10px;border-radius:6px;font-size:calc(var(--fs)*.714);border:1px solid var(--border-soft);background:var(--bg);color:var(--text-dim);cursor:pointer;transition:all .12s}
 .test-mode-btn:hover{border-color:var(--accent);color:var(--text)}
 .test-mode-btn.active{background:var(--accent);color:#052e16;border-color:var(--accent);font-weight:600}
 .test-mode-btn:disabled{opacity:.4;cursor:default}
-.test-run-actions{display:flex;gap:8px;align-items:center}
+.test-run-actions{display:flex;gap:8px;align-items:center;margin-left:auto}
 .test-log-panel{font-family:'JetBrains Mono',monospace;font-size:calc(var(--fs)*.643);color:var(--text-muted);max-height:220px;overflow-y:auto;background:var(--bg);border:1px solid var(--border-soft);border-radius:6px;padding:8px;white-space:pre-wrap;word-break:break-all}
 .test-progress-bar{height:3px;background:var(--border-soft);border-radius:2px;overflow:hidden}
 .test-progress-bar .fill{height:100%;background:var(--accent);transition:width .3s}
@@ -374,10 +374,11 @@ i[data-lucide]:empty{display:none}
 .cfg-table{width:100%;border-collapse:collapse;font-size:calc(var(--fs)*.8)}
 .cfg-table th{position:sticky;top:0;background:var(--bg-elev);text-align:left;padding:8px 8px;border-bottom:1px solid var(--border);color:var(--text-dim);font-weight:500;white-space:nowrap;z-index:2}
 .cfg-table td{padding:4px 6px;border-bottom:1px solid var(--border-soft);vertical-align:middle}
-.cfg-table td input[type=text],.cfg-table td input[type=number],.cfg-table td select{width:100%;background:var(--bg);border:1px solid var(--border-soft);border-radius:5px;padding:4px 6px;color:var(--text);font-size:calc(var(--fs)*.786);outline:none}
+.cfg-table td input[type=text],.cfg-table td input[type=number],.cfg-table td select{width:100%;min-width:0;background:var(--bg);border:1px solid var(--border-soft);border-radius:5px;padding:4px 6px;color:var(--text);font-size:calc(var(--fs)*.786);outline:none}
 .cfg-table td input:focus,.cfg-table td select:focus{border-color:var(--accent)}
 .cfg-proj-name{font-family:var(--font-mono);font-size:calc(var(--fs)*.786);white-space:nowrap}
 .cfg-path{min-width:200px}
+.cfg-script{min-width:150px}
 .cfg-detect-btn{white-space:nowrap}
 .cfg-row-off .cfg-proj-name{opacity:.45;text-decoration:line-through}
 .cfg-toast-ok{color:var(--accent)}
@@ -391,6 +392,22 @@ i[data-lucide]:empty{display:none}
 .cfg-cfgfield{display:grid;grid-template-columns:78px 1fr;align-items:center;gap:8px}
 .cfg-cfgfield label{font-size:calc(var(--fs)*.786);color:var(--text-muted);text-align:right}
 .cfg-cfgfield input[type=text],.cfg-cfgfield select{background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:5px 8px;color:var(--text);font-size:calc(var(--fs)*.821);outline:none}
+
+/* ═══ 原生 <select> 主题化：自绘箭头 + 主题化展开列表，与自定义下拉菜单风格对齐 ═══ */
+select.cfg-input,.cfg-table td select,.cfg-cfgfield select{
+  appearance:none;-webkit-appearance:none;-moz-appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:right 7px center;
+  padding-right:24px;
+  cursor:pointer;
+  transition:background-color .12s,border-color .12s;
+}
+:root[data-theme='light'] select.cfg-input,:root[data-theme='light'] .cfg-table td select,:root[data-theme='light'] .cfg-cfgfield select{
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+select.cfg-input:hover,.cfg-table td select:hover,.cfg-cfgfield select:hover{background-color:var(--bg-hover);border-color:var(--border)}
+select.cfg-input option,.cfg-table td select option,.cfg-cfgfield select option{background:var(--bg-elev);color:var(--text)}
 .cfg-cfgfield input:focus,.cfg-cfgfield select:focus{border-color:var(--accent)}
 .cfg-cfgfield .cfg-val{font-family:var(--font-mono);font-size:calc(var(--fs)*.821);color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cfg-cfgfield .cfg-path-ctrl{display:flex;gap:4px}

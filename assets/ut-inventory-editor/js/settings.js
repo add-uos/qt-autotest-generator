@@ -75,8 +75,10 @@ function applyCfgFilter() {
 
 function toggleCfgSearch(show) {
     const inp = $('#cfg-search-input');
+    const btn = $('#cfg-search-btn');
     const on = show ?? inp.classList.contains('hidden');
     inp.classList.toggle('hidden', !on);
+    btn.classList.toggle('hidden', on);
     if (on) {
         inp.focus();
     } else {
@@ -105,7 +107,7 @@ function cfgRow(p) {
 </select></td>
 <td><input type="text" data-f="test_dir" value="${escAttr(b.test_dir || '')}" placeholder="autotests" style="width:64px"/></td>
 <td><input type="text" data-f="build_dir" value="${escAttr(b.build_dir || '')}" placeholder="build-ut" style="width:80px"/></td>
-<td class="cfg-path"><div style="display:flex;gap:4px"><input type="text" data-f="script" value="${escAttr(b.script || '')}" placeholder="autotests/run-ut.sh"/><button class="btn btn-sm btn-ghost fs-pick-script-btn" title="浏览选择测试脚本">…</button></div></td>
+<td class="cfg-script"><div style="display:flex;gap:4px"><input type="text" data-f="script" value="${escAttr(b.script || '')}" placeholder="autotests/run-ut.sh"/><button class="btn btn-sm btn-ghost fs-pick-script-btn" title="浏览选择测试脚本">…</button></div></td>
 <td><input type="text" data-f="test_cmd" value="${escAttr(b.test_cmd || '')}" placeholder="空=默认/脚本"/></td>
 <td style="white-space:nowrap">
   <button class="btn btn-sm btn-ghost cfg-detect-btn" title="按本地路径探测构建系统">🔍</button>
@@ -302,6 +304,7 @@ function initSettingsEvents() {
     $('#cfg-search-btn').onclick = () => toggleCfgSearch();
     $('#cfg-search-input').oninput = applyCfgFilter;
     $('#cfg-search-input').onkeydown = e => { if (e.key === 'Escape') toggleCfgSearch(false); };
+    $('#cfg-search-input').onblur = () => { if (!$('#cfg-search-input').value.trim()) toggleCfgSearch(false); };
     // 目录浏览对话框
     $('#fs-cancel').onclick = fsClose;
     $('#fs-confirm').onclick = () => { if (fsPick.mode === 'file' && !fsPick.selected) { toast('请先选择一个文件', 'warn'); return; } const picked = fsPick.selected ? fsPick.path + '/' + fsPick.selected : fsPick.path; if (fsPick.cb && picked) fsPick.cb(picked); fsClose(); };
@@ -320,6 +323,7 @@ async function openFsPicker(startPath, onPick, opts = {}) {
     fsPick.cb = onPick;
     fsPick.mode = opts.file ? 'file' : 'dir';
     $('#fs-picker-modal').querySelector('h3').textContent = opts.file ? '📄 选择测试脚本' : '📁 选择项目本地路径';
+    $('#fs-confirm').textContent = opts.file ? '✅ 选定此文件' : '✅ 选定此目录';
     $('#fs-show-hidden').checked = fsPick.showHidden;
     $('#fs-picker-modal').classList.remove('hidden');
     fsLoad(startPath || '~');
