@@ -556,7 +556,8 @@ def run_structural(review_path, out_json):
         return json.load(f), None
 
 
-def run_branch(review_path, inventory_path, project, mcp_url, out_json):
+def run_branch(review_path, inventory_path, project, mcp_url, out_json,
+               repo_root=None):
     """跑 mcp-scan.py extract-branches（MCP 分支白盒反查）。
 
     返回 (status, data|None, reason)：status ∈ ok | skipped | failed。
@@ -570,6 +571,8 @@ def run_branch(review_path, inventory_path, project, mcp_url, out_json):
            "--inventory", inventory_path, "-o", out_json]
     if mcp_url:
         cmd += ["--mcp-url", mcp_url]
+    if repo_root:
+        cmd += ["--repo-root", repo_root]
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
     except (OSError, subprocess.TimeoutExpired) as e:
@@ -673,7 +676,8 @@ def review_targets(targets_doc, args_like):
         if structural is not None and not args_like.no_branch:
             bjson = os.path.join(art_dir, base + ".branch.json")
             bstatus, branch_data, breason = run_branch(
-                t["review_path"], inventory, project, args_like.mcp_url, bjson)
+                t["review_path"], inventory, project, args_like.mcp_url, bjson,
+                repo_root=getattr(args_like, "repo_root", None))
             branch = {"status": bstatus, "data": branch_data, "reason": breason}
             if bstatus != "ok":
                 degraded.append(f"分支白盒[{t['source_path']}]: {breason}")
@@ -1000,6 +1004,9 @@ def main(argv=None):
     p_rev.add_argument("--outdir", "-o", default=".reports", help="报告输出目录（默认 .reports/）")
     p_rev.add_argument("--project", default=None, help="MCP 项目名（分支白盒；缺省取 inventory.project）")
     p_rev.add_argument("--mcp-url", default=None, help="MCP HTTP 端点（透传 extract-branches）")
+    p_rev.add_argument("--repo-root", default=None,
+                       help="仓库本地路径（透传 extract-branches；"
+                            "缺省从测试文件 git 顶层推导）")
     p_rev.add_argument("--scorer-path", default=None, help="qt-autotest-scorer score.py 路径")
     p_rev.add_argument("--no-branch", action="store_true", help="跳过分支白盒维度")
     p_rev.add_argument("--no-scorer", action="store_true", help="跳过数值评分维度")

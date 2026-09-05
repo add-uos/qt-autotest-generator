@@ -7,30 +7,14 @@
   - --skip-test-mapping 跳过采集
   - test-mapping 子命令（独立回写入口）
 
-fetch 集成测试用 monkeypatch 把采集函数换成 spy，mock 掉 cmd_fetch 前置
-依赖（MCPClient/build_inventory 等），只验证 test_* 采集分支是否被正确触发。
+fetch 集成测试 stub open_adapter 返回 StubAdapter（GitNexusAdapter 替身，
+采集方法全返空并记录调用），只验证 test_* 采集分支是否被正确触发。
+adapter 采集逻辑本身的测试见 test_gitnexus_adapter.py。
 """
 import json
 import types
 
 import pytest
-
-
-# ── FakeClient：复用 test_fetch_mcp_data 的 mock 模式 ─────────────────
-
-class FakeClient:
-    """按 tool_name → 返回值 映射模拟 MCPClient。"""
-
-    def __init__(self, responses=None, default=None):
-        self.responses = responses or {}
-        self.default = default
-        self.calls = []
-
-    def call_tool(self, name, arguments, retries=3):
-        self.calls.append((name, arguments))
-        if name in self.responses:
-            return self.responses[name]
-        return self.default
 
 
 # ── _tm_normalize_qn ──────────────────────────────────────────────────
@@ -88,44 +72,9 @@ class TestNormalizeQn:
         assert fetch_mcp_data._tm_normalize_qn(qn) == "reader.document.PDFModel.foo"
 
 
-# ── discover_test_modules ─────────────────────────────────────────────
-
-class TestDiscoverTestModules:
-    def _mk_search_result(self, results):
-        return {"results": results, "total": len(results)}
-
-    def test_filters_ut_files(self, fetch_mcp_data):
-        """只保留 ut_*.cpp/h 文件。"""
-        c = FakeClient(default=self._mk_search_result([
-            {"name": "ut_foo.cpp", "file_path": "tests/ut_foo.cpp", "out_degree": 3},
-            {"name": "helper.cpp", "file_path": "tests/helper.cpp", "out_degree": 0},
-            {"name": "ut_bar.h", "file_path": "tests/ut_bar.h", "out_degree": 1},
-        ]))
-        mods = fetch_mcp_data.discover_test_modules(c, "proj")
-        names = [m["name"] for m in mods]
-        assert "ut_foo.cpp" in names and "ut_bar.h" in names
-        assert "helper.cpp" not in names
-
-    def test_sorted_by_out_degree(self, fetch_mcp_data):
-        c = FakeClient(default=self._mk_search_result([
-            {"name": "ut_a", "file_path": "tests/ut_a.cpp", "out_degree": 1},
-            {"name": "ut_b", "file_path": "tests/ut_b.cpp", "out_degree": 9},
-        ]))
-        mods = fetch_mcp_data.discover_test_modules(c, "proj")
-        assert mods[0]["out_degree"] >= mods[1]["out_degree"]
-
-    def test_out_degree_falls_back_to_out_column(self, fetch_mcp_data):
-        """远端可能用 `out` 而非 `out_degree` 列名。"""
-        c = FakeClient(default=self._mk_search_result([
-            {"name": "ut_x", "file_path": "tests/ut_x.cpp", "out": 5},
-        ]))
-        mods = fetch_mcp_data.discover_test_modules(c, "proj")
-        assert mods[0]["out_degree"] == 5
-
-    def test_empty(self, fetch_mcp_data):
-        c = FakeClient(default=self._mk_search_result([]))
-        assert fetch_mcp_data.discover_test_modules(c, "proj") == []
-
+# ── discover_test_modules ─────────────────────────────────────────
+# 已随 GitNexus 改造移入 GitNexusAdapter.discover_test_modules，
+# 其行为测试（ut_* 过滤 / 测试目录前缀）见 test_gitnexus_adapter.py。
 
 # ── build_test_mapping ────────────────────────────────────────────────
 
@@ -235,48 +184,70 @@ class TestLoadTestMappingFromFile:
 
 # ── fetch 集成分支：非增量触发采集 ──────────────────────────────────────
 
+class StubAdapter:
+    """GitNexusAdapter 替身：采集方法全返空，调用记录在 self.calls。"""
+
+    def __init__(self):
+        self.calls = []
+
+    def check_drift(self):
+        return ("", "")
+
+    def collect_methods(self, file_patterns=None, limit=2000):
+        self.calls.append(("collect_methods", file_patterns, limit))
+        return [], []
+
+    def collect_inheritance(self):
+        self.calls.append(("collect_inheritance",))
+        return [], [], [], []
+
+    def collect_dbus_slots(self, adaptors):
+        self.calls.append(("collect_dbus_slots", len(adaptors)))
+        return []
+
+    def collect_qt_macros(self, file_patterns=None):
+        self.calls.append(("collect_qt_macros", file_patterns))
+        return {}, {}
+
+    def discover_test_modules(self):
+        self.calls.append(("discover_test_modules",))
+        return []
+
+    def collect_all_calls(self, modules):
+        self.calls.append(("collect_all_calls", len(modules)))
+        return {}
+
+    def fetch_test_cases(self, modules):
+        self.calls.append(("fetch_test_cases", len(modules)))
+        return {}
+
+
 class TestFetchIntegrationTestMapping:
     """验证 cmd_fetch 在非增量路径触发 test_* 采集，增量/skip 不触发。
 
-    monkeypatch 把采集函数换成 spy（记录调用），mock 掉 cmd_fetch 前置
-    依赖（MCPClient.initialize/resolve_base_sha/collect_methods 等返回空），
+    stub open_adapter 返回 StubAdapter，mock 掉 cmd_fetch 的 MCP 前置依赖，
     只断言 test_* 采集分支是否被触发。
     """
 
     def _stub_fetch_deps(self, monkeypatch, fetch_mcp_data):
-        """mock cmd_fetch 的所有 MCP 前置依赖，让流程能跑到 test_* 采集分支。"""
-        # MCPClient: initialize 不连真 MCP，call_tool 返回空
-        class StubClient:
-            session_id = "stub-session-id"
-
-            def initialize(self):
-                pass
-
-        monkeypatch.setattr(fetch_mcp_data, "MCPClient", lambda **kw: StubClient())
-        # resolve_base_sha: 不查图谱
+        """stub open_adapter / resolve_base_sha，返回可检查调用的 StubAdapter。"""
+        stub = StubAdapter()
+        monkeypatch.setattr(fetch_mcp_data, "open_adapter", lambda *a, **kw: stub)
         monkeypatch.setattr(fetch_mcp_data, "resolve_base_sha",
                             lambda c, p, e=None: "stubsha")
-        # 采集步骤: 返回空数据，让 build_inventory 产出空 inventory
-        monkeypatch.setattr(fetch_mcp_data, "collect_methods",
-                            lambda c, p, fp=None, limit=2000: ([], []))
-        monkeypatch.setattr(fetch_mcp_data, "collect_inheritance",
-                            lambda c, p: ([], [], [], []))
-        monkeypatch.setattr(fetch_mcp_data, "collect_dbus_slots",
-                            lambda c, p, bases: [])
-        monkeypatch.setattr(fetch_mcp_data, "collect_qt_macros",
-                            lambda c, p: ({}, {}))
-        monkeypatch.setattr(fetch_mcp_data, "compute_p75_nonzero", lambda ms: 5)
+        return stub
 
     def _make_fetch_args(self, tmp_path, incremental=False, skip_tm=False,
                          existing=None):
         """构造 cmd_fetch 的 args namespace。"""
         out = tmp_path / ".ut-inventory.json"
-        ns = types.SimpleNamespace(
+        return types.SimpleNamespace(
             cmd="fetch",
             project="stub-proj",
             file_pattern=None,
             output=str(out),
             mcp_url="http://stub",
+            repo_root=None,
             limit=2000,
             base_sha=None,
             summary=False,
@@ -285,35 +256,35 @@ class TestFetchIntegrationTestMapping:
             existing=str(existing) if existing else None,
             skip_test_mapping=skip_tm,
         )
-        return ns
 
     def test_non_incremental_triggers_collection(self, monkeypatch, fetch_mcp_data, tmp_path):
-        """非增量 fetch 必须调用 discover_test_modules 采集 test_*。"""
-        self._stub_fetch_deps(monkeypatch, fetch_mcp_data)
-        spy = {"called": False}
+        """非增量 fetch 必须触发 adapter 的 test_* 采集三连。"""
+        stub = self._stub_fetch_deps(monkeypatch, fetch_mcp_data)
 
-        def fake_discover(client, project):
-            spy["called"] = True
-            return []  # 返回空，跳过后续采集
+        def fake_discover():
+            stub.calls.append(("discover_test_modules",))
+            return [{"name": "ut_a.cpp", "file_path": "tests/ut_a.cpp",
+                     "out_degree": 1}]
 
-        monkeypatch.setattr(fetch_mcp_data, "discover_test_modules", fake_discover)
+        stub.discover_test_modules = fake_discover
         args = self._make_fetch_args(tmp_path, incremental=False)
-        fetch_mcp_data.cmd_fetch(args)
-        assert spy["called"] is True
+        rc = fetch_mcp_data.cmd_fetch(args)
+        assert rc == 0
+        names = [c[0] for c in stub.calls]
+        assert "discover_test_modules" in names
+        assert "collect_all_calls" in names
+        assert "fetch_test_cases" in names
 
     def test_skip_test_mapping_skips_collection(self, monkeypatch, fetch_mcp_data, tmp_path):
         """--skip-test-mapping 时不触发 test_* 采集。"""
-        self._stub_fetch_deps(monkeypatch, fetch_mcp_data)
-        spy = {"called": False}
-        monkeypatch.setattr(fetch_mcp_data, "discover_test_modules",
-                            lambda c, p: spy.__setitem__("called", True) or [])
+        stub = self._stub_fetch_deps(monkeypatch, fetch_mcp_data)
         args = self._make_fetch_args(tmp_path, incremental=False, skip_tm=True)
         fetch_mcp_data.cmd_fetch(args)
-        assert spy["called"] is False
+        assert all(c[0] != "discover_test_modules" for c in stub.calls)
 
     def test_incremental_skips_collection(self, monkeypatch, fetch_mcp_data, tmp_path):
         """增量模式靠 overlay 保留 test_*，不重新采集。"""
-        self._stub_fetch_deps(monkeypatch, fetch_mcp_data)
+        stub = self._stub_fetch_deps(monkeypatch, fetch_mcp_data)
         # 增量：stub build_inventory 产出含 "A" 的 inventory，让 overlay 能贴回
         monkeypatch.setattr(fetch_mcp_data, "build_mcp_dump", lambda *a, **kw: {})
         monkeypatch.setattr(fetch_mcp_data, "build_inventory",
@@ -337,13 +308,10 @@ class TestFetchIntegrationTestMapping:
                          "test_files": ["ut_a.cpp"], "test_cases": [], "test_source": "mcp_calls"}],
             "review_queue": [], "gate_thresholds": {},
         }))
-        spy = {"called": False}
-        monkeypatch.setattr(fetch_mcp_data, "discover_test_modules",
-                            lambda c, p: spy.__setitem__("called", True) or [])
         args = self._make_fetch_args(tmp_path, incremental=True, existing=old_inv)
         fetch_mcp_data.cmd_fetch(args)
-        # 增量路径不调用 discover_test_modules
-        assert spy["called"] is False
+        # 增量路径不触发 test_* 采集
+        assert all(c[0] != "discover_test_modules" for c in stub.calls)
         # 但旧 test_* 通过 overlay 保留
         out = json.loads((tmp_path / ".ut-inventory.json").read_text())
         m = out["methods"][0]
@@ -352,12 +320,12 @@ class TestFetchIntegrationTestMapping:
 
     def test_collection_failure_does_not_block_fetch(self, monkeypatch, fetch_mcp_data, tmp_path):
         """test_* 采集抛异常不阻断主流程（inventory 仍写出，仅缺 test_*）。"""
-        self._stub_fetch_deps(monkeypatch, fetch_mcp_data)
+        stub = self._stub_fetch_deps(monkeypatch, fetch_mcp_data)
 
-        def boom(client, project):
+        def boom():
             raise RuntimeError("MCP boom")
 
-        monkeypatch.setattr(fetch_mcp_data, "discover_test_modules", boom)
+        stub.discover_test_modules = boom
         args = self._make_fetch_args(tmp_path, incremental=False)
         rc = fetch_mcp_data.cmd_fetch(args)
         # 不抛异常，inventory 仍写出

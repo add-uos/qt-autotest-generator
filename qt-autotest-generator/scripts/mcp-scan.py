@@ -5,7 +5,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""mcp-scan.py — MCP 知识图谱 → .ut-inventory.json 端到端探测
+"""mcp-scan.py — GitNexus 代码图谱 MCP → .ut-inventory.json 端到端探测
 
 合并自 scan-inventory.py + fetch-mcp-data.py + fetch-test-mapping.py。四个子命令：
   scan             — 评分建表（原 scan-inventory.py）
@@ -13,20 +13,28 @@
   extract-branches — 分支清单交叉验证（原 fetch-mcp-data.py 子命令）
   test-mapping     — 仅回写 test_* 字段（原 fetch-test-mapping.py；inventory 已存在时增量刷）
 
-fetch 的 test_* 采集：build_inventory 之后、写文件之前，复用 MCPClient 采集
+数据源（GitNexus，双源架构，详见 doc/gitnexus-适配分析.md）：
+  - 图谱（cypher/context/list_repos）：符号定位、CALLS/EXTENDS/HAS_METHOD 关系。
+    属性 camelCase（filePath/startLine/endLine），无 parent_class/base_classes/
+    annotations 属性，content 在 5016 字符截断（均实测）。
+  - 本地仓库（--repo-root）：方法体行切片、复杂度指标、Q_INVOKABLE/
+    Q_PLUGIN_METADATA、签名、TEST_F 用例。
+
+fetch 的 test_* 采集：build_inventory 之后、写文件之前，复用 GitNexusAdapter 采集
 CALLS 边（测试文件 → 被测函数），回写 test_cover_count/test_files/test_cases/
 test_source。增量模式不重采（overlay 已保留旧 test_*）。
 
 用法:
   # scan: 从预采集的 MCP 数据 JSON 评分建表
   python3 mcp-scan.py scan \
-    --project home-uos-service-codebase-repos-deepin-calculator \
+    --project dde-file-manager \
     --output /tmp/inventory-calculator.json \
     --mcp-dump /tmp/mcp_dump.json
 
   # fetch: 端到端 MCP 采集 + 评分
   python3 mcp-scan.py fetch \
-    --project home-uos-service-codebase-repos-dde-file-manager \
+    --project dde-file-manager \
+    --repo-root ~/debug/dde-file-manager \
     --file-pattern "src/**" \
     --output .ut-inventory.json
 
@@ -38,24 +46,14 @@ test_source。增量模式不重采（overlay 已保留旧 test_*）。
 示例:
   # dde-file-manager（排除 3rdparty）
   python3 mcp-scan.py fetch \
-    --project home-uos-service-codebase-repos-dde-file-manager \
+    --project dde-file-manager \
+    --repo-root ~/debug/dde-file-manager \
     --file-pattern "src/**" \
     --output /tmp/dde-file-manager/.ut-inventory.json
 
-  # deepin-reader（排除 pdfium 等 3rdparty）
-  python3 mcp-scan.py fetch \
-    --project home-uos-service-codebase-repos-deepin-reader \
-    --file-pattern "reader/**" \
-    --output /tmp/deepin-reader/.ut-inventory.json
-
-  # deepin-calculator（无 3rdparty，无需 file-pattern）
-  python3 mcp-scan.py fetch \
-    --project home-uos-service-codebase-repos-deepin-calculator \
-    --output /tmp/deepin-calculator/.ut-inventory.json
-
   # 多目录项目（源码 + 插件，分别指定或逗号分隔，结果自动去重合并）
   python3 mcp-scan.py fetch \
-    --project home-uos-service-codebase-repos-xxx \
+    --project xxx --repo-root ~/debug/xxx \
     --file-pattern "src/**" --file-pattern "plugins/**" \
     --output /tmp/xxx/.ut-inventory.json
   # 等价写法：
@@ -81,6 +79,7 @@ import math
 import os
 import re
 import shutil
+import subprocess
 import sys
 import time
 import urllib.request
@@ -142,21 +141,21 @@ CONCURRENT_BASE_CLASSES = [
 # ── 配置 ──
 #
 # 优先级：环境变量 > 代码默认值
-# - QTAG_MCP_URL: 远端 MCP HTTP 端点（覆盖默认值）
+# - QTAG_MCP_URL: GitNexus MCP HTTP 端点（覆盖默认值）
 
-MCP_URL = os.environ.get("QTAG_MCP_URL", "http://10.8.12.80:13626/mcp")
+MCP_URL = os.environ.get("QTAG_MCP_URL", "https://codegraph.uniontech.com/api/mcp")
 
-# 可选认证头：本地 mcp-proxy 等需 X-API-Key 认证时通过环境变量设置（向后兼容，不设则无）。
-#   QTAG_MCP_HEADERS: JSON 字符串，如 '{"X-API-Key":"xxx"}'
+# GitNexus 默认认证头（Basic，见 doc/new_代码图谱MCP_使用文档.md）。
+#   QTAG_MCP_HEADERS: JSON 字符串，设置后整体替换默认头，如 '{"Authorization": "Basic xxx"}'
 #   QTAG_MCP_API_KEY: 单独 apiKey → 自动构造 {"X-API-Key": "<key>"}
-MCP_EXTRA_HEADERS = {}
+MCP_EXTRA_HEADERS = {"Authorization": "Basic Z2l0bmV4dXM6Z2l0bmV4dXMuMTEyMg=="}
 _json_headers = os.environ.get("QTAG_MCP_HEADERS")
 if _json_headers:
     try:
         MCP_EXTRA_HEADERS = json.loads(_json_headers) or {}
     except Exception:
-        MCP_EXTRA_HEADERS = {}
-if not MCP_EXTRA_HEADERS and os.environ.get("QTAG_MCP_API_KEY"):
+        pass
+if os.environ.get("QTAG_MCP_API_KEY"):
     MCP_EXTRA_HEADERS = {"X-API-Key": os.environ["QTAG_MCP_API_KEY"]}
 
 # 服务端 DBus Adaptor — 契约级测试目标，其 public 方法 → dbus_slot (+3)
@@ -755,188 +754,368 @@ def fetch_mcp_data_via_subagent(project_name: str) -> dict:
 
 # ── MCP HTTP 客户端 ──
 
-# search_graph fields: build_inventory 评分所需的所有节点属性。
-# 本地 MCP 静默丢弃不支持的 field（如 docstring/return_type），
-# 因此只列已验证支持的 12 个；lines/in/out 为核心列，不在此请求。
-SEARCH_GRAPH_FIELDS = [
-    "complexity", "cognitive", "loop_count", "loop_depth",
-    "alloc_in_loop", "recursive", "transitive_loop_depth",
-    "linear_scan_in_loop", "param_count", "signature",
-    "parent_class", "is_test",
-]
+# ── GitNexus 响应编解码（ResponseCodec）──────────────────────────────────────
+#
+# GitNexus 实测响应形态（见 doc/gitnexus-适配分析.md）：
+#   1. 工具结果统一为字符串化 JSON（list_repos 大分页时尾部可能多段拼接）
+#   2. cypher 查询结果被包裹为 {"markdown": "| 列名 |\\n| --- |...", "row_count": N}
+#      markdown 表单元格为 JSON 转义字符串，多行单元格内含真实换行
+#   3. 错误为 {"error": "Prepare failed: ..."} 或 "Error: LadybugDB unavailable..."
+#      （后者是索引重建锁，可重试）
+
+class GraphQueryError(RuntimeError):
+    """GitNexus 查询失败。retryable=True 时上层可重试（如 LadybugDB 索引重建锁）。"""
+
+    def __init__(self, message, retryable=False):
+        super().__init__(message)
+        self.retryable = retryable
 
 
-def _lines_range_to_int(lines_val):
-    """Convert search_graph `lines` core column (range "start-end") to count.
+_RETRYABLE_ERROR_RE = re.compile(
+    r"LadybugDB unavailable|rebuilding the index|shadow pages", re.I)
 
-    search_graph 返回 "251-334"（行范围）；build_inventory 评分（>=50, >=150）
-    需要整数行数。count = end - start + 1（251-334 → 84，与 query_graph
-    m.lines 真值一致）。裸整数（已是计数）原样返回。
+
+def _split_md_cells(line):
+    """按管道符切分 markdown 表行（引号感知）。
+
+    返回 (已完整切出的 cells, 行尾残留文本, 行尾是否仍在引号内)。
+    多行单元格（内含真实换行的 JSON 字符串）由调用方拼接后续行。
     """
-    if isinstance(lines_val, int):
-        return lines_val
-    if isinstance(lines_val, str):
-        s = lines_val.strip()
-        if not s or s == "-":
-            return 0
-        # 行范围 "start-end"（排除负数）
-        if "-" in s and not s.startswith("-"):
-            parts = s.split("-", 1)
-            try:
-                return int(parts[1]) - int(parts[0]) + 1
-            except ValueError:
-                pass
-        try:
-            return int(s)
-        except ValueError:
-            return 0
-    return 0
-
-
-def _tokenize_text_row(line):
-    """Tokenize a query_graph text data row.
-
-    含特殊字符（空格/方括号/引号）的值是 JSON 引号串；裸值不含空格。
-    裸 `-` 表示 null → None。
-    """
-    tokens = []
-    i = 0
-    n = len(line)
-    while i < n:
-        while i < n and line[i] in " \t":
-            i += 1
-        if i >= n:
-            break
-        if line[i] == '"':
-            j = i + 1
-            while j < n:
-                if line[j] == "\\":
-                    j += 2
-                    continue
-                if line[j] == '"':
-                    break
-                j += 1
-            tok = line[i:j + 1]
-            try:
-                tokens.append(json.loads(tok))
-            except json.JSONDecodeError:
-                tokens.append(tok)
-            i = j + 1
+    cells, cur = [], []
+    in_q = False
+    esc = False
+    for ch in line:
+        if esc:
+            cur.append(ch)
+            esc = False
+        elif ch == "\\" and in_q:
+            cur.append(ch)
+            esc = True
+        elif ch == '"':
+            in_q = not in_q
+            cur.append(ch)
+        elif ch == "|" and not in_q:
+            cells.append("".join(cur).strip())
+            cur = []
         else:
-            j = i
-            while j < n and line[j] not in " \t":
-                j += 1
-            bare = line[i:j]
-            tokens.append(None if bare == "-" else bare)
-            i = j
-    return tokens
+            cur.append(ch)
+    return cells, "".join(cur).strip(), in_q
 
 
-def _parse_query_graph_text(text):
-    """Parse query_graph plain-text response into {rows, total, cols}.
+def _decode_md_cell(cell):
+    """markdown 单元格 → python 值：JSON 引号串还原，'-' 视为 null，其余原样。
 
-    Format::
-        rows: N  (cols: c.name c.qualified_name ...)
-          <val1> <val2> ...
-          ...
-        total: N
+    多行 content 单元格内含真实换行（JSON 控制字符非法）导致 json.loads
+    失败时，降级为手工去首尾引号（保留内文，含换行）。
     """
-    rows = []
-    total = 0
+    if cell == "-" or cell == "":
+        return None
+    if len(cell) >= 2 and cell[0] == '"' and cell[-1] == '"':
+        try:
+            return json.loads(cell)
+        except json.JSONDecodeError:
+            return cell[1:-1]
+    return cell
+
+
+def markdown_rows(md):
+    """解析 GitNexus cypher 的 markdown 表 → {cols, rows}。
+
+    多行单元格：行尾仍在引号内时继续拼接下一物理行，直到引号闭合。
+    空/无表头输入返回 ({"cols": [], "rows": []})。
+    """
+    if not md:
+        return {"cols": [], "rows": []}
     cols = []
-    for raw in text.splitlines():
-        line = raw.strip()
-        if not line:
+    rows = []
+    buf = ""       # 跨物理行累积中的行文本
+    buf_q = False  # 缓冲行是否仍在引号内
+    pending = False
+    for line in md.split("\n"):
+        s = line.rstrip("\r")
+        if pending:
+            buf += "\n" + s
+            _, _, buf_q = _split_md_cells(buf)
+            if buf_q:
+                continue
+            row_text, pending = buf, False
+        elif s.startswith("|"):
+            buf = s
+            _, _, buf_q = _split_md_cells(buf)
+            if buf_q:
+                pending = True
+                continue
+            row_text, pending = buf, False
+        else:
             continue
-        m = re.match(r"^rows:\s+(\d+)\s+\(cols:\s*(.*?)\)\s*$", line)
+        # 处理完整行：先按管道切分，再去掉首尾管道产生的结构性空格，最后解码
+        cells, trailing, _ = _split_md_cells(row_text)
+        if trailing:
+            cells = cells + [trailing]  # 行尾无竖线（异常容错）
+        if cells and cells[0] == "":
+            cells = cells[1:]           # 首管道前的空段
+        if row_text.rstrip().endswith("|") and cells and cells[-1] == "":
+            cells = cells[:-1]          # 尾管道后的空段
+        cells = [_decode_md_cell(c) for c in cells]
+        if not cols:
+            # 第一行是表头（列名）；分隔行 | --- | 跳过
+            if all(isinstance(c, str) and set(c) <= set("-: ") and c for c in cells):
+                continue  # 分隔行且尚未建立表头（异常输入）
+            cols = cells
+            continue
+        if all(isinstance(c, str) and set(c) <= set("-: ") and c for c in cells):
+            continue  # 分隔行
+        rows.append(cells)
+    return {"cols": cols, "rows": rows}
+
+
+def parse_tool_result(raw):
+    """MCP text block 内容 → 干净 dict/list。
+
+    字符串化 JSON（可能多段拼接）→ raw_decode 取首段；
+    markdown 表包裹 → 展开为 {cols, rows, total}；错误 → GraphQueryError。
+    非 JSON 非 markdown 的纯文本 → 原样透传（旧路径宽容语义）。
+    """
+    if isinstance(raw, dict):
+        if "error" in raw:
+            msg = str(raw["error"])
+            raise GraphQueryError(msg[:300],
+                                  retryable=bool(_RETRYABLE_ERROR_RE.search(msg)))
+        md = raw.get("markdown")
+        if isinstance(md, str) and md.lstrip().startswith("|"):
+            parsed = markdown_rows(md)
+            out = dict(raw)
+            out["cols"] = parsed["cols"]
+            out["rows"] = parsed["rows"]
+            out["total"] = raw.get("row_count", len(parsed["rows"]))
+            return out
+        return raw
+    if isinstance(raw, list):
+        return raw
+    if not isinstance(raw, str):
+        return raw
+    s = raw.strip()
+    if not s:
+        return {"cols": [], "rows": [], "total": 0}
+    if s.startswith(("Error:", "error:")):
+        raise GraphQueryError(s[:300], retryable=bool(_RETRYABLE_ERROR_RE.search(s)))
+    try:
+        obj, _ = json.JSONDecoder().raw_decode(s)
+    except json.JSONDecodeError:
+        return s  # 纯文本透传（如 list_repos 尾部非 JSON 片段）
+    if isinstance(obj, str):
+        return parse_tool_result(obj)  # 双重包装
+    if isinstance(obj, dict) and "error" in obj:
+        msg = str(obj["error"])
+        raise GraphQueryError(msg[:300], retryable=bool(_RETRYABLE_ERROR_RE.search(msg)))
+    if isinstance(obj, dict):
+        md = obj.get("markdown")
+        if isinstance(md, str) and md.lstrip().startswith("|"):
+            parsed = markdown_rows(md)
+            out = dict(obj)
+            out["cols"] = parsed["cols"]
+            out["rows"] = parsed["rows"]
+            out["total"] = obj.get("row_count", len(parsed["rows"]))
+            return out
+    return obj
+
+
+# ── 本地源码分析（GitNexus 图谱不提供的指标，全部由本地仓库推导）───────────────
+#
+# 实测 GitNexus Method/Function 节点仅含 name/filePath/startLine/endLine/content，
+# 无 complexity/cognitive/annotations/returnType 等属性（Binder exception 验证）。
+
+def _signature_from_body(body):
+    """从方法体头几行提取签名字符串（到 '{' 为止），供 inventory 展示。
+
+    无 '(' 的首行不是签名（如纯文本/截断内容）→ 空串。
+    """
+    if not body:
+        return ""
+    head = body.split("{", 1)[0]
+    if "(" not in head:
+        return ""
+    sig = " ".join(head.split())
+    return sig.rstrip(":").strip()[:300]
+
+
+def _param_count_from_signature(sig):
+    """签名括号内参数个数（顶层逗号 + 1；空括号 0）。用于重载消歧。"""
+    m = re.search(r"\(([^)]*)\)", sig or "")
+    if not m:
+        return 0
+    inner = m.group(1).strip()
+    if not inner:
+        return 0
+    depth = commas = 0
+    for ch in inner:
+        if ch in "(<[":
+            depth += 1
+        elif ch in ")>]":
+            depth = max(0, depth - 1)
+        elif ch == "," and depth == 0:
+            commas += 1
+    return commas + 1
+
+
+def compute_body_metrics(body, method_name=""):
+    """本地估算复杂度指标（替代旧 indexer 提供的 complexity 等）。
+
+    - complexity: 圈复杂度 = 1 + 分支关键字/短路/三目计数（与 extract_branches
+      同源的 strip_cpp_comments_and_strings 先清洗）
+    - cognitive: 嵌套加权分支数（简化实现：控制关键字 1+depth，逻辑运算符按
+      连续段计 1）
+    - loop_count / loop_depth / alloc_in_loop / recursive
+    返回 dict；body 为空时全 0（recursive False, param_count 0）。
+    """
+    empty = {"complexity": 0, "cognitive": 0, "loop_count": 0, "loop_depth": 0,
+             "alloc_in_loop": 0, "recursive": False, "param_count": 0,
+             "signature": ""}
+    if not body:
+        return empty
+    cleaned = strip_cpp_comments_and_strings(body)
+    sig = _signature_from_body(body)
+    signature_present = bool(sig) and ("(" in sig)
+    lines = cleaned.split("\n")
+
+    complexity = 1
+    cognitive = 0
+    loop_count = 0
+    loop_depth = 0
+    alloc_in_loop = 0
+    depth = 0        # 大括号深度（相对方法体）
+    loop_depths = [] # 各循环所在深度
+    in_loop = 0      # 当前所处循环层数
+    ctrl_re = re.compile(r"\b(if|else\s+if|for|while|case|catch)\b")
+    loop_re = re.compile(r"\b(for|while)\s*\(")
+    logic_re = re.compile(r"&&|\|")
+    tern_re = re.compile(r"\?\s*[^:?]+\s*:")
+    alloc_re = re.compile(r"\bnew\s+\w|\bmalloc\s*\(|\bcalloc\s*\(")
+    prev_logic = False
+
+    for ln in lines:
+        opens = ln.count("{")
+        closes = ln.count("}")
+        n_ctrl = len(ctrl_re.findall(ln))
+        has_logic = bool(logic_re.search(ln))
+        has_tern = bool(tern_re.search(ln))
+        complexity += n_ctrl + (1 if has_logic else 0) + (1 if has_tern else 0)
+        # cognitive：控制关键字按 1+depth，同连续段逻辑运算符只 +1
+        cognitive += n_ctrl * (1 + depth)
+        if has_logic and not prev_logic:
+            cognitive += 1 + depth
+        prev_logic = has_logic
+        if has_tern:
+            cognitive += 1 + depth
+        if loop_re.search(ln):
+            loop_count += 1
+            loop_depths.append(depth)
+            in_loop += 1
+        if alloc_re.search(ln) and in_loop > 0:
+            alloc_in_loop += 1
+        depth += opens - closes
+        # 循环退出检测：深度回落到该循环起始深度以下
+        while loop_depths and depth <= loop_depths[-1] and closes:
+            loop_depths.pop()
+            in_loop = max(0, in_loop - 1)
+        if loop_depths:
+            loop_depth = max(loop_depth, len(loop_depths))
+
+    name_matches = len(re.findall(r"\b" + re.escape(method_name) + r"\s*\(", cleaned)) if method_name else 0
+    recursive = name_matches >= 2 if signature_present else name_matches >= 1
+
+    return {"complexity": complexity, "cognitive": cognitive,
+            "loop_count": loop_count, "loop_depth": loop_depth,
+            "alloc_in_loop": alloc_in_loop, "recursive": recursive,
+            "param_count": _param_count_from_signature(sig),
+            "signature": sig}
+
+
+# Q_INVOKABLE 方法声明（方法名提取，与旧 search_code 正则同源）
+_Q_INVOKABLE_RE = re.compile(
+    r"Q_INVOKABLE\s+(?:virtual\s+)?[\w:<>&*\s,]+?\s+(\w+)\s*\(")
+_CLASS_DECL_RE = re.compile(r"^\s*(?:template\s*<[^>]*>\s*)?class\s+(\w+)")
+
+
+def scan_qt_macros_in_file(text, class_name_from_stem=None):
+    """单文件本地扫描 Q_INVOKABLE / Q_PLUGIN_METADATA。
+
+    返回 (invokables {class: [method]}, has_plugin_metadata bool)。
+    class 上下文：文件内最近一次 `class X` 声明（嵌套类以后者为准）。
+    """
+    inv = {}
+    has_plugin = False
+    current = None
+    for line in text.splitlines():
+        m = _CLASS_DECL_RE.match(line)
         if m:
-            cols = m.group(2).split()
+            current = m.group(1)
+        if "Q_PLUGIN_METADATA" in line:
+            has_plugin = True
+        m = _Q_INVOKABLE_RE.search(line)
+        if m and current:
+            inv.setdefault(current, []).append(m.group(1))
+    return inv, has_plugin
+
+
+# ── cypher 查询构造助手 ────────────────────────────────────────────────────
+
+def _cypher_str(s):
+    """cypher 字符串字面量转义（单引号）。"""
+    return "'" + str(s).replace("\\", "\\\\").replace("'", "\\'") + "'"
+
+
+def _file_where(alias, patterns):
+    """file_patterns（glob 简化）→ cypher WHERE 子句（OR 连接，None 表示不过滤）。
+
+    支持：'src/**' → STARTS WITH 'src/'；'**/plugins/**' → CONTAINS '/plugins/'；
+    'src/foo' → STARTS WITH 'src/foo/'。
+    """
+    clauses = []
+    for p in patterns or []:
+        p = (p or "").strip().strip("/")
+        if not p:
             continue
-        m = re.match(r"^total:\s+(\d+)", line)
-        if m:
-            total = int(m.group(1))
-            continue
-        # 数据行有缩进；header/total/hint("Query returned no results")顶格
-        if raw[:1] in (" ", "\t"):
-            toks = _tokenize_text_row(line)
-            if toks:
-                rows.append(toks)
-    return {"rows": rows, "total": total, "cols": cols}
+        if "**/" in p:
+            seg = p.split("**/")[-1].strip("/").split("/**")[0]
+            if seg:
+                clauses.append(f"{alias}.filePath CONTAINS {_cypher_str('/' + seg + '/')}")
+        else:
+            prefix = p.split("/**")[0]
+            if prefix:
+                clauses.append(f"{alias}.filePath STARTS WITH {_cypher_str(prefix + '/')}")
+    return " OR ".join(clauses) if clauses else None
 
 
-def _flatten_search_graph(result):
-    """Flatten search_graph format=json tree model into {results: [...]}.
+# GitNexus（LadybugDB）分页语法：SKIP 必须在 LIMIT 之前（实测 LIMIT n SKIP m 报语法错）
+PAGE_SIZE = 500
+MAX_CYPHER_ROWS = 20000
 
-    Input:  {total, cols, groups[{qn_prefix, file, rows[[...]]}], has_more}
-    Output: {results: [{qualified_name, name, label, file_path, lines,
-            in_degree, out, <fields...>}], total, has_more}
 
-    qualified_name = qn_prefix + "." + name（无 prefix 时取 name）。
-    `lines` 行范围串 → 整数计数；`in` → `in_degree`。
+def paginate_cypher(client, match_clause, return_cols, order_cols,
+                    page_size=PAGE_SIZE, max_rows=MAX_CYPHER_ROWS, repo=None):
+    """SKIP-before-LIMIT 分页执行 cypher，汇总 {cols, rows, total}。
+
+    排序保证翻页确定性；单页不足 page_size 即止。
+    repo：GitNexus 多仓库索引时必传（否则服务端报 Multiple repositories）。
     """
-    cols = result.get("cols", [])
-    groups = result.get("groups", [])
-    results = []
-    for grp in groups:
-        qn_prefix = grp.get("qn_prefix", "")
-        file_path = grp.get("file", "")
-        for row in grp.get("rows", []):
-            d = dict(zip(cols, row))
-            name = d.get("name", "")
-            d["qualified_name"] = (qn_prefix + "." + name) if qn_prefix else name
-            d["file_path"] = file_path
-            if "lines" in d:
-                d["lines"] = _lines_range_to_int(d["lines"])
-            if "in" in d:
-                d["in_degree"] = d["in"]
-            results.append(d)
-    return {
-        "results": results,
-        "total": result.get("total", len(results)),
-        "has_more": result.get("has_more", False),
-    }
-
-
-def _normalize_search_code(result):
-    """Normalize search_code full-mode {cols, rows} into {results: [{...}]}.
-
-    列数组 → dict；`qn`→`qualified_name`、`file`→`file_path`。
-    files 模式（有 `files` 无 `rows`）不进入此函数。
-    """
-    cols = result.get("cols", [])
-    rows = result.get("rows", [])
-    results = []
-    for row in rows:
-        d = dict(zip(cols, row))
-        if "qn" in d and "qualified_name" not in d:
-            d["qualified_name"] = d["qn"]
-        if "file" in d and "file_path" not in d:
-            d["file_path"] = d["file"]
-        results.append(d)
-    out = dict(result)
-    out["results"] = results
-    return out
-
-
-def _normalize_mcp_response(tool_name, result):
-    """归一化本地 codebase-memory-mcp 响应形状至 mcp-scan 下游期望。
-
-    对远端 MCP 安全（形状已匹配时原样返回）：
-    - search_graph format=json → tree model {groups}；展平为 {results:[...]}
-    - query_graph → 纯文本 "rows: N (cols: ...)"；解析为 {rows:[[...]]}
-    - search_code full → {cols,rows}；映射为 {results:[{...}]}
-    """
-    if isinstance(result, str):
-        if tool_name == "query_graph":
-            return _parse_query_graph_text(result)
-        return result
-    if isinstance(result, dict):
-        if tool_name == "search_graph" and "groups" in result and "results" not in result:
-            return _flatten_search_graph(result)
-        if tool_name == "search_code" and "rows" in result and "results" not in result:
-            return _normalize_search_code(result)
-        return result
-    return result
+    cols, rows = [], []
+    skip = 0
+    while True:
+        stmt = (f"{match_clause} RETURN {return_cols} "
+                f"ORDER BY {order_cols} SKIP {skip} LIMIT {page_size}")
+        args = {"statement": stmt}
+        if repo:
+            args["repo"] = repo
+        data = client.call_tool("cypher", args)
+        if not cols:
+            cols = data.get("cols", []) if isinstance(data, dict) else []
+        batch = data.get("rows", []) if isinstance(data, dict) else []
+        rows.extend(batch)
+        if len(batch) < page_size or len(rows) >= max_rows:
+            break
+        skip += page_size
+    return {"cols": cols, "rows": rows, "total": len(rows)}
 
 
 class MCPClient:
@@ -1017,7 +1196,12 @@ class MCPClient:
         return result
 
     def call_tool(self, name, arguments, retries=3):
-        """Call an MCP tool with retry on session expiry."""
+        """Call an MCP tool with retry on transport errors and index-rebuild locks.
+
+        响应经 parse_tool_result 解码（字符串化 JSON / markdown 表）；
+        GraphQueryError.retryable（LadybugDB 重建锁）重试时加倍退避；
+        语法/绑定类错误（Prepare failed）立即抛出不重试。
+        """
         for attempt in range(retries):
             try:
                 payload = {
@@ -1037,18 +1221,28 @@ class MCPClient:
                 resp = urllib.request.urlopen(req, timeout=self.timeout)
                 result = self._parse_body(resp.read().decode())
                 if "error" in result:
-                    raise RuntimeError(
+                    raise GraphQueryError(
                         f"RPC error: {json.dumps(result['error'], ensure_ascii=False)[:300]}")
                 # MCP returns content as text blocks
                 content = result.get("result", {}).get("content", [])
                 for block in content:
                     if block.get("type") == "text":
-                        try:
-                            parsed = json.loads(block["text"])
-                        except json.JSONDecodeError:
-                            parsed = block["text"]
-                        return _normalize_mcp_response(name, parsed)
-                return content
+                        return parse_tool_result(block["text"])
+                if content:
+                    return content
+                # 空 content：视作空表（cypher 无结果）
+                return {"cols": [], "rows": [], "total": 0}
+            except GraphQueryError as e:
+                if e.retryable and attempt < retries - 1:
+                    wait = 4 * (attempt + 1) * 2  # 索引重建锁耗时较长，加倍退避
+                    print(f"   ⚠️  {name} index busy (retry {attempt + 1}/{retries}, wait {wait}s): {e}")
+                    time.sleep(wait)
+                    try:
+                        self.initialize()
+                    except Exception:
+                        pass
+                    continue
+                raise
             except Exception as e:
                 if attempt < retries - 1:
                     wait = 2 * (attempt + 1)
@@ -1063,276 +1257,591 @@ class MCPClient:
                     raise
 
 
-# ── 数据采集步骤 ──
+# ── GitNexus 数据适配层（GitNexusAdapter）────────────────────────────────────────────
 
 
-# ── 数据采集步骤 ──
+def _derive_return_keys(return_cols):
+    """RETURN 子句 → 列键名列表（取 AS 别名；无别名时用表达式的最后一段）。"""
+    keys = []
+    depth = 0
+    cur = []
+    for ch in return_cols:
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth = max(0, depth - 1)
+        if ch == "," and depth == 0:
+            keys.append("".join(cur))
+            cur = []
+        else:
+            cur.append(ch)
+    if "".join(cur).strip():
+        keys.append("".join(cur))
+    out = []
+    for k in keys:
+        k = k.strip()
+        if " AS " in k.upper():
+            # 取 AS 后的别名（大小写不敏感分割）
+            idx = k.upper().rindex(" AS ")
+            out.append(k[idx + 4:].strip().strip("`"))
+        else:
+            out.append(k.split(".")[-1].strip().strip("`"))
+    return out
 
-def collect_methods(client, project, file_patterns=None, limit=2000):
-    """Step 1: Paginated search_graph to collect all Method + Function nodes.
 
-    file_patterns 支持多个目录（项目含多个源码目录 / 插件目录时使用）：
-      - 传入 list 时，逐个 pattern 分页拉取后按 qualified_name 去重合并
-      - None / 空 list 时全量查询（不过滤）
-    Function nodes include free C/C++ functions (main, helpers, etc.).
-    Some Function entries are noise (macros, using-declarations, misclassified
-    constructors) — filtered later by scan-inventory.py.
+class GitNexusAdapter:
+    """GitNexus 图谱 + 本地仓库双源适配层。
+
+    职责划分（详见 doc/gitnexus-适配分析.md）：
+      - 图谱（cypher/context/list_repos）：符号定位、CALLS/EXTENDS/HAS_METHOD
+        关系、File 枚举。属性 camelCase；无 parent_class/base_classes/annotations
+        属性（实测 Binder exception）；content 截断 5016 字符（实测）。
+      - 本地仓库（repo_root）：方法体行切片、复杂度指标估算、Q_INVOKABLE/
+        Q_PLUGIN_METADATA、签名、TEST_F 用例。
+    产出的数据结构与旧 codebase-memory-mcp 路径完全对齐（下游零改动）。
     """
-    # 兼容单个字符串传入
-    if isinstance(file_patterns, str):
-        file_patterns = [file_patterns]
-    # None / 空 → 单轮全量查询
-    patterns = file_patterns or [None]
 
-    all_methods = []
-    all_functions = []
-    seen_method_qns = set()
-    seen_function_qns = set()
+    # 测试文件路径前缀（is_test 判定 + 测试模块发现）
+    TEST_PATH_PREFIXES = ("tests/", "test/", "autotests/")
+    SOURCE_EXTS = (".h", ".hpp", ".hh", ".cpp", ".cc", ".cxx")
+    TEST_F_RE = re.compile(r"\bTEST_F\s*\(\s*(\w+)\s*,\s*(\w+)\s*\)")
 
-    print(f"\n📊 [1/5] Collecting Method + Function nodes...")
-    if any(patterns):
-        print(f"   file_patterns: {[p for p in patterns if p]}")
+    def __init__(self, client, project, repo_root=None):
+        self.client = client
+        self.project = project
+        self.repo_root = repo_root or ""
+        self._parent_cache = None
+        self._indegree_cache = None
 
-    for pattern in patterns:
-        args_base = {
-            "project": project, "limit": limit, "offset": 0,
-            "format": "json", "fields": SEARCH_GRAPH_FIELDS,
+    # ── 基础查询 ──
+
+    def cypher_rows(self, match_clause, return_cols, order_cols,
+                    max_rows=MAX_CYPHER_ROWS, page_size=PAGE_SIZE):
+        """分页 cypher 查询 → [{别名: 值}, ...]（键来自 RETURN 子句显式别名）。"""
+        keys = _derive_return_keys(return_cols)
+        paginated = paginate_cypher(self.client, match_clause, return_cols,
+                                    order_cols, page_size=page_size, max_rows=max_rows,
+                                    repo=self.project)
+        rows = []
+        for raw in paginated["rows"]:
+            # markdown 单元格按列位置对齐；行短于列时补 None
+            vals = list(raw) + [None] * (len(keys) - len(raw))
+            rows.append(dict(zip(keys, vals)))
+        return rows
+
+    def find_repo(self):
+        """list_repos 分页遍历 → 本项目元信息；未索引返回 None。"""
+        offset = 0
+        page = 100
+        while True:
+            data = self.client.call_tool("list_repos", {"limit": page, "offset": offset})
+            repos = data.get("repositories", []) if isinstance(data, dict) else []
+            for r in repos:
+                if r.get("name") == self.project:
+                    return r
+            if len(repos) < page:
+                return None
+            offset += page
+
+    def repo_head_sha(self):
+        """图谱侧提交哈希（list_repos.lastCommit，替代旧 index_status.git.head_sha）。"""
+        info = self.find_repo()
+        return (info or {}).get("lastCommit", "")
+
+    def check_drift(self):
+        """本地 HEAD vs 图谱 lastCommit 漂移检查。
+
+        返回 (local_sha, graph_sha)；无法取本地 HEAD 时 local_sha 为空串。
+        """
+        graph_sha = self.repo_head_sha()
+        local_sha = ""
+        if self.repo_root and os.path.isdir(os.path.join(self.repo_root, ".git")):
+            try:
+                proc = subprocess.run(
+                    ["git", "rev-parse", "HEAD"], cwd=self.repo_root,
+                    capture_output=True, text=True, timeout=10)
+                if proc.returncode == 0:
+                    local_sha = proc.stdout.strip()
+            except Exception:
+                local_sha = ""
+        return local_sha, graph_sha
+    # ── 本地仓库访问 ──
+
+    def read_local_lines(self, file_path):
+        """读本地仓库文件 → 行列表（UTF-8 容错）；不可得返回 None。"""
+        if not self.repo_root or not file_path:
+            return None
+        fp = os.path.join(self.repo_root, file_path)
+        if not os.path.isfile(fp):
+            return None
+        try:
+            with open(fp, "r", encoding="utf-8", errors="replace") as f:
+                return f.readlines()
+        except OSError:
+            return None
+
+    def slice_body(self, file_path, start_line, end_line):
+        """按图谱行范围 [startLine, endLine]（1-based 闭区间）本地切片。
+
+        实测 GitNexus 行范围精确；切片免疫图谱 content 的 5016 字符截断。
+        """
+        lines = self.read_local_lines(file_path)
+        if lines is None or not start_line:
+            return ""
+        s = max(1, int(start_line))
+        e = int(end_line) if end_line else s
+        e = min(e, s + 5000, len(lines))
+        if e < s:
+            return ""
+        return "".join(lines[s - 1:e])
+
+    @classmethod
+    def is_test_path(cls, file_path):
+        """路径含 /tests/ /test/ /autotests/ 段 → 测试文件。"""
+        norm = "/" + (file_path or "").replace("\\", "/").strip("/")
+        return any(seg in norm for seg in ("/tests/", "/test/", "/autotests/"))
+
+    # ── 图谱关系缓存 ──
+
+    def parent_class_map(self):
+        """(filePath, name, startLine) → 所属类名（HAS_METHOD 全量扫描一遍）。
+
+        GitNexus 无 parent_class 属性（实测 Binder exception）；File 源的
+        HAS_METHOD（不属于类）不当作父类。
+        """
+        if self._parent_cache is None:
+            self._parent_cache = {}
+            rows = self.cypher_rows(
+                "MATCH (c)-[r:CodeRelation]->(m:Method) WHERE r.type = 'HAS_METHOD'",
+                "c.name AS parent, labels(c) AS clabels, m.filePath AS filePath, "
+                "m.name AS name, m.startLine AS sline",
+                "filePath, sline, name")
+            for r in rows:
+                clabels = r.get("clabels") or []
+                if isinstance(clabels, str):
+                    try:
+                        clabels = json.loads(clabels)
+                    except json.JSONDecodeError:
+                        clabels = [clabels]
+                if "File" in clabels:
+                    continue
+                self._parent_cache[(r["filePath"], r["name"], int(r["sline"] or 0))] = r["parent"]
+        return self._parent_cache
+
+    def in_degree_map(self):
+        """(filePath, name, startLine) → 被 CALLS 次数（全仓聚合，替代旧 `in` 字段）。"""
+        if self._indegree_cache is None:
+            self._indegree_cache = defaultdict(int)
+            rows = self.cypher_rows(
+                "MATCH (src)-[r:CodeRelation]->(t) "
+                "WHERE r.type = 'CALLS'",
+                "t.filePath AS filePath, t.name AS name, t.startLine AS sline",
+                "filePath, sline, name")
+            for r in rows:
+                self._indegree_cache[(r["filePath"], r["name"], int(r["sline"] or 0))] += 1
+        return self._indegree_cache
+
+    # ── Step 1: Method/Function 采集 ──
+
+    def collect_methods(self, file_patterns=None, limit=2000):
+        """Step 1: 枚举 Method + Function 节点，补齐下游评分所需字段。
+
+        图谱仅提供 name/filePath/startLine/endLine（实测）；其余字段来源：
+          parent_class ← HAS_METHOD；in_degree ← CALLS 聚合；
+          complexity/cognitive/loop_*/recursive/param_count/signature ← 本地源码估算。
+        产出字段与旧 search_graph 路径对齐（qualified_name/file_path/lines/...）。
+        Function 节点含自由函数（main/helpers），噪声由 scan 评分层过滤。
+        """
+        if isinstance(file_patterns, str):
+            file_patterns = [file_patterns]
+        patterns = file_patterns or [None]
+
+        print(f"\n📊 [1/5] Collecting Method + Function nodes...")
+        if any(patterns):
+            print(f"   file_patterns: {[p for p in patterns if p]}")
+
+        all_methods = []
+        all_functions = []
+        seen = set()  # (label, filePath, name, startLine) 跨 pattern 去重
+        parent_map = self.parent_class_map()
+        indeg = self.in_degree_map()
+
+        for pattern in patterns:
+            where_m = _file_where("m", [pattern] if pattern else None)
+            where_f = _file_where("f", [pattern] if pattern else None)
+            if pattern:
+                print(f"   ── pattern: {pattern}")
+
+            m_rows = self.cypher_rows(
+                "MATCH (m:Method)" + (f" WHERE {where_m}" if where_m else ""),
+                "m.name AS name, m.filePath AS filePath, "
+                "m.startLine AS startLine, m.endLine AS endLine",
+                "filePath, startLine, name", max_rows=limit)
+            f_rows = self.cypher_rows(
+                "MATCH (f:Function)" + (f" WHERE {where_f}" if where_f else ""),
+                "f.name AS name, f.filePath AS filePath, "
+                "f.startLine AS startLine, f.endLine AS endLine",
+                "filePath, startLine, name", max_rows=limit)
+            print(f"   Method: {len(m_rows)}, Function: {len(f_rows)}")
+
+            for r in m_rows:
+                key = ("Method", r["filePath"], r["name"], int(r["startLine"] or 0))
+                if key in seen:
+                    continue
+                seen.add(key)
+                all_methods.append(self._method_row(r, "Method", parent_map, indeg))
+            for r in f_rows:
+                key = ("Function", r["filePath"], r["name"], int(r["startLine"] or 0))
+                if key in seen:
+                    continue
+                seen.add(key)
+                all_functions.append(self._method_row(r, "Function", parent_map, indeg))
+
+        # qn 在全量收集后统一分配（Method/Function 各自一个命名空间）
+        self._assign_qualified_names(all_methods)
+        self._assign_qualified_names(all_functions)
+        print(f"   ✅ {len(all_methods)} methods + {len(all_functions)} functions collected")
+        return all_methods, all_functions
+
+    def _method_row(self, r, label, parent_map, indeg):
+        """图谱行 → mcp_dump 方法行（字段与旧 search_graph 路径对齐）。"""
+        fp = r["filePath"] or ""
+        name = r["name"] or ""
+        start = int(r["startLine"] or 0)
+        end = int(r["endLine"] or 0)
+        parent = parent_map.get((fp, name, start), "")
+        body = self.slice_body(fp, start, end)
+        metrics = compute_body_metrics(body, name)
+        return {
+            "qualified_name": "",  # _assign_qualified_names 统一分配
+            "name": name,
+            "label": label,
+            "file_path": fp,
+            "startLine": start,
+            "lines": max(0, end - start + 1) if end else 0,
+            "in_degree": indeg.get((fp, name, start), 0),
+            "out": 0,
+            "complexity": metrics["complexity"],
+            "cognitive": metrics["cognitive"],
+            "loop_count": metrics["loop_count"],
+            "loop_depth": metrics["loop_depth"],
+            "alloc_in_loop": metrics["alloc_in_loop"],
+            "recursive": metrics["recursive"],
+            "transitive_loop_depth": 0,   # GitNexus 无跨层循环传播数据（保守 0）
+            "linear_scan_in_loop": 0,
+            "param_count": metrics["param_count"],
+            "signature": metrics["signature"],
+            "parent_class": parent,
+            "is_test": self.is_test_path(fp),
+            "docstring": "",
         }
-        if pattern:
-            args_base["file_pattern"] = pattern
-            print(f"   ── pattern: {pattern}")
 
-        # 1A. Method nodes (class methods)
-        offset = 0
-        page = 0
-        args = {**args_base, "label": "Method"}
-        while True:
-            page += 1
-            args["offset"] = offset
-            data = client.call_tool("search_graph", args)
-            results = data.get("results", [])
-            total = data.get("total", 0)
-            has_more = data.get("has_more", False)
+    @staticmethod
+    def _assign_qualified_names(rows):
+        """分配 qualified_name：Method='Class.name'，Function=裸名；撞名追加 '@文件名'。
 
-            new = 0
-            for r in results:
-                qn = r.get("qualified_name")
-                # 无 qn 的噪声节点直接保留；有 qn 的按 qn 去重
-                if qn and qn in seen_method_qns:
+        旧图谱 qn 带命名空间前缀；GitNexus 无命名空间属性，采用类内归属 +
+        文件名消歧，同文件重载再追加行号。_tm_normalize_qn（剥 '-' 前导段）
+        对新格式天然兼容。
+        """
+        base_counts = defaultdict(int)
+        bases = []
+        for r in rows:
+            base = f"{r['parent_class']}.{r['name']}" if r["parent_class"] else r["name"]
+            bases.append(base)
+            base_counts[base] += 1
+        used = set()
+        for r, base in zip(rows, bases):
+            qn = base
+            if base_counts[base] > 1:
+                stem = os.path.splitext(os.path.basename(r["file_path"] or ""))[0]
+                cand = f"{base}@{stem}" if stem else base
+                if cand in used:
+                    cand = f"{cand}@{int(r['startLine'] or 0)}"
+                qn = cand
+            if qn in used:
+                qn = f"{qn}@{int(r['startLine'] or 0)}"
+            used.add(qn)
+            r["qualified_name"] = qn
+
+
+    # ── Step 2-4: 继承 / DBus slots / Qt 宏 ──
+
+    def list_source_files(self, file_patterns=None, max_files=8000):
+        """图谱 File 节点 → 本地存在的 C/C++ 源文件路径列表（宏扫描范围）。"""
+        where = _file_where("f", file_patterns)
+        rows = self.cypher_rows(
+            "MATCH (f:File)" + (f" WHERE {where}" if where else ""),
+            "f.filePath AS filePath", "filePath", max_rows=max_files)
+        out = []
+        for r in rows:
+            fp = r["filePath"] or ""
+            if not fp.lower().endswith(self.SOURCE_EXTS):
+                continue
+            if not self.repo_root or os.path.isfile(os.path.join(self.repo_root, fp)):
+                out.append(fp)
+        return out
+
+    def collect_inheritance(self):
+        """Step 2: EXTENDS/IMPLEMENTS 边 → DBus / 并发 / GUI 基类清单。
+
+        GitNexus 无 base_classes 属性（实测 CONTAINS 直译报 Binder exception），
+        改查 CodeRelation 关系边 + 基类名白名单过滤。
+        Returns (dbus_adaptor, dbus_interface, concurrent, gui)，
+        每项 [{name, qualified_name, file_path, base_classes}]。
+        """
+        print(f"\n📊 [2/5] Detecting inheritance chains...")
+        buckets = [
+            ("DBus Adaptor (server)", DBUS_ADAPTOR_BASES),
+            ("DBus Interface (client)", DBUS_INTERFACE_BASES),
+            ("Concurrent", CONCURRENT_BASES),
+            ("GUI", GUI_BASES),
+        ]
+        all_bases = sorted({b for _, bases in buckets for b in bases})
+        base_clause = ",".join(_cypher_str(b) for b in all_bases)
+        rows = self.cypher_rows(
+            "MATCH (c)-[r:CodeRelation]->(b) "
+            f"WHERE r.type IN ['EXTENDS', 'IMPLEMENTS'] AND b.name IN [{base_clause}]",
+            "c.name AS name, c.filePath AS filePath, b.name AS base",
+            "name, filePath")
+        per_class = {}
+        for r in rows:
+            if self.is_test_path(r["filePath"]):
+                continue
+            per_class.setdefault((r["name"], r["filePath"] or ""), set()).add(r["base"])
+        results = []
+        for label, bases_list in buckets:
+            bset = set(bases_list)
+            out = []
+            for (cname, fp), bases in per_class.items():
+                hit = bases & bset
+                if hit:
+                    out.append({
+                        "name": cname,
+                        "qualified_name": cname,
+                        "file_path": fp,
+                        "base_classes": sorted(hit),
+                    })
+            out.sort(key=lambda c: c["name"])
+            results.append(out)
+            print(f"   {label}: {len(out)}")
+        return results[0], results[1], results[2], results[3]
+
+    def collect_dbus_slots(self, dbus_adaptor_classes):
+        """Step 3: HAS_METHOD → 每个 DBus Adaptor 类的方法 → dbus_slots。
+
+        仅 QDBusAbstractAdaptor（服务端）slots 是契约级测试目标；
+        过滤构造/析构/emit* 信号（与旧一致）。
+        """
+        print(f"\n📊 [3/5] Collecting DBus Adaptor slots...")
+        dbus_slots = {}
+        for cls in dbus_adaptor_classes:
+            cls_name = cls["name"]
+            rows = self.cypher_rows(
+                f"MATCH (c)-[r:CodeRelation]->(m:Method) WHERE r.type = 'HAS_METHOD' "
+                f"AND c.name = {_cypher_str(cls_name)}",
+                "m.name AS name", "name")
+            slots = []
+            for r in rows:
+                method_name = r["name"] or ""
+                if method_name == cls_name:      # 构造函数
                     continue
-                if qn:
-                    seen_method_qns.add(qn)
-                all_methods.append(r)
-                new += 1
-
-            if page == 1:
-                print(f"   Method: total={total}, +{new} new")
-
-            if not has_more or not results:
-                break
-            offset += limit
-
-        # 1B. Function nodes (free functions)
-        offset = 0
-        page = 0
-        args = {**args_base, "label": "Function"}
-        while True:
-            page += 1
-            args["offset"] = offset
-            data = client.call_tool("search_graph", args)
-            results = data.get("results", [])
-            total = data.get("total", 0)
-            has_more = data.get("has_more", False)
-
-            new = 0
-            for r in results:
-                qn = r.get("qualified_name")
-                if qn and qn in seen_function_qns:
+                if method_name.startswith("~"):  # 析构函数
                     continue
-                if qn:
-                    seen_function_qns.add(qn)
-                all_functions.append(r)
-                new += 1
+                if method_name.startswith("emit"):  # 可能是 Q_SIGNALS
+                    continue
+                slots.append(method_name)
+            if slots:
+                dbus_slots[cls["qualified_name"]] = sorted(set(slots))
+                print(f"   {cls_name}: {len(slots)} slots")
+        print(f"   ✅ {sum(len(v) for v in dbus_slots.values())} DBus slots total")
+        return dbus_slots
 
-            if page == 1:
-                print(f"   Function: total={total}, +{new} new")
+    def collect_qt_macros(self, file_patterns=None):
+        """Step 4: Q_INVOKABLE / Q_PLUGIN_METADATA 本地扫描。
 
-            if not has_more or not results:
-                break
-            offset += limit
-
-    print(f"   ✅ {len(all_methods)} methods + {len(all_functions)} functions collected")
-    return all_methods, all_functions
-
-
-def collect_inheritance(client, project):
-    """Step 2: query_graph to detect DBus / concurrent / GUI base classes.
-
-    Returns (dbus_adaptor_classes, dbus_interface_classes, concurrent_classes, gui_classes).
-    Each is a list of dicts: {name, qualified_name, file_path, base_classes}.
-    """
-    print(f"\n📊 [2/5] Detecting inheritance chains...")
-
-    dbus_adaptor = []
-    dbus_interface = []
-    concurrent = []
-    gui = []
-
-    # DBus Adaptor (server-side, contract-level)
-    for base in DBUS_ADAPTOR_BASES:
-        query = (
-            f"MATCH (c:Class) WHERE c.base_classes CONTAINS '{base}' "
-            f"RETURN c.name, c.qualified_name, c.file_path, c.base_classes"
-        )
-        data = client.call_tool("query_graph", {"project": project, "query": query})
-        for row in data.get("rows", []):
-            dbus_adaptor.append({
-                "name": row[0], "qualified_name": row[1],
-                "file_path": row[2], "base_classes": _parse_bases(row[3]),
-            })
-
-    # DBus Interface (client-side proxy — recorded but NOT contract-level)
-    for base in DBUS_INTERFACE_BASES:
-        query = (
-            f"MATCH (c:Class) WHERE c.base_classes CONTAINS '{base}' "
-            f"RETURN c.name, c.qualified_name, c.file_path, c.base_classes"
-        )
-        data = client.call_tool("query_graph", {"project": project, "query": query})
-        for row in data.get("rows", []):
-            dbus_interface.append({
-                "name": row[0], "qualified_name": row[1],
-                "file_path": row[2], "base_classes": _parse_bases(row[3]),
-            })
-
-    # Concurrent base classes
-    for base in CONCURRENT_BASES:
-        query = (
-            f"MATCH (c:Class) WHERE c.base_classes CONTAINS '{base}' "
-            f"RETURN c.name, c.qualified_name, c.file_path, c.base_classes"
-        )
-        data = client.call_tool("query_graph", {"project": project, "query": query})
-        for row in data.get("rows", []):
-            concurrent.append({
-                "name": row[0], "qualified_name": row[1],
-                "file_path": row[2], "base_classes": _parse_bases(row[3]),
-            })
-
-    # GUI base classes → is_gui（Mode 2 测试生成的环境约束依据）
-    for base in GUI_BASES:
-        query = (
-            f"MATCH (c:Class) WHERE c.base_classes CONTAINS '{base}' "
-            f"RETURN c.name, c.qualified_name, c.file_path, c.base_classes"
-        )
-        data = client.call_tool("query_graph", {"project": project, "query": query})
-        for row in data.get("rows", []):
-            gui.append({
-                "name": row[0], "qualified_name": row[1],
-                "file_path": row[2], "base_classes": _parse_bases(row[3]),
-            })
-
-    # Deduplicate
-    dbus_adaptor = _dedup_classes(dbus_adaptor)
-    dbus_interface = _dedup_classes(dbus_interface)
-    concurrent = _dedup_classes(concurrent)
-    gui = _dedup_classes(gui)
-
-    print(f"   DBus Adaptor (server): {len(dbus_adaptor)}")
-    print(f"   DBus Interface (client): {len(dbus_interface)}")
-    print(f"   Concurrent: {len(concurrent)}")
-    print(f"   GUI: {len(gui)}")
-    return dbus_adaptor, dbus_interface, concurrent, gui
-
-
-def collect_dbus_slots(client, project, dbus_adaptor_classes):
-    """Step 3: Get methods of each DBus Adaptor class → dbus_slots map.
-
-    Only QDBusAbstractAdaptor (server-side) slots are contract-level test targets.
-    QDBusAbstractInterface (client proxy) methods are auto-generated call() wrappers.
-
-    Returns dbus_slots = {class_qualified_name: [method_name, ...]}.
-    """
-    print(f"\n📊 [3/5] Collecting DBus Adaptor slots...")
-    dbus_slots = {}
-
-    for cls in dbus_adaptor_classes:
-        cls_name = cls["name"]
-        cls_qn = cls["qualified_name"]
-        # query_graph: all methods whose parent_class contains the class name
-        query = (
-            f"MATCH (m:Method) WHERE m.parent_class CONTAINS '{cls_name}' "
-            f"RETURN m.name, m.qualified_name"
-        )
-        data = client.call_tool("query_graph", {"project": project, "query": query})
-        slots = []
-        for row in data.get("rows", []):
-            method_name = row[0]
-            # Filter out constructors, destructors, and Q_SIGNALS (emit*)
-            if method_name == cls_name:
-                continue  # constructor
-            if method_name.startswith("~"):
-                continue  # destructor
-            if method_name.startswith("emit"):
-                continue  # likely Q_SIGNALS
-            slots.append(method_name)
-
-        if slots:
-            dbus_slots[cls_qn] = slots
-            print(f"   {cls_name}: {len(slots)} slots")
-
-    print(f"   ✅ {sum(len(v) for v in dbus_slots.values())} DBus slots total")
-    return dbus_slots
-
-
-def collect_qt_macros(client, project):
-    """Step 4: search_code for Q_INVOKABLE and Q_PLUGIN_METADATA (best-effort).
-
-    Returns (q_invokables, q_plugins):
-      q_invokables = {class_short_name: [method_name, ...]}
-      q_plugins = {class_short_name: True}
-    """
-    print(f"\n📊 [4/5] Detecting Q_INVOKABLE / Q_PLUGIN_METADATA...")
-    q_invokables = {}
-    q_plugins = {}
-
-    # Q_INVOKABLE — full mode to extract method names from source
-    try:
-        data = client.call_tool("search_code", {
-            "project": project, "pattern": "Q_INVOKABLE",
-            "mode": "full", "limit": 100,
-        })
-        for res in data.get("results", []):
-            src = res.get("source", "")
-            qn = res.get("qualified_name", "")
-            # Extract method name: Q_INVOKABLE [virtual] <type> <name>(
-            for m in re.finditer(
-                r"Q_INVOKABLE\s+(?:virtual\s+)?[\w:<>&*\s,]+?\s+(\w+)\s*\(", src
-            ):
-                method_name = m.group(1)
-                # Extract class short name from qualified_name (second-to-last segment)
-                class_name = _extract_class_from_qn(qn)
-                if class_name:
-                    q_invokables.setdefault(class_name, []).append(method_name)
+        GitNexus 图谱无 annotations 属性、Macro 标签不可查（实测）→
+        图谱 File 枚举 + 本地逐文件正则（同旧 search_code 正则）。
+        Returns (q_invokables, q_plugins)。
+        """
+        print(f"\n📊 [4/5] Detecting Q_INVOKABLE / Q_PLUGIN_METADATA...")
+        q_invokables = {}
+        q_plugins = {}
+        if not self.repo_root:
+            print("   ⚠️  未提供 --repo-root，跳过本地宏扫描")
+            return q_invokables, q_plugins
+        files = self.list_source_files(file_patterns)
+        scanned = 0
+        for fp in files:
+            lines = self.read_local_lines(fp)
+            if lines is None:
+                continue
+            inv, has_plugin = scan_qt_macros_in_file("".join(lines))
+            scanned += 1
+            for cls_name, method_names in inv.items():
+                bucket = q_invokables.setdefault(cls_name, [])
+                for mname in method_names:
+                    if mname not in bucket:
+                        bucket.append(mname)
+            if has_plugin:
+                # 与旧 search_code files 模式同构：按文件名主干归plugin类
+                class_name = os.path.splitext(os.path.basename(fp))[0]
+                q_plugins[class_name] = True
+        print(f"   scanned {scanned}/{len(files)} source files")
         print(f"   Q_INVOKABLE: {sum(len(v) for v in q_invokables.values())} methods "
               f"in {len(q_invokables)} classes")
-    except Exception as e:
-        print(f"   ⚠️  Q_INVOKABLE search failed: {e}")
-
-    # Q_PLUGIN_METADATA — files mode, mark classes in those files
-    try:
-        data = client.call_tool("search_code", {
-            "project": project, "pattern": "Q_PLUGIN_METADATA",
-            "mode": "files", "limit": 50,
-        })
-        for file_path in data.get("files", []):
-            # Extract class name from file path (filename without extension)
-            basename = os.path.basename(file_path)
-            class_name = os.path.splitext(basename)[0]
-            q_plugins[class_name] = True
         print(f"   Q_PLUGIN_METADATA: {len(q_plugins)} plugin classes")
-    except Exception as e:
-        print(f"   ⚠️  Q_PLUGIN_METADATA search failed: {e}")
+        return q_invokables, q_plugins
 
-    return q_invokables, q_plugins
+    # ── 方法体 / 测试模块 / CALLS 采集 ──
+
+    def _context_content(self, name, file_path):
+        """context 工具降级取 content（5016 字符截断，实测）。"""
+        try:
+            data = self.client.call_tool("context", {
+                "name": name, "file_path": file_path,
+                "kind": "Method", "include_content": True,
+                "repo": self.project,
+            })
+        except Exception:
+            return ""
+        if not isinstance(data, dict):
+            return ""
+        if data.get("status") == "found":
+            return (data.get("symbol") or {}).get("content", "") or ""
+        if data.get("status") == "ambiguous":
+            for cand in data.get("candidates") or []:
+                if (cand.get("filePath") or cand.get("file_path")) == file_path:
+                    return cand.get("content", "") or ""
+        return ""
+
+    def fetch_method_bodies(self, classname, methods):
+        """图谱定位 + 本地行切片获取方法体（extract-branches 用）。
+
+        重载消歧：HAS_METHOD 候选按（类名匹配， 参数个数差）排序取最优；
+        参数个数来自本地签名字段解析（inventory 方法 signature）。
+        本地文件缺失时降级 context content（5016 截断，标 truncated=True）；
+        规则名 SNIPPET_FETCH_FAILED 及输出结构保持不变（下游兼容）。
+        Returns {qualified_name: {body, name, complexity, error?, truncated?}}。
+        """
+        if not methods:
+            return {}
+        names = sorted({m.get("name") for m in methods if m.get("name")})
+        rows = self.cypher_rows(
+            "MATCH (c)-[r:CodeRelation]->(m:Method) WHERE r.type = 'HAS_METHOD' "
+            f"AND m.name IN [{','.join(_cypher_str(n) for n in names)}]",
+            "c.name AS parent, m.name AS name, m.filePath AS filePath, "
+            "m.startLine AS startLine, m.endLine AS endLine",
+            "filePath, startLine, name")
+        by_name = defaultdict(list)
+        for r in rows:
+            by_name[r["name"]].append(r)
+
+        result = {}
+        for m in methods:
+            qn = m.get("qualified_name") or m.get("name") or ""
+            entry = {
+                "body": "",
+                "name": m.get("name", ""),
+                "complexity": m.get("complexity", 0) or 0,
+            }
+            cands = by_name.get(m.get("name"), [])
+            if cands:
+                want_pc = _param_count_from_signature(m.get("signature", "") or "")
+
+                def cand_key(r):
+                    body = self.slice_body(r["filePath"], r["startLine"], r["endLine"])
+                    pc = _param_count_from_signature(_signature_from_body(body))
+                    return (0 if r["parent"] == classname else 1,
+                            abs(pc - want_pc) if want_pc else 0)
+
+                pick = min(cands, key=cand_key)
+                body = self.slice_body(pick["filePath"], pick["startLine"], pick["endLine"])
+                if body:
+                    entry["body"] = body
+                else:
+                    content = self._context_content(pick["name"], pick["filePath"])
+                    if content:
+                        entry["body"] = content
+                        entry["truncated"] = True
+                    else:
+                        entry["error"] = (
+                            f"方法体不可得：本地文件缺失且图谱 content 为空 "
+                            f"({pick['filePath']}:{pick['startLine']}-{pick['endLine']})")
+            else:
+                entry["error"] = f"图谱未定位到方法 {m.get('name')}（类 {classname}）"
+            result[qn] = entry
+        return result
+
+    def discover_test_modules(self):
+        """测试目录 File 节点 → ut_*/test_* 测试模块 [{name, file_path, out_degree}]。
+
+        兼容两种命名惯例：新代码 ut_*.cpp（deepin 现行），旧快照 test_*.cpp
+        （如 dde-file-manager 图谱基线）。非 gTest 文件无 TEST_* 宏，在
+        fetch_test_cases 里自然产出空用例，不引入噪声。
+        """
+        clauses = " OR ".join(
+            f"f.filePath STARTS WITH {_cypher_str(p)}" for p in self.TEST_PATH_PREFIXES)
+        rows = self.cypher_rows(
+            f"MATCH (f:File) WHERE {clauses}",
+            "f.filePath AS filePath", "filePath")
+        modules = []
+        for r in rows:
+            fp = r["filePath"] or ""
+            if UT_FILE_PATTERN.search(fp):
+                modules.append({"name": os.path.basename(fp), "file_path": fp, "out_degree": 0})
+        return modules
+
+    def collect_all_calls(self, test_modules):
+        """测试模块 CALLS 目标采集（图谱关系边）→ {源 qn: {test_file}}。
+
+        与旧逻辑对齐：仅统计测试模块文件发出的 CALLS；目标在测试目录 →
+        视为 stub 剔除。源 qn 用 parent_class_map 归一（Class.name 或裸名），
+        与 inventory qualified_name 同构。
+        """
+        module_files = {m["file_path"] for m in test_modules}
+        if not module_files:
+            return {}
+        src_clause = ",".join(_cypher_str(f) for f in sorted(module_files))
+        rows = self.cypher_rows(
+            f"MATCH (src)-[r:CodeRelation]->(t) WHERE r.type = 'CALLS' "
+            f"AND src.filePath IN [{src_clause}]",
+            "src.filePath AS srcFile, t.name AS name, t.filePath AS filePath, "
+            "t.startLine AS startLine",
+            "srcFile, name, filePath")
+        parent_map = self.parent_class_map()
+        source_to_tests = defaultdict(set)
+        test_hit = set()
+        for r in rows:
+            test_hit.add(r["srcFile"])
+            tpath = r["filePath"] or ""
+            if self.is_test_path(tpath):
+                continue  # 测试目录内定义的被“调用”目标 → stub
+            name = r["name"]
+            if not name:
+                continue
+            parent = parent_map.get((tpath, name, int(r["startLine"] or 0)), "")
+            qn = f"{parent}.{name}" if parent else name
+            source_to_tests[qn].add(r["srcFile"])
+        # 回填测试模块 out_degree（有 CALLS 出边记 1，与旧逻辑一致）
+        for m in test_modules:
+            m["out_degree"] = 1 if m["file_path"] in test_hit else 0
+        return dict(source_to_tests)
+
+    def fetch_test_cases(self, test_modules):
+        """本地解析 TEST_F(Suite, Case) → {file: ["Suite.Case", ...]}。
+
+        GitNexus 无 docstring 属性 → 用例注释暂缺（旧值来自图谱 docstring）。
+        """
+        file_to_cases = defaultdict(list)
+        for m in test_modules:
+            lines = self.read_local_lines(m["file_path"])
+            if lines is None:
+                continue
+            text = "".join(lines)
+            for mm in self.TEST_F_RE.finditer(text):
+                file_to_cases[m["file_path"]].append(f"{mm.group(1)}.{mm.group(2)}")
+        return dict(file_to_cases)
 
 
 def compute_p75_nonzero(methods):
@@ -1358,78 +1867,49 @@ def compute_p75_nonzero(methods):
     return p75
 
 
-# ── 辅助函数 ──
+# ── 连接与解析辅助 ──
 
 
-# ── 辅助函数 ──
+def open_adapter(project, mcp_url=None, repo_root=None):
+    """连接 GitNexus 并校验仓库已索引 → GitNexusAdapter。
 
-def _parse_bases(base_classes_raw):
-    """Parse base_classes from query_graph (JSON string or list)."""
-    if isinstance(base_classes_raw, list):
-        return base_classes_raw
-    if isinstance(base_classes_raw, str) and base_classes_raw:
-        try:
-            parsed = json.loads(base_classes_raw)
-            if isinstance(parsed, list):
-                return parsed
-        except json.JSONDecodeError:
-            pass
-        # Comma-separated fallback
-        return [b.strip() for b in base_classes_raw.split(",") if b.strip()]
-    return []
-
-
-def _dedup_classes(classes):
-    """Deduplicate classes by qualified_name.
-
-    缺 qualified_name 的节点（空字符串/None）不参与去重，全部保留——
-    它们是各自独立的噪声节点，塌缩成一个会丢失数据。
+    仓库未索引 → SystemExit(2)（一等失败，不再静默拉空数据）。
     """
-    seen = set()
-    result = []
-    for cls in classes:
-        qn = cls.get("qualified_name") or ""
-        if not qn:  # 无 qn → 不去重，直接保留
-            result.append(cls)
-            continue
-        if qn not in seen:
-            seen.add(qn)
-            result.append(cls)
-    return result
+    client = MCPClient(url=mcp_url or MCP_URL)
+    print(f"🔗 Connecting to {client.url} ...")
+    client.initialize()
+    print(f"✅ MCP session: {(client.session_id or 'stateless')[:12]}...")
+    adapter = GitNexusAdapter(client, project=project, repo_root=repo_root)
+    info = adapter.find_repo()
+    if info is None:
+        print(f"❌ GitNexus 未索引仓库 {project!r}（list_repos 无匹配）", file=sys.stderr)
+        raise SystemExit(2)
+    print(f"📋 Repo: {info.get('name')}  branch: {info.get('branch', '?')}  "
+          f"indexedAt: {info.get('indexedAt', '?')}")
+    return adapter
 
 
-def _extract_class_from_qn(qn):
-    """Extract class short name from qualified_name.
+def resolve_base_sha(client_or_adapter, project, explicit=None):
+    """解析 base_sha：显式传入优先，否则取 GitNexus list_repos.lastCommit。
 
-    e.g. 'proj.path.ClassName.methodName' → 'ClassName'
-    """
-    if not qn:
-        return None
-    parts = qn.split(".")
-    if len(parts) >= 2:
-        return parts[-2]  # second-to-last segment
-    return parts[-1] if parts else None
-
-
-def resolve_base_sha(client, project, explicit=None):
-    """解析 base_sha：显式传入优先，否则从图谱 index_status 取 git.head_sha。
-
-    base_sha 语义为「本次 inventory 数据所基于的图谱版本」，应与图谱索引时
-    记录的 git HEAD 一致，而非本地工作区 HEAD（后者可能比图谱更新）。
-    用图谱版本才能让 reconcile 正确检测「图谱落后于代码」的情形。
+    base_sha 语义为「本次 inventory 数据所基于的图谱版本」（继承旧语义，
+    对应旧 index_status.git.head_sha），而非本地工作区 HEAD（后者可能比图谱
+    更新）。用图谱版本才能让 reconcile 正确检测「图谱落后于代码」的情形。
     """
     if explicit:
         return explicit
     try:
-        data = client.call_tool("index_status", {"project": project})
-        git = data.get("git", {}) if isinstance(data, dict) else {}
-        sha = git.get("head_sha") or git.get("base_sha")
+        if isinstance(client_or_adapter, GitNexusAdapter):
+            info = client_or_adapter.find_repo()
+        else:
+            info = GitNexusAdapter(client_or_adapter, project=project).find_repo()
+        sha = (info or {}).get("lastCommit", "")
         if sha:
             print(f"   base_sha (from graph): {sha}")
             return sha
-        print(f"   ⚠️  index_status 未返回 git.head_sha，base_sha 回退 unknown")
+        print("   ⚠️  list_repos 未返回 lastCommit，base_sha 回退 unknown")
     except Exception as e:
-        print(f"   ⚠️  获取 index_status 失败，base_sha 回退 unknown: {e}")
+        print(f"   ⚠️  获取图谱提交哈希失败，base_sha 回退 unknown: {e}")
     return "unknown"
 
 
@@ -1837,43 +2317,6 @@ def cross_check_branches(real_total, declared_count, is_complex):
     return None
 
 
-def fetch_method_bodies(client, project, methods):
-    """对每个方法调 get_code_snippet 拉方法体。
-
-    methods: [{"qualified_name":..., "name":..., "complexity":...}, ...]
-    返回 {qn: {"body":..., "name":..., "complexity":..., "error"?:...}}。
-    get_code_snippet 返回结构字段名不确定（body/code/source/snippet/implementation），
-    逐一尝试 + 纯字符串兜底。失败的方法 body 为空 + error 记录。
-    """
-    result = {}
-    for m in methods:
-        qn = m.get("qualified_name")
-        if not qn:
-            continue
-        entry = {"body": "", "name": m.get("name", ""),
-                 "complexity": m.get("complexity", 0) or 0}
-        try:
-            snippet = client.call_tool(
-                "get_code_snippet",
-                {"project": project, "qualified_name": qn})
-            body = ""
-            if isinstance(snippet, dict):
-                # 尝试常见字段名（远端/本地提供方可能不同）
-                for key in ("body", "code", "source", "snippet",
-                            "implementation", "text"):
-                    val = snippet.get(key)
-                    if isinstance(val, str) and val:
-                        body = val
-                        break
-            elif isinstance(snippet, str):
-                body = snippet
-            entry["body"] = body
-        except Exception as e:
-            entry["error"] = str(e)
-        result[qn] = entry
-    return result
-
-
 def select_class_methods(inventory, classname):
     """从 inventory 取目标类的 testable 方法。
 
@@ -1898,14 +2341,17 @@ def run_extract_branches():
     """
     parser = argparse.ArgumentParser(
         description="self-checker §2c 分支清单交叉验证："
-                    "MCP get_code_snippet 拉真实源码分支 → 与测试文件声明分支做差集")
-    parser.add_argument("--project", required=True, help="MCP 项目名")
+                    "GitNexus 图谱定位 + 本地切片拉真实源码分支 → 与测试文件声明分支做差集")
+    parser.add_argument("--project", required=True, help="GitNexus 仓库名")
     parser.add_argument("--test-file", required=True, help="测试文件路径")
     parser.add_argument("--inventory", required=True,
                         help=".ut-inventory.json 路径")
     parser.add_argument("--class", dest="classname", default=None,
-                        help="限定类名；未指定时从 test_<class>.cpp 文件名推断")
-    parser.add_argument("--mcp-url", default=MCP_URL, help="MCP HTTP 端点")
+                        help="限定类名；未指定时从 test_<class>.cpp / ut_<class>.cpp 文件名推断")
+    parser.add_argument("--mcp-url", default=MCP_URL, help="GitNexus MCP HTTP 端点")
+    parser.add_argument("--repo-root", default=None,
+                        help="GitNexus 仓库内的本地检出路径（方法体切片来源；"
+                             "默认从测试文件 git 顶层推导）")
     parser.add_argument("--json", action="store_true", help="额外打印完整 JSON")
     parser.add_argument("-o", "--output", default=None, help="写 JSON 到文件")
     args = parser.parse_args()
@@ -1967,16 +2413,32 @@ def cmd_fetch(args):
             print(f"❌ --existing 文件不存在: {args.existing}", file=sys.stderr)
             sys.exit(1)
 
-    # 连接 MCP
-    client = MCPClient(url=args.mcp_url)
-    print(f"🔗 Connecting to {args.mcp_url}...")
-    client.initialize()
-    _sid = client.session_id or "stateless"
-    print(f"✅ Session: {_sid[:12]}...")
-    print(f"📋 Project: {args.project}")
+    # repo_root：显式传入 > 从 --output 推导（inventory 通常在 <repo>/autotests/ 下）
+    repo_root = getattr(args, "repo_root", None)
+    if not repo_root:
+        output_dir = Path(args.output).resolve().parent
+        if output_dir.name in ("autotests", "tests", "test"):
+            repo_root = str(output_dir.parent)
+        elif os.path.isdir(os.path.join(str(output_dir), ".git")):
+            repo_root = str(output_dir)
+    if repo_root:
+        print(f"📁 repo_root: {repo_root}")
+    else:
+        print("⚠️  未指定 --repo-root 且无法从 --output 推导："
+              "方法体/指标/宏扫描将不可用，仅依赖图谱数据")
 
-    # 解析 base_sha：显式传入优先，否则从图谱 index_status 取 git.head_sha
-    base_sha = resolve_base_sha(client, args.project, args.base_sha)
+    # 连接 GitNexus
+    adapter = open_adapter(args.project, args.mcp_url, repo_root)
+
+    # 本地 HEAD vs 图谱 lastCommit 漂移告警（继承旧 base_sha 语义的 Iron Law：
+    # 数据应与图谱版本一致；本地较新时方法体切片可能与图谱行号错位）
+    local_sha, graph_sha = adapter.check_drift()
+    if local_sha and graph_sha and local_sha != graph_sha:
+        print(f"⚠️  本地 HEAD ({local_sha[:8]}) ≠ 图谱 lastCommit ({graph_sha[:8]})："
+              "本地切片基于较新代码，建议同步图谱索引或检出图谱对应版本")
+
+    # 解析 base_sha：显式传入优先，否则从图谱 list_repos.lastCommit 取
+    base_sha = resolve_base_sha(adapter, args.project, args.base_sha)
 
     # 规整 --file-pattern：action="append" 产出 list，再拆逗号分隔、去空、去重
     file_patterns = None
@@ -1989,10 +2451,10 @@ def cmd_fetch(args):
                     file_patterns.append(p)
 
     # Step 1-5: 采集数据
-    methods, functions = collect_methods(client, args.project, file_patterns, args.limit)
-    dbus_adaptor, dbus_interface, concurrent, gui = collect_inheritance(client, args.project)
-    dbus_slots = collect_dbus_slots(client, args.project, dbus_adaptor)
-    q_invokables, q_plugins = collect_qt_macros(client, args.project)
+    methods, functions = adapter.collect_methods(file_patterns, args.limit)
+    dbus_adaptor, dbus_interface, concurrent, gui = adapter.collect_inheritance()
+    dbus_slots = adapter.collect_dbus_slots(dbus_adaptor)
+    q_invokables, q_plugins = adapter.collect_qt_macros(file_patterns)
     p75 = compute_p75_nonzero(methods + functions)
 
     # 构建 mcp_dump
@@ -2045,10 +2507,10 @@ def cmd_fetch(args):
     if not args.incremental and not args.skip_test_mapping:
         print(f"\n📊 test_* 采集：CALLS 边 → 被测函数...")
         try:
-            test_modules = discover_test_modules(client, args.project)
+            test_modules = adapter.discover_test_modules()
             if test_modules:
-                source_to_tests = collect_all_calls(client, args.project, test_modules)
-                file_to_cases = fetch_test_cases(client, args.project, test_modules)
+                source_to_tests = adapter.collect_all_calls(test_modules)
+                file_to_cases = adapter.fetch_test_cases(test_modules)
                 mapping = build_test_mapping(source_to_tests, file_to_cases)
                 updated, unmatched, _ = update_inventory_test_mapping(
                     inventory, mapping)
@@ -2165,22 +2627,41 @@ def cmd_fetch(args):
 
 
 def cmd_extract_branches(args):
-    """extract-branches 子命令：MCP 真实源码分支 × 测试文件声明分支 差集校验。
+    """extract-branches 子命令：真实源码分支 × 测试文件声明分支 差集校验。
 
     原 fetch-mcp-data.py run_extract_branches 的逻辑体，
     参数由 build_parser 的 extract-branches 子解析器预解析后传入。
+    方法体来源：GitNexus 图谱定位 + 本地仓库行切片（adapter）。
     """
-    # 推断 classname（PascalCase 惯例：test_calculator.cpp → Calculator）
+    # 推断 classname（PascalCase 惯例：test_calculator.cpp / ut_calculator.cpp → Calculator）
     classname = args.classname
     if not classname:
         basename = os.path.basename(args.test_file)
-        m = re.match(r'test_(\w+)\.cpp$', basename)
+        m = re.match(r'(?:test|ut)_(\w+)\.cpp$', basename)
         if not m:
             print(f"❌ 无法从文件名推断类名: {basename}，请用 --class 指定",
                   file=sys.stderr)
             sys.exit(2)
         classname = m.group(1)
         classname = classname[0].upper() + classname[1:]
+
+    # repo_root：显式传入 > 测试文件所在 git 仓库顶层
+    repo_root = getattr(args, "repo_root", None)
+    if not repo_root:
+        try:
+            proc = subprocess.run(
+                ["git", "rev-parse", "--show-toplevel"],
+                cwd=os.path.dirname(os.path.abspath(args.test_file)) or ".",
+                capture_output=True, text=True, timeout=10)
+            if proc.returncode == 0 and proc.stdout.strip():
+                repo_root = proc.stdout.strip()
+        except Exception:
+            repo_root = None
+        if repo_root:
+            print(f"📁 repo_root (auto): {repo_root}")
+        else:
+            print("⚠️  未找到本地仓库（--repo-root 未传且测试文件不在 git 仓内）；"
+                  "方法体将降级图谱 content（5016 字符截断）")
 
     # 读测试文件
     if not os.path.isfile(args.test_file):
@@ -2207,12 +2688,10 @@ def cmd_extract_branches(args):
                           f, ensure_ascii=False, indent=2)
         return 0
 
-    # 连 MCP 拉方法体
-    client = MCPClient(url=args.mcp_url)
-    print(f"🔗 Connecting to {args.mcp_url}...")
-    client.initialize()
+    # 连 GitNexus，图谱定位 + 本地切片拉方法体
+    adapter = open_adapter(args.project, args.mcp_url, repo_root)
     print(f"📋 Project: {args.project}  Class: {classname}  Methods: {len(methods)}")
-    bodies = fetch_method_bodies(client, args.project, methods)
+    bodies = adapter.fetch_method_bodies(classname, methods)
 
     # 交叉验证
     violations = []
@@ -2225,7 +2704,7 @@ def cmd_extract_branches(args):
             violations.append({
                 "check": "branch", "severity": "warning",
                 "rule": "SNIPPET_FETCH_FAILED", "method": name,
-                "message": f"get_code_snippet 返回空 body"
+                "message": f"方法体不可得（本地切片与图谱 content 均为空）"
                            + (f": {info.get('error', '')}" if info.get('error') else ""),
             })
             continue
@@ -2268,239 +2747,7 @@ def cmd_extract_branches(args):
 
 # ── test-mapping 子命令（原 fetch-test-mapping.py：MCP CALLS → test_* 回写）──
 
-UT_FILE_PATTERN = re.compile(r'(?:^|/)ut_\w+\.(?:cpp|h)$')
-TEST_DIR_MARKERS = ("tests/", "test/")
-
-
-def discover_test_modules(client, project):
-    """发现项目中的所有单元测试模块文件（ut_*.cpp/h）。
-
-    search_graph(label=Module, file_pattern=tests/**) → 过滤 ut_* 文件。
-    返回 [{name, file_path, out_degree}, ...]，out_degree>0 表示有 CALLS 关系。
-    """
-    print(f"\n📊 [1/4] 发现测试模块...")
-    data = client.call_tool("search_graph", {
-        "project": project,
-        "label": "Module",
-        "file_pattern": "tests/**",
-        "limit": 200,
-        "format": "json",
-    })
-    results = data.get("results", [])
-    total = data.get("total", 0)
-
-    test_modules = []
-    for r in results:
-        file_path = r.get("file_path", "")
-        name = r.get("name", "")
-        # out_degree 兼容：远端列名可能是 out_degree 或 out
-        out_degree = r.get("out_degree") or r.get("out") or 0
-        if UT_FILE_PATTERN.search(file_path) or UT_FILE_PATTERN.search(name):
-            test_modules.append({
-                "name": name,
-                "file_path": file_path,
-                "out_degree": out_degree,
-            })
-
-    test_modules.sort(key=lambda x: x["out_degree"], reverse=True)
-
-    with_calls = [m for m in test_modules if m["out_degree"] > 0]
-    without_calls = [m for m in test_modules if m["out_degree"] == 0]
-
-    print(f"   tests/ Module 总数: {total}")
-    print(f"   ut_* 单元测试文件: {len(test_modules)}")
-    print(f"   有 CALLS 关系: {len(with_calls)}")
-    print(f"   无 CALLS 关系: {len(without_calls)}")
-
-    return test_modules
-
-
-def collect_calls_for_module(client, project, module_name, module_file=None,
-                              skip_module_query=False):
-    """查询单个测试模块的 CALLS 关系目标。
-
-    返回 [(target_name, target_qn, target_file, target_labels), ...]。
-
-    图谱 schema 兼容：
-    - v0.10.0：CALLS 边挂在 Module 节点（name=文件路径），按模块名查询。
-    - v0.10.8+：Module 无 CALLS 出边（挂在 File/Function/Method 上），
-      回退按测试文件路径匹配任意源节点。
-    """
-    rows = []
-    if not skip_module_query:
-        query = (
-            f"MATCH (m:Module {{name:'{module_name}'}})-[:CALLS]->(target) "
-            f"RETURN target.name, target.qualified_name, target.file_path, labels(target)"
-        )
-        data = client.call_tool("query_graph", {
-            "project": project,
-            "query": query,
-        })
-        rows = data.get("rows", []) if isinstance(data, dict) else []
-    if not rows and module_file:
-        query = (
-            f"MATCH (src)-[:CALLS]->(target) "
-            f"WHERE src.file_path = '{module_file}' "
-            f"RETURN DISTINCT target.name, target.qualified_name, "
-            f"target.file_path, labels(target)"
-        )
-        data = client.call_tool("query_graph", {
-            "project": project,
-            "query": query,
-        })
-        rows = data.get("rows", []) if isinstance(data, dict) else []
-    result = []
-    for row in rows:
-        if len(row) >= 3:
-            name = row[0] or ""
-            qn = row[1] or ""
-            file_path = row[2] or ""
-            labels = row[3] if len(row) > 3 else []
-            if isinstance(labels, str):
-                try:
-                    labels = json.loads(labels)
-                except json.JSONDecodeError:
-                    labels = [labels]
-            result.append((name, qn, file_path, labels))
-    return result
-
-
-def collect_all_calls(client, project, test_modules):
-    """批量收集所有测试模块的 CALLS 目标。
-
-    过滤规则：去 Field 节点、去 tests/ 目录目标（stub）、只留 Method/Function。
-    返回 {source_qn: set(test_files)} 映射。
-    """
-    print(f"\n📊 [2/4] 收集 CALLS 关系...")
-
-    source_to_tests = defaultdict(set)
-    modules_with_calls = [m for m in test_modules if m["out_degree"] > 0]
-
-    # 图谱 schema 探测：v0.10.8+ Module 节点无 CALLS 出边，且其 out_degree
-    # 反映 DEFINES 而非 CALLS，不能用 out_degree>0 预筛（会漏掉有 CALLS 的
-    # 测试文件）。用首个 out_degree>0 模块探测，新 schema 下改为全量按
-    # file_path 查询。
-    skip_module_query = False
-    if modules_with_calls:
-        probe = modules_with_calls[0]
-        try:
-            data = client.call_tool("query_graph", {
-                "project": project,
-                "query": (f"MATCH (m:Module {{name:'{probe['name']}'}})"
-                          f"-[:CALLS]->() RETURN count(m) AS n"),
-            })
-            prows = data.get("rows", []) if isinstance(data, dict) else []
-            n = int(str(prows[0][0]).strip('"'))
-        except Exception:
-            n = -1
-        if n == 0:
-            skip_module_query = True
-            modules_with_calls = test_modules
-            print("   ℹ️  检测到 v0.10.8+ 图谱（Module 无 CALLS 出边），"
-                  "改用 file_path 匹配全量测试模块")
-
-    total_modules = len(modules_with_calls)
-
-    for idx, module in enumerate(modules_with_calls, 1):
-        module_name = module["name"]
-        module_file = module["file_path"]
-
-        if idx % 5 == 0 or idx == total_modules:
-            print(f"   [{idx}/{total_modules}] {module_name} "
-                  f"(out_degree={module['out_degree']})")
-
-        try:
-            targets = collect_calls_for_module(
-                client, project, module_name, module_file,
-                skip_module_query=skip_module_query)
-        except Exception as e:
-            print(f"   ⚠️  {module_name} 查询失败: {e}")
-            continue
-
-        for target_name, target_qn, target_file, target_labels in targets:
-            # 过滤 1: 去掉 Field 节点
-            label_strs = [l.strip('"') for l in (target_labels or [])]
-            if "Field" in label_strs and "Method" not in label_strs and "Function" not in label_strs:
-                continue
-            # 过滤 2: 去掉 tests/ 目录中的目标（stub/辅助类）
-            if any(marker in target_file for marker in TEST_DIR_MARKERS):
-                continue
-            # 过滤 3: 确保至少是 Method 或 Function
-            if not any(l in label_strs for l in ("Method", "Function")):
-                continue
-            if target_qn:
-                source_to_tests[target_qn].add(module_file)
-
-        if idx < total_modules:
-            time.sleep(0.1)
-
-    total_targets = sum(len(v) for v in source_to_tests.values())
-    covered_sources = len(source_to_tests)
-    max_coverage = max((len(v) for v in source_to_tests.values()), default=0)
-
-    print(f"   ✅ {total_modules} 个测试模块已查询")
-    print(f"   被测源码节点: {covered_sources}")
-    print(f"   总 CALLS 边: {total_targets}")
-    print(f"   最大覆盖: {max_coverage} 个测试文件")
-
-    return source_to_tests
-
-
-def fetch_test_cases(client, project, test_modules):
-    """采集每个测试文件中的 TEST_F 用例名。
-
-    search_graph(label=Function, name_pattern=TEST_F, file_pattern=tests/**)
-    signature 格式 (test_class, test_case_name)。
-    返回 {test_file_path: [test_case_name, ...]} 映射。
-    """
-    print(f"\n📊 [3/4] 采集 TEST_F 用例名...")
-    data = client.call_tool("search_graph", {
-        "project": project,
-        "label": "Function",
-        "name_pattern": "TEST_F",
-        "file_pattern": "tests/**",
-        "limit": 500,
-        "format": "json",
-        "fields": ["signature", "docstring"],
-    })
-    results = data.get("results", [])
-    total = data.get("total", 0)
-
-    file_to_cases = defaultdict(list)
-    for r in results:
-        sig = r.get("signature", "")
-        file_path = r.get("file_path", "")
-        if not sig or not file_path:
-            continue
-        match = re.match(r'\(\s*([^,]+)\s*,\s*([^)]+)\s*\)', sig)
-        if match:
-            test_class = match.group(1).strip()
-            test_case = match.group(2).strip()
-            full_name = f"{test_class}.{test_case}"
-            doc = r.get("docstring", "")
-            comment = doc.lstrip('/ ').strip() if doc else ""
-            if comment:
-                full_name = f"{full_name}  // {comment}"
-            file_to_cases[file_path].append(full_name)
-
-    total_cases = sum(len(v) for v in file_to_cases.values())
-    files_with_cases = len(file_to_cases)
-    print(f"   TEST_F 节点总数: {total}")
-    print(f"   含用例名的文件: {files_with_cases}")
-    print(f"   用例名总数: {total_cases}")
-
-    if test_modules:
-        ut_files = {m["file_path"] for m in test_modules}
-        for fp in sorted(file_to_cases.keys()):
-            if fp in ut_files:
-                cases = file_to_cases[fp]
-                print(f"   {os.path.basename(fp)}: {len(cases)} 个用例")
-                for tc in cases[:5]:
-                    print(f"     \U0001f9ea {tc}")
-                if len(cases) > 5:
-                    print(f"     ... 还有 {len(cases) - 5} 个")
-
-    return file_to_cases
+UT_FILE_PATTERN = re.compile(r'(?:^|/)(?:ut|test)_\w+\.(?:cpp|h)$')
 
 
 def _tm_normalize_qn(qn):
@@ -2683,15 +2930,32 @@ def cmd_test_mapping(args):
             "total_calls": sum(m["test_cover_count"] for m in mapping.values()),
         }
     else:
-        client = MCPClient(url=args.mcp_url)
-        print(f"🔗 Connecting to {args.mcp_url}...")
-        client.initialize()
-        print(f"✅ Session: {(client.session_id or 'stateless')[:12]}...")
+        # repo_root：显式传入 > 从 inventory 路径推导（<repo>/autotests/ → <repo>）
+        repo_root = getattr(args, "repo_root", None)
+        if not repo_root:
+            inv_dir = Path(args.inventory).resolve().parent
+            if inv_dir.name in ("autotests", "tests", "test"):
+                repo_root = str(inv_dir.parent)
+            elif os.path.isdir(os.path.join(str(inv_dir), ".git")):
+                repo_root = str(inv_dir)
+        adapter = open_adapter(project_name, args.mcp_url, repo_root)
         print(f"📋 Project: {project_name}")
 
-        test_modules = discover_test_modules(client, project_name)
-        source_to_tests = collect_all_calls(client, project_name, test_modules)
-        file_to_cases = fetch_test_cases(client, project_name, test_modules)
+        print(f"\n📊 [1/4] 发现测试模块...")
+        test_modules = adapter.discover_test_modules()
+        with_calls = sum(1 for m in test_modules if m["out_degree"] > 0)
+        print(f"   ut_* 单元测试文件: {len(test_modules)}")
+        print(f"   有 CALLS 关系: {with_calls}")
+
+        print(f"\n📊 [2/4] 收集 CALLS 关系...")
+        source_to_tests = adapter.collect_all_calls(test_modules)
+        print(f"   被测源码节点: {len(source_to_tests)}")
+        print(f"   总 CALLS 边: {sum(len(v) for v in source_to_tests.values())}")
+
+        print(f"\n📊 [3/4] 采集 TEST_F 用例名...")
+        file_to_cases = adapter.fetch_test_cases(test_modules)
+        print(f"   含用例名的文件: {len(file_to_cases)}")
+        print(f"   用例名总数: {sum(len(v) for v in file_to_cases.values())}")
 
         print(f"\n📊 [4/4] 构建函数↔测试映射...")
         mapping = build_test_mapping(source_to_tests, file_to_cases)
@@ -2779,7 +3043,7 @@ def cmd_test_mapping(args):
 def build_parser():
     """构建顶层 argparse，含 scan / fetch / extract-branches / test-mapping 四个子命令。"""
     parser = argparse.ArgumentParser(
-        description="MCP 知识图谱 → .ut-inventory.json 端到端探测")
+        description="GitNexus 代码图谱 MCP → .ut-inventory.json 端到端探测")
 
     subparsers = parser.add_subparsers(dest="cmd", required=True)
 
@@ -2796,19 +3060,22 @@ def build_parser():
     # ── fetch 子命令（原 fetch-mcp-data.py） ──
     sp_fetch = subparsers.add_parser(
         "fetch", help="端到端 MCP 采集 + 评分（原 fetch-mcp-data.py）")
-    sp_fetch.add_argument("--project", required=True, help="MCP 项目名")
+    sp_fetch.add_argument("--project", required=True, help="GitNexus 仓库名")
     sp_fetch.add_argument("--file-pattern", action="append", default=None,
                           help="Glob 过滤源码目录，可多次指定或用逗号分隔 "
                                "(e.g. --file-pattern 'src/**' --file-pattern 'plugins/**', "
                                "或 --file-pattern 'src/**,plugins/**')")
     sp_fetch.add_argument("--output", "-o", required=True,
                           help="输出 .ut-inventory.json 路径")
-    sp_fetch.add_argument("--mcp-url", default=MCP_URL, help="MCP HTTP 端点")
+    sp_fetch.add_argument("--mcp-url", default=MCP_URL, help="GitNexus MCP HTTP 端点")
+    sp_fetch.add_argument("--repo-root", default=None,
+                          help="GitNexus 仓库内的本地检出路径（方法体切片/复杂度估算/"
+                               "宏扫描来源；默认从 --output 路径推导）")
     sp_fetch.add_argument("--limit", type=int, default=2000,
-                          help="search_graph 分页大小 (default: 2000)")
+                          help="Method/Function 采集上限 (default: 2000)")
     sp_fetch.add_argument("--base-sha", default=None,
-                          help="Git base SHA；未指定时自动从图谱 index_status 的 "
-                               "git.head_sha 获取（推荐，与图谱版本一致）")
+                          help="Git base SHA；未指定时自动从 GitNexus list_repos 的 "
+                               "lastCommit 获取（推荐，与图谱版本一致）")
     sp_fetch.add_argument("--summary", action="store_true",
                           help="同时输出 Markdown 摘要")
     sp_fetch.add_argument("--keep-dump", action="store_true",
@@ -2830,13 +3097,16 @@ def build_parser():
     sp_eb = subparsers.add_parser(
         "extract-branches",
         help="分支清单交叉验证（self-checker §2c）")
-    sp_eb.add_argument("--project", required=True, help="MCP 项目名")
+    sp_eb.add_argument("--project", required=True, help="GitNexus 仓库名")
     sp_eb.add_argument("--test-file", required=True, help="测试文件路径")
     sp_eb.add_argument("--inventory", required=True,
                        help=".ut-inventory.json 路径")
     sp_eb.add_argument("--class", dest="classname", default=None,
-                       help="限定类名；未指定时从 test_<class>.cpp 文件名推断")
-    sp_eb.add_argument("--mcp-url", default=MCP_URL, help="MCP HTTP 端点")
+                       help="限定类名；未指定时从 test_<class>.cpp / ut_<class>.cpp 文件名推断")
+    sp_eb.add_argument("--mcp-url", default=MCP_URL, help="GitNexus MCP HTTP 端点")
+    sp_eb.add_argument("--repo-root", default=None,
+                       help="GitNexus 仓库内的本地检出路径（方法体切片来源；"
+                            "默认从测试文件 git 顶层推导）")
     sp_eb.add_argument("--json", action="store_true", help="额外打印完整 JSON")
     sp_eb.add_argument("-o", "--output", default=None, help="写 JSON 到文件")
 
@@ -2845,7 +3115,7 @@ def build_parser():
         "test-mapping",
         help="仅回写 test_* 字段（原 fetch-test-mapping.py）")
     sp_tm.add_argument("--project", required=False,
-                       help="MCP 项目名（与 fetch --project 一致）；"
+                       help="GitNexus 仓库名（与 fetch --project 一致）；"
                             "使用 --mapping-in 时可省略")
     sp_tm.add_argument("--inventory", "-i", required=True,
                        help=".ut-inventory.json 路径")
@@ -2855,7 +3125,10 @@ def build_parser():
                        help="保存映射到 JSON 文件（供后续 --mapping-in 使用）")
     sp_tm.add_argument("--report", default=None,
                        help="输出 Markdown 测试覆盖报告路径")
-    sp_tm.add_argument("--mcp-url", default=MCP_URL, help="MCP HTTP 端点")
+    sp_tm.add_argument("--mcp-url", default=MCP_URL, help="GitNexus MCP HTTP 端点")
+    sp_tm.add_argument("--repo-root", default=None,
+                       help="GitNexus 仓库内的本地检出路径（TEST_F 解析来源；"
+                            "默认从 --inventory 路径推导）")
     sp_tm.add_argument("--dry-run", action="store_true",
                        help="只打印映射结果不写回 inventory")
     sp_tm.add_argument("--verbose", "-v", action="store_true",

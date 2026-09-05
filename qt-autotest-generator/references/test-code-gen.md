@@ -2,7 +2,7 @@
 
 > 前置条件：`.ut-inventory.json` 存在（方法分级 + `factors`），`dependency-tracer` 已完成目标类追踪（有 `is_gui` + `stub_list` + `source_dirs`（内存变量）），图谱 ready。
 
-> 通过 mcp_provider 调用知识图谱工具（详见 references/mcp-providers.md）
+> 通过 GitNexus 代码图谱 MCP 定位符号（详见 references/gitnexus-guide.md）
 
 ## 概述
 
@@ -12,7 +12,7 @@
 
 ## 测试方法论引用（必读）
 
-生成用例前**必须先读** `${SKILL_DIR}/references/test-types.md`，按其方法论建模输入空间与组织用例。不读 test-types.md 直接生成 → 分支清单/等价类建模缺失，**self-checker §2c 会用 `get_code_snippet` 反查真实源码分支拦下**（MISSING_BRANCH_LIST / BRANCH_NOT_MAPPED），过不了自检。本节列出**必须遵守的最小清单**，详细方法以 test-types.md 为准。
+生成用例前**必须先读** `${SKILL_DIR}/references/test-types.md`，按其方法论建模输入空间与组织用例。不读 test-types.md 直接生成 → 分支清单/等价类建模缺失，**self-checker §2c 会用 extract-branches 反查真实源码分支拦下**（MISSING_BRANCH_LIST / BRANCH_NOT_MAPPED），过不了自检。本节列出**必须遵守的最小清单**，详细方法以 test-types.md 为准。
 
 ### 最小清单（在测试文件顶部注释中输出完成情况，未完成不得提交编译验证）
 
@@ -29,7 +29,7 @@
 | 9 | 负面用例验证强异常安全（状态未损坏） | §6.3 |
 | 10 | 项目内接口类用 gMock，Qt 类/全局函数/无虚函数类用 stub_ext | §7.5 |
 
-> **#5/#6 是硬门禁**：分支清单必须基于 `get_code_snippet` 取的真实源码分支填写（不凭签名编造），self-checker §2c 会做差集校验；声明分支 < 真实分支即 `BRANCH_NOT_MAPPED` 违规，流转回此处补用例。分支清单门槛（complexity≥10）与评分因子边界（complexity:8-19）是两套独立阈值：前者决定是否强制写分支清单注释，后者决定方法评分与 level。
+> **#5/#6 是硬门禁**：分支清单必须基于 extract-branches 取的真实源码分支填写（不凭签名编造），self-checker §2c 会做差集校验；声明分支 < 真实分支即 `BRANCH_NOT_MAPPED` 违规，流转回此处补用例。分支清单门槛（complexity≥10）与评分因子边界（complexity:8-19）是两套独立阈值：前者决定是否强制写分支清单注释，后者决定方法评分与 level。
 
 **必须读的关键章节**：
 - §1 等价类划分、§2 边界值分析 → 决定用例输入空间
@@ -50,9 +50,11 @@
 从图谱获取每个待测方法的完整源码：
 
 ```python
-snippet = codebase_memory_mcp.get_code_snippet(
-    qualified_name=method.qualified_name   # 必须来自 search_graph 返回值，不自己拼
-)
+# 图谱定位（filePath/startLine）+ 本地行切片；qn 必须与 inventory 一致，不自己拼
+rows = cypher(
+    f"MATCH (m:Method) WHERE m.filePath = '{method.file_path}' AND m.name = '{method.name}' "
+    "RETURN m.startLine AS startLine, m.endLine AS endLine")
+snippet = slice_body(repo_root, method.file_path, rows[0]["startLine"], rows[0]["endLine"])
 ```
 
 ### 2. 读模板
@@ -115,25 +117,24 @@ read("${SKILL_DIR}/templates/cmake-submodule.txt")
 
 `stub_list` 是依赖追踪给的起点，**不能盲信**。生成用例前必须对每个待测方法做以下分析，分析结论落入测试文件顶部注释或 `SetUp()` 实现：
 
-1. **用 MCP 追加出向调用链（在 §1 基础上补充隐式依赖识别）**：步骤 §1 已通过 `get_code_snippet` 获取方法体，此处追加 `trace_path` 出向链识别隐式依赖（Iron Law #12：项目源码只走 MCP，禁止 `read`/`grep` 直读项目源码文件）：
+1. **用图谱追加出向调用链（在 §1 基础上补充隐式依赖识别）**：步骤 §1 已通过本地切片获取方法体，此处追加 CALLS 出向边识别隐式依赖（Iron Law #12：项目源码只走图谱，禁止 `read`/`grep` 直读项目源码文件）：
    ```python
-   # 出向调用链（识别分支/循环/异常/emit/隐式依赖）
-   # depth=3：比依赖追踪阶段（depth=2）更深，覆盖传递依赖中可能遗漏的隐式依赖
-   callees = mcp.trace_path(
-       project=project_name_in_graph,
-       function_name=method.qualified_name,
-       direction="outbound", depth=3, mode="calls"
-   )
+   # CALLS 出向边（识别分支/循环/异常/emit/隐式依赖）；多跳逐层展开（无变长路径保证）
+   callees = cypher(
+       f"MATCH (src {{filePath: '{method.file_path}'}})"
+       "-[r:CodeRelation {{type:'CALLS'}}]->(t) "
+       f"WHERE src.name = '{method.name}' "
+       "RETURN DISTINCT t.filePath AS file_path, t.name AS name")
    ```
-   复杂方法（complexity≥10 或 lines≥50）**必须**先在测试文件顶部用注释列出「分支清单 → 用例映射」（来源标注 `get_code_snippet`），确保每条分支至少一个用例。**分支清单不得凭记忆/凭签名编造**——自检会用 `get_code_snippet` 反查真实分支做差集（见 self-checker §2c）。
-2. **用 trace_path 出向链识别隐式依赖（不 grep 源码）**：`stub_list` 是依赖追踪的起点但常漏；隐式依赖**从上方 `trace_path` 返回的 callees 里命中**判断，不 `read`/`grep` 源文件。依赖分类与 stub 决策矩阵以 `dependency-tracer.md` §3 为准，以下仅列出依赖追踪阶段**未覆盖的补充类别**：
-   | 补充依赖类别 | trace_path 命中的 callee（全限定名片段） | 决策 |
+   复杂方法（complexity≥10 或 lines≥50）**必须**先在测试文件顶部用注释列出「分支清单 → 用例映射」（来源标注 extract-branches），确保每条分支至少一个用例。**分支清单不得凭记忆/凭签名编造**——自检会用 extract-branches 反查真实分支做差集（见 self-checker §2c）。
+2. **用 CALLS 出向边识别隐式依赖（不 grep 源码）**：`stub_list` 是依赖追踪的起点但常漏；隐式依赖**从上方 CALLS 查询返回的 callees 里命中**判断，不 `read`/`grep` 源文件。依赖分类与 stub 决策矩阵以 `dependency-tracer.md` §3 为准，以下仅列出依赖追踪阶段**未覆盖的补充类别**：
+   | 补充依赖类别 | CALLS 命中的 callee（名片段） | 决策 |
    |---|---|---|
    | 路径访问 | `QStandardPaths::writableLocation`、`QDir::currentPath`、`QCoreApplication::applicationDirPath`、`QDir::home` | mock 返回临时目录，或 `SetUp()` 用 `QTemporaryDir` 注入路径 |
    | 环境变量 | `getenv`、`qEnvironmentVariable`、`qgetenv`、`QProcessEnvironment::systemEnvironment` | `SetUp()` `qputenv` / `TearDown()` `qunsetenv`，或 mock |
-   > 硬编码路径**字符串字面量**（`/usr/...`、`/tmp/...`）图谱 trace_path 不一定命中——此时**仍不 read 整个源文件**，用 `get_code_snippet` 取方法体后在方法体文本里查字符串即可（`get_code_snippet` 是 MCP 提供的结构化源码片段，不是 `read` 整文件）。
+   > 硬编码路径**字符串字面量**（`/usr/...`、`/tmp/...`）CALLS 边不一定命中——此时**仍不 read 整个源文件**，用本地切片取方法体后在方法体文本里查字符串即可（切片是图谱定位的结构化源码片段，不是 `read` 整文件）。
 3. **对每个识别出的依赖决定 mock 策略**：能 mock 的走 `stub.set_lamda`；不能直接 mock 的（如硬编码路径字符串）在 `SetUp()` 用 `QTemporaryDir`/`QTemporaryFile` 构造临时环境并把路径注入被测对象；环境变量在 `SetUp()` 用 `qputenv` 设置、`TearDown()` 用 `qunsetenv` 还原。完整决策矩阵见 `dependency-tracer.md` §3。
-4. **分支覆盖优先于用例数量**：基于 §1 `get_code_snippet` 取到的真实源码分支生成用例，按 level/factors 推导的用例数下限不是上限。嵌套 `if`/`switch`/循环边界/异常路径要单独生成用例，**哪怕超出下限也必须补**，避免漏测。
+4. **分支覆盖优先于用例数量**：基于 §1 切片取到的真实源码分支生成用例，按 level/factors 推导的用例数下限不是上限。嵌套 `if`/`switch`/循环边界/异常路径要单独生成用例，**哪怕超出下限也必须补**，避免漏测。
 5. **private 方法的间接覆盖**：private 方法不直接 `TEST_F`，但**必须通过调用它的 public/protected 方法覆盖其分支和边界条件**，不得因"private 不可直接测"就跳过其内部逻辑分支。若某 public 方法全部逻辑就是调一个 private，则该 public 的用例必须覆盖 private 的所有分支。
 
 ### 4.1 用例结构与断言规范
@@ -263,7 +264,7 @@ read("${SKILL_DIR}/templates/cmake-submodule.txt")
 - 不从网络下载模板，只读 `templates/`
 - 测试文件必须有 `SPDX-FileCopyrightText` 和 `SPDX-License-Identifier` 头
 - 不硬耦合测试机：所有路径、环境变量、文件系统、网络、子进程、时间、随机源访问必须 mock 或在 `SetUp()` 中隔离；禁止硬编码测试机绝对路径；禁止依赖测试机特定文件/用户/权限/时区/网络状态；用例必须可在任意干净 CI 环境复现
-- 不盲信 `stub_list`：必须先用 MCP（`trace_path` 出向链 + `get_code_snippet` 方法体）识别待测方法的**隐式依赖**，按 §4.0 补齐 mock（Iron Law #12：项目源码只走 MCP）
+- 不盲信 `stub_list`：必须先用图谱（CALLS 出向边 + 本地切片方法体）识别待测方法的**隐式依赖**，按 §4.0 补齐 mock（Iron Law #12：项目源码只走图谱）
 - 不让测试依赖外部资源：按 `dependency-tracer.md` §3 决策矩阵 + §4.0 §2 补充类别执行隔离；一律 mock 或在 `SetUp()` 临时隔离并在 `TearDown()` 清理
 - 不让用例间互相污染：单例/静态成员/全局状态在 `TearDown()` 重置；`stub.clear()` 必须在 `TearDown()` 调用；临时目录/文件必须在 `TearDown()` 释放
 - 不用"不崩溃"或单一布尔作为唯一断言：每个用例至少 2 个有效 `EXPECT_*` 断言维度；反模式完整清单见 test-types.md §9

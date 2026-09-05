@@ -115,7 +115,7 @@ cmake --build . --target test_<classname>   # 首次：编依赖+测试；后续
 ### 3. 函数定位与变异体生成
 
 ```python
-# 函数行范围定位（当前用正则 find_function_range; 生产环境可换 MCP get_code_snippet 更准）
+# 函数行范围定位（当前用正则 find_function_range; 生产环境可换 mcp-scan.py 图谱定位+本地行切片更准）
 func_start, func_end = find_function_range(lines, func_name)
 
 # 生成变异体（5 类算子, 框架无关）

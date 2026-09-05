@@ -2,7 +2,7 @@
 
 > 前置条件：`test-writer.md` 编排流程已完成目标类（`class_status[classname].status=test_written`（内存变量）），`{test_dir}/<module>/test_<classname>.cpp` 存在。
 
-> 通过 mcp_provider 调用知识图谱工具（详见 references/mcp-providers.md）
+> 通过 GitNexus 代码图谱 MCP 获取符号定位与调用关系（详见 references/gitnexus-guide.md）
 
 ## 概述
 
@@ -38,9 +38,9 @@ cmake --build . -j$(nproc) --target test_<classname> 2>&1
 
 | 错误模式 | 修复策略 |
 |---------|--------|
-| `undefined reference to` | 在 CMakeLists `target_link_libraries` 补依赖；用 MCP `trace_path` 重新追踪遗漏的传递依赖 |
+| `undefined reference to` | 在 CMakeLists `target_link_libraries` 补依赖；用 `cypher` CALLS 边查询重新追踪遗漏的传递依赖 |
 | `No such file or directory`（头文件） | 在 CMakeLists `target_include_directories` 补路径 |
-| `stub.set_lamda` 签名不匹配 | 用 MCP `get_code_snippet` 重新读方法签名，修正 stub |
+| `stub.set_lamda` 签名不匹配 | 用 mcp-scan.py（图谱定位+本地行切片）重读方法签名，修正 stub |
 | `expected primary-expression` | 检查返回类型/参数类型，用 `static_cast` 修正重载 |
 | `CMake Error` | 修 CMakeLists.txt 语法 |
 | `undefined reference to stub_ext::freeWrapper` | 确认 `templates/stub-ext/stub-shadow.cpp` 已编入 test target |
@@ -82,9 +82,9 @@ timeout 120 ./${test_dir}/<module>/test_<classname> --gtest_output=xml:${PROJECT
         → failure_reason = "needs_manual"
 ```
 
-> **注意**：判定前必须用 `get_code_snippet` 读源码确认。尝试最小化复现：只构造对象、不调方法，看是否崩溃。若源码缺 `#include`、缺 `Q_OBJECT`、有空实现导致链接失败 → 源码缺陷。
+> **注意**：判定前必须用 mcp-scan.py（图谱定位+本地行切片）读源码确认。尝试最小化复现：只构造对象、不调方法，看是否崩溃。若源码缺 `#include`、缺 `Q_OBJECT`、有空实现导致链接失败 → 源码缺陷。
 
-**编译期提前捕获**（Mode 5）：若在重试预算内识别到明确源码特征（如 `fatal error: xxx.h: No such file` 指向源码目录、`undefined reference to` 经 `trace_path` 确认非 stub 缺失、`vtable for XXX` 提示缺 `Q_OBJECT`），可**提前预记录**到 `.ut-defects.json`（`detected_at_stage=compile`），不必等 10 loops 耗尽。后续若发现是测试侧误会，再调 `export-defects.py mark-fixed` 清除。防误判：必须先排除 stub/include/CMake 测试侧问题再落盘。
+**编译期提前捕获**（Mode 5）：若在重试预算内识别到明确源码特征（如 `fatal error: xxx.h: No such file` 指向源码目录、`undefined reference to` 经 `cypher` CALLS 边查询确认非 stub 缺失、`vtable for XXX` 提示缺 `Q_OBJECT`），可**提前预记录**到 `.ut-defects.json`（`detected_at_stage=compile`），不必等 10 loops 耗尽。后续若发现是测试侧误会，再调 `export-defects.py mark-fixed` 清除。防误判：必须先排除 stub/include/CMake 测试侧问题再落盘。
 
 ### 6. 产出双信号
 
@@ -199,4 +199,4 @@ python3 ${SKILL_DIR}/scripts/coverage-report.py --level-only \
 - 不忽略 gtest XML 输出：方法名差集从 XML 提取
 - 不跳过 lcov 采集：运行通过后必须采集 filtered.info（lcov 可用时），供 7c 与 self-checker 复用
 - 不自行判定门禁达标：7c 只产出覆盖率快照，`pass:false` 不阻塞 `verified`；达标判定在 `self-checker`
-- 不自行宣布"源码缺陷"而不读源码：必须用 `get_code_snippet` 读源码确认
+- 不自行宣布"源码缺陷"而不读源码：必须用 mcp-scan.py（图谱定位+本地行切片）读源码确认

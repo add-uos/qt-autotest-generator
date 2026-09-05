@@ -2,7 +2,7 @@
 
 > 前置条件：目标项目绝对路径（`project_path`）已就绪。
 
-> 通过 mcp_provider 调用知识图谱工具（详见 references/mcp-providers.md）
+> 通过 GitNexus 代码图谱 MCP 获取符号定位（详见 references/mcp-providers.md / gitnexus-guide.md）
 
 ## 概述
 
@@ -43,122 +43,66 @@ fi
 
 将 `test_dir` 值写入 session（见 Step 6）。
 
-### 1. MCP 提供方解析（远端唯一，Mode 0 除外）
+### 1. GitNexus 索引确认（单栈，Mode 0 除外）
 
 **完整规则（路由表、硬终止指引模板）见 [`references/mcp-providers.md`](mcp-providers.md)，该文档为单一权威来源。** 本步骤只列执行要点：
 
-**Mode 0**：`mode_0_active == true` 时本步骤整体跳过（本地提供方已由 `references/dev-preflight.md` 锁定并同步）。
+**Mode 0**：`mode_0_active == true` 时本步骤整体跳过（索引确认与漂移检查已由 `references/dev-preflight.md` 完成）。
 
-**Mode 1-5**：`remote-codebase-memory-mcp` 是唯一候选，只读查询、不可触发索引。
-本地图谱仅经 Mode 0 进入，本流程**不安装、不回退本地**（`mcp-providers.md` §2）。
+**Mode 1-5**：GitNexus 是唯一图谱后端（`cypher` / `list_repos` / `context`），仓库由平台统一索引，本流程**不能触发索引、不回退文件扫描**。
 
 **执行步骤**：
 
-1. **探测远端**：`remote_codebase_memory_mcp.list_projects()` 调不通 → 按硬终止情形 1 处理。
-2. **项目名匹配**：用项目名（路径最后一段）匹配远端 `list_projects()` 返回的 `root_path` 最后一段，命中不到 → 情形 2。
-3. **确认 ready**：`index_status(project=...) == "ready"`，否则 → 情形 3。
-4. **任一失败 → 硬终止**：按 `mcp-providers.md` §5 输出统一指引（修复远端索引后重试，或显式触发 Mode 0）。不降级 LSP，不安装本地。
+1. **探测端点**：`list_repos` 调不通 → 硬终止情形 1（MCP 不可用）。
+2. **项目名匹配**：用项目名（路径最后一段）匹配 `list_repos` 返回的 `name`（分页遍历，limit ≤ 200），命中不到 → 情形 2（未索引）。
+3. **记录 lastCommit**：命中即取 `lastCommit`（图谱基线，后续 base_sha 用）。
+4. **任一失败 → 硬终止**：按 `mcp-providers.md` §3 输出统一指引。mcp-scan.py `open_adapter` 已内建（未索引 `SystemExit(2)`）。
 
 ### 2. 确认项目已索引
 
-用解析到的提供方查询已索引项目列表，按**项目名**（路径最后一段）匹配找到目标项目：
+查询已索引仓库列表，按**项目名**（路径最后一段）匹配找到目标项目：
 
 ```python
 import os
-provider = resolved_provider  # "remote-codebase-memory-mcp" 或 "local-codebase-memory-mcp"
-projects = provider.list_projects()
+repos = list_repos_pages()   # 分页遍历（limit ≤ 200）：{"name","lastCommit","branch","indexedAt"}
 project_basename = os.path.basename(project_path.rstrip('/'))
-target = next((p for p in projects if os.path.basename(p.root_path.rstrip('/')) == project_basename), None)
-project_name = target.name if target else None
+target = next((r for r in repos if r["name"] == project_basename), None)
+project_name = target["name"] if target else None
+graph_last_commit = target["lastCommit"] if target else None
 ```
 
-项目名规则：把 repo 绝对路径的 `/` 转成 `-`，例如 `/home/user/my-qt-app` → `home-user-my-qt-app`。
-**不要自己拼**，必须从 `list_projects` 匹配取 `name`。
+**不要自己拼**仓库名，必须从 `list_repos` 匹配取 `name`。
 
-### 3. 首次索引（已并入 Mode 0）
+### 3. 索引状态与漂移检查（check_drift）
 
-> 首次索引仅发生在 Mode 0 路径（`references/dev-preflight.md` Step 3b）。
-> Mode 1-5 远端唯一：远端不可索引，项目未索引在 Step 1 已硬终止；本地 MCP 不在本流程安装/索引。
-
-### 4. 等待索引 ready
-
-索引是异步的，`index_repository` 返回后 daemon 还需几秒构建：
+GitNexus 无 `index_status` / 本地索引；图谱基线 = `list_repos.lastCommit`。
+漂移 = 本地 HEAD 与 lastCommit 的差异（mcp-scan.py `check_drift` 内建，fetch 前自动警告）：
 
 ```python
-import time
-max_wait = 300  # 硬超时 300 秒（5 分钟）
-start = time.time()
-while True:
-    elapsed = time.time() - start
-    if elapsed > max_wait:
-        # 硬终止：远端索引 5 分钟未 ready
-        print("[FATAL] 远端索引 5 分钟未 ready，请手动刷新远端，或显式触发 Mode 0 使用本地图谱")
-        break
-    status = provider.index_status(project=project_name)
-    if status.status == "ready":
-        break
-    elif status.status == "indexing":
-        time.sleep(2)
-    else:
-        break
+local_head = git("-C", repo_root, "rev-parse", "HEAD")
+drift = check_drift()   # lastCommit vs local_head
 ```
 
-**超时处理**（仅本地提供方即 Mode 0 路径，远端已在 Step 1 确认 ready 跳过此处）：等待超过 60 秒仍未 ready → `index_repository(mode="fast")` 推一下；再等 30 秒仍不 ready → **硬终止**。
-
-> 远端提供方已在 Step 1 确认 ready，Step 4 整体跳过。
-
-### 4a. Freshness 检查（仅远端提供方）
-
-> 仅当 `mcp_provider_type == "remote"` 且 `mode_0_active == false` 时执行。
-> 远端图谱从远端 git 仓库同步，**看不到本地未 push / 未提交代码**——这是结构性能力边界，不是可等待自愈的瞬态。
-
-```python
-if mcp_provider_type == "remote" and not mode_0_active:
-    # 1) dirty 工作区（定论性：未提交改动远端必然没有，也没有可 push 的 commit 可等）
-    if git("-C", project_path, "status", "--porcelain").stdout.strip():
-        HARD_FATAL("[FATAL] 工作区有未提交改动，远端图谱必然看不到。"
-                   "commit + push 后等远端同步，或显式触发 Mode 0。" + 指引模板(mcp-providers.md §5))
-
-    # 2) 未推送检测（定论性：远端必然没有这些代码）
-    up = git("-C", project_path, "log", "@{upstream}..HEAD", "--oneline")
-    if up.failed or up.stdout.strip():
-        n = "无远程追踪分支" if up.failed else f"{len(up.stdout.strip().splitlines())} 个未推送 commit"
-        HARD_FATAL("[FATAL] 远端图谱必然落后于本地代码（" + n + "）。" + 指引模板(mcp-providers.md §5))
-        # 不回退本地；用户须 push 后等远端同步，或显式触发 Mode 0
-
-    # 3) 分支一致性（远端索引可能挂在别的分支，此时等待 watcher 永不收敛）
-    local_branch = git("-C", project_path, "branch", "--show-current").stdout.strip()
-    remote_branch = <远端 list_projects 中本项目的 git.branch>   # 远端携带 git 元数据（实测）
-    if local_branch != remote_branch:
-        HARD_FATAL(f"[FATAL] 本地分支 {local_branch} 与远端索引分支 {remote_branch} 不一致。"
-                   "请让远端索引正确分支，或显式触发 Mode 0。" + 指引模板(mcp-providers.md §5))
-
-    # 4) 已全部推送且分支一致 → 用远端元数据直比（无需间接推断）
-    local_head = git("-C", project_path, "rev-parse", "HEAD").stdout.strip()
-    remote_head = <远端 list_projects 中本项目的 git.head_sha>
-    # local_head == remote_head → 图谱 fresh，继续
-    # 不等 → watcher 延迟，落入 reconcile 的索引等待逻辑（有界）
-```
+| 场景 | 处理 |
+|------|------|
+| `local_head == lastCommit` | 图谱即最新，继续 |
+| 本地领先（未 push commit / dirty） | 图谱看不到这些代码——**列出受影响文件**（`git log --name-only lastCommit..HEAD`）：涉及待测模块 → 硬终止等待平台同步；仅无关文件 → 带警告继续（方法体以本地切片为准） |
+| 本地落后 | 提示拉取最新代码（切片行号以本地为准，落后会错位） |
+| 分支不一致（本地 ≠ list_repos 的 `branch`） | 硬终止：图谱关系网与本地分支不同源，CALLS/继承可能失真 |
 
 **注意**：
-- 工作区 dirty → **立即硬终止**：未提交改动永远到不了远端，commit+push 或切 Mode 0 二选一。**不回退本地**（`mcp-providers.md` §2）
-- 有未推送 commit（或无 upstream）→ **立即硬终止**：远端永远看不到这些代码，等待无意义。指引二选一：push 后等待远端同步重试；或显式触发 Mode 0。**不回退本地**（`mcp-providers.md` §2）
-- 本地分支 ≠ 远端索引分支（`git.branch`）→ **硬终止**：watcher 追的是远端配置的分支，等待永不收敛
-- 本步骤不做任何间接推断——远端 `list_projects()` 实测携带 `git.head_sha` / `git.branch` 元数据，直接读取
-- Mode 0 激活时（`mode_0_active == true`）跳过本检测——Mode 0 已按本地 HEAD + 工作区确认 fresh（含 dirty 同步）
+- GitNexus 无本地索引可补，"等待平台同步"是唯一收敛途径；不等只能确认漂移范围不涉及待测代码
+- 工作区 dirty 不再一票否决：方法体一律本地切片，dirty 改动即刻反映在切片中；漂移警告由 check_drift 承担
+- Mode 0 激活时（`mode_0_active == true`）跳过提供方解析，但漂移检查照常执行
 
 ### 5. 验证图谱可用性
 
 最小验证查询，确认图谱非空：
 
 ```python
-result = provider.search_graph(
-    project=project_name,
-    label="Class",
-    limit=1
-)
-if result.total == 0:
-    # 图谱为空，硬终止
+rows = cypher("MATCH (c:Class) RETURN count(c) AS c", repo=project_name)  # repo 参数必带
+if rows[0]["c"] == 0:
+    # 图谱为空（平台索引异常），硬终止
 ```
 
 ### 6. 写入 session 文件
@@ -190,9 +134,9 @@ git -C <project_path> rev-parse HEAD
 
 ## 关键约束
 
-- 全流程只用 `mcp_provider` 记录的那一个提供方，不混用
-- 不对远端 MCP 调用 `index_repository`（远端不可索引，只能查询）
+- 全流程只用 GitNexus 单栈（`cypher` / `list_repos` / `context`），无提供方切换
+- 不触发索引（GitNexus 由平台索引，技能侧无索引能力）
 - 图谱不可用即硬终止，不降级到 LSP
-- 必须确认 `index_status == "ready"` 且图谱非空
+- 必须确认项目在 `list_repos` 在册且图谱非空；`lastCommit` 记为图谱基线
 - 不修改项目源码
-- 项目名必须从 `list_projects` 匹配取 `name`，不假设（远端按路径最后一段匹配，本地按全路径匹配）
+- 项目名必须从 `list_repos` 匹配取 `name`，不自己拼

@@ -2,11 +2,11 @@
 
 > 前置条件：知识图谱已就绪（`environment_check` 通过），`.ut-inventory.json` 存在，目标类已从 inventory 提取（`testable_classes`（内存变量）），图谱 ready。
 
-> 通过 mcp_provider 调用知识图谱工具（详见 references/mcp-providers.md）
+> 通过 GitNexus 代码图谱 MCP 查询 CALLS/IMPORTS 边（详见 references/gitnexus-guide.md）
 
 ## 概述
 
-从 inventory 读取目标类的 GUI 标记（`is_gui`），再用知识图谱的 `trace_path` 追踪目标类每个方法的出向调用链，按决策矩阵决定哪些依赖需要 stub、哪些需要编入 CMake。此阶段只产出 GUI 标记、stub 清单和源码目录清单，不生成测试代码。
+从 inventory 读取目标类的 GUI 标记（`is_gui`），再用知识图谱的 CALLS 出向边追踪目标类每个方法的调用链，按决策矩阵决定哪些依赖需要 stub、哪些需要编入 CMake。此阶段只产出 GUI 标记、stub 清单和源码目录清单，不生成测试代码。
 
 ## 工作步骤
 
@@ -28,12 +28,13 @@ GUI 类（`is_gui=true`）后续测试代码生成特殊处理：`QCoreApplicati
 对 inventory 中该类的每个 testable 方法：
 
 ```python
-callees = codebase_memory_mcp.trace_path(
-    project=project_name_in_graph,
-    function_name=method.qualified_name,   # 用全限定名，精确
-    direction="outbound",
-    depth=2
-)
+# CALLS 出向边（repo 参数必带；入向把方向反转）
+callees = cypher(
+    f"MATCH (src {{filePath: '{method.file_path}'}})"
+    "-[r:CodeRelation {{type:'CALLS'}}]->(t) "
+    f"WHERE src.name = '{method.name}' AND src.startLine = {method.start_line} "
+    "RETURN DISTINCT t.filePath AS file_path, t.name AS name, t.startLine AS start_line")
+# 多跳：逐跳组合（对每个 callee 的 (file_path, name, start_line) 重复上述查询）
 ```
 
 ### 3. stub 决策矩阵
@@ -71,18 +72,14 @@ for callee in callees:
 ### 5. 用 Cypher 补充 IMPORTS 链
 
 ```python
-imports = codebase_memory_mcp.query_graph(
-    project=project_name_in_graph,
-    query="""
-        MATCH (f:File)-[:IMPORTS]->(dep:Module)
-        WHERE f.file_path STARTS WITH '<目标类文件路径前缀>'
-        RETURN DISTINCT dep.file_path AS dep_file
-    """
-)
+imports = cypher(
+    f"MATCH (f:File)-[r:CodeRelation]->(dep) WHERE r.type = 'IMPORTS' "
+    f"AND f.filePath STARTS WITH '{目标类文件路径前缀}' "
+    "RETURN DISTINCT dep.filePath AS dep_file")
 # 聚合到 source_dirs
 ```
 
-注意：IMPORTS 边的目标节点是 `Module` 标签（不是 `File`），属性名是 `file_path`。拿不准时用 `get_graph_schema()` 确认。
+注意：GitNexus 关系类型在边属性 `r.type` 上（无 `type()` 函数）；属性名 camelCase（`filePath`）。拿不准时先 `MATCH ()-[r:CodeRelation]->() RETURN DISTINCT r.type` 摸清边集合。
 
 ### 6. 产出 stub 清单
 
@@ -103,7 +100,7 @@ stub 类型选择规则：
 - 普通函数 → `stub.set_lamda(...)`
 - 具体模式参考 `templates/stub-patterns.cpp`
 
-**循环依赖处理**：若 trace_path 发现 callee 链形成环（A→B→C→A），记录环路但不无限递归。在 stub_list 中标记 `circular: true`，可选择跳过该类或标记 needs_manual。标记 needs_manual 时调 `export-defects.py upsert` 落盘到 `.ut-defects.json`（`type=needs_manual, detected_at_stage=review`），归集进缺陷统计。
+**循环依赖处理**：若 CALLS 链发现环（A→B→C→A），记录环路但不无限递归。在 stub_list 中标记 `circular: true`，可选择跳过该类或标记 needs_manual。标记 needs_manual 时调 `export-defects.py upsert` 落盘到 `.ut-defects.json`（`type=needs_manual, detected_at_stage=review`），归集进缺陷统计。
 
 **深度限制**：depth=2 是基础值。若发现 callee 包含本项目代码且未完全覆盖传递依赖，提高到 depth=3。超过 depth=3 仍遗漏 → 标记 `incomplete_trace: true`。
 
@@ -133,7 +130,7 @@ stub 类型选择规则：
 
 | 查询类型 | 严重程度 | 失败处理 |
 |---------|---------|----------|
-| `trace_path`（依赖链） | 关键 | **硬终止** + 明确错误：`[FATAL] 依赖追踪失败，请检查 MCP 提供方和索引状态` |
-| `search_graph`（头文件/符号查找） | 关键 | **硬终止** + 明确错误：无法定位头文件则 CMake include 无法配置 |
-| `get_code_snippet`（签名确认） | 关键 | **硬终止** + 明确错误：签名不确定则 stub 无法正确生成 |
-| `query_graph`（辅助查询） | 非关键 | **降级** + 警告：返回空时改用 `trace_path`(outbound, depth=3) + `search_graph` 重新聚合依赖目录，**不读项目源码文件**，继续执行 |
+| CALLS 边查询（依赖链） | 关键 | **硬终止** + 明确错误：`[FATAL] 依赖追踪失败，请检查 GitNexus 端点与索引状态` |
+| cypher 符号定位（头文件/符号查找） | 关键 | **硬终止** + 明确错误：无法定位头文件则 CMake include 无法配置 |
+| 本地切片（签名确认） | 关键 | **硬终止** + 明确错误：签名不确定则 stub 无法正确生成 |
+| IMPORTS 边查询（辅助） | 非关键 | **降级** + 警告：返回空时改用 CALLS 多跳逐层展开重新聚合依赖目录，**不读项目源码文件**，继续执行 |

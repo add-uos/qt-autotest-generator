@@ -21,7 +21,7 @@
 
 | 状态 | 来源 | 读取方式 |
 |------|------|---------|
-| MCP 提供方 | `environment_check` 解析结果 | 内存变量 `mcp_provider` |
+| MCP 端点 | `references/environment-check.md` 确认的 GitNexus 端点 | 内存变量 `mcp_provider` |
 | 项目名（图谱） | `environment_check` 解析结果 | 内存变量 `project_name_in_graph` |
 | 测试目录 | `environment_check` 探测结果 | 内存变量 `test_dir` |
 | Qt 版本 | `framework_builder` 检测结果 | 内存变量 `qt_version` |
@@ -51,7 +51,7 @@ gui_names = {c["name"] for c in inventory.get("classes", []) if c.get("is_gui")}
 
 ### 2. 环境门禁
 
-`Read references/environment-check.md` → MCP 提供方解析、索引验证
+`Read references/environment-check.md` → GitNexus 索引确认、漂移检查
 
 ### 3. 框架搭建（按需）
 
@@ -152,7 +152,7 @@ for c in sorted_classes:
 
 | 步骤 | 文件 | 说明 |
 |------|------|------|
-| 依赖追踪 | `references/dependency-tracer.md` | 读 inventory 的 is_gui、MCP trace_path 出向、stub 决策、CMake 目录 |
+| 依赖追踪 | `references/dependency-tracer.md` | 读 inventory 的 is_gui、图谱 CALLS 出向、stub 决策、CMake 目录 |
 | 测试代码生成 | `references/test-code-gen.md` | 读模板生成测试代码、用例数下限从 level/factors 推导、AAA、命名 |
 | 编译验证 | `references/build-verifier.md` | 强制编译+运行、错误分类→修复表 |
 | 自检 | `references/self-checker.md` | 覆盖率/命名/SPDX/stub/断言强度/环境隔离 |
@@ -233,17 +233,17 @@ Mode 2 的 MCP 查询集中在依赖追踪和测试代码生成阶段。**被测
 
 | 查询 | 用途 | 阶段 |
 |------|------|------|
-| `trace_path(direction="outbound")` | 出向调用链（分支/隐式依赖/emit） | 依赖追踪 + 测试生成 |
-| `query_graph(IMPORTS)` | 补充传递依赖 | 依赖追踪 |
-| `search_graph` | 头文件/符号/类与方法查找 | 依赖追踪 |
-| `get_code_snippet(qn)` | 方法体全文（含签名/返回类型/分支） | 测试生成 + 自检反查 |
+| CALLS 出向边（cypher） | 出向调用链（分支/隐式依赖/emit） | 依赖追踪 + 测试生成 |
+| IMPORTS 边（cypher，r.type='IMPORTS'） | 补充传递依赖 | 依赖追踪 |
+| cypher 符号定位（Method/Class/File 节点） | 头文件/符号/类与方法查找 | 依赖追踪 |
+| mcp-scan.py（图谱定位+本地行切片） | 方法体全文（含签名/返回类型/分支） | 测试生成 + 自检反查 |
 
 **查询失败处理**：
 
 | 严重程度 | 处理 |
 |---------|------|
-| 关键（search_graph/trace_path/get_code_snippet） | 硬终止 + 明确错误 |
-| 非关键（query_graph 辅助查询） | 降级 + 警告，改用 `trace_path`+`search_graph` 重新聚合，**不读项目源码文件** |
+| 关键（符号定位/CALLS/本地切片） | 硬终止 + 明确错误 |
+| 非关键（IMPORTS 辅助查询） | 降级 + 警告，改用 CALLS 多跳展开重新聚合，**不读项目源码文件** |
 
 ## 关键约束
 

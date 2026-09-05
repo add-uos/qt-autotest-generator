@@ -2,7 +2,7 @@
 
 > 前置条件：目标类 `build_result=fail` 或 `run_result=fail`（`class_status[classname].status=failed`（内存变量））；或源码变更后方法删除导致测试引用失效。
 
-> 通过 mcp_provider 调用知识图谱工具（详见 references/mcp-providers.md）
+> 通过 GitNexus 代码图谱 MCP 定位符号（详见 references/gitnexus-guide.md）
 
 ## 概述
 
@@ -29,12 +29,15 @@ python3 ${SKILL_DIR}/scripts/utq.py -P ${test_dir} info <失败方法名>
 
 ### 2. 读源码确认根因
 
-用图谱读失败方法的源码：
+用图谱读失败方法的源码（图谱定位 + 本地行切片；图谱 content 5016 字符截断，不作源）：
 
 ```python
-snippet = codebase_memory_mcp.get_code_snippet(
-    qualified_name=method.qualified_name
-)
+# 1) cypher 定位（repo 参数必带）
+rows = cypher(
+    f"MATCH (m:Method) WHERE m.filePath = '{method.file_path}' AND m.name = '{method.name}' "
+    "RETURN m.startLine AS startLine, m.endLine AS endLine")
+# 2) 本地行切片（repo_root 为本地检出）
+snippet = slice_body(repo_root, method.file_path, rows[0]["startLine"], rows[0]["endLine"])
 ```
 
 判断失败是测试代码问题还是源码问题：
@@ -51,12 +54,12 @@ per-error 3 次重试，总计 max 10 loops（与编译验证的预算独立）�
 
 | 错误模式 | 修复策略 |
 |---------|--------|
-| `undefined reference to` | MCP `trace_path` 重新追踪传递依赖，补 CMake `target_link_libraries` |
+| `undefined reference to` | `cypher` CALLS 边查询重新追踪传递依赖，补 CMake `target_link_libraries` |
 | `No such file or directory` | 补 CMake `target_include_directories` |
-| `stub.set_lamda` 签名不匹配 | MCP `get_code_snippet` 重读签名，修正 stub |
+| `stub.set_lamda` 签名不匹配 | mcp-scan.py（图谱定位+本地行切片）重读签名，修正 stub |
 | `expected primary-expression` | `static_cast` 修正重载 |
 | `undefined reference to stub_ext::freeWrapper` | 确认 `stub-shadow.cpp` 已编入 |
-| Segfault | 补 stub（可能 trace_path 漏了依赖），重试 |
+| Segfault | 补 stub（可能 CALLS 查询漏了依赖），重试 |
 | ASSERT 失败 | 检查测试期望值，修正测试逻辑 |
 
 ### 4. 重试耗尽 → 根因分类
@@ -87,7 +90,7 @@ per-error 3 次重试，总计 max 10 loops（与编译验证的预算独立）�
         → 标红：需人工排查
 ```
 
-> **注意**：标红前必须用 `get_code_snippet` 读源码确认。尝试最小化复现：只构造对象不调方法，看是否崩溃。
+> **注意**：标红前必须用 mcp-scan.py（图谱定位+本地行切片）读源码确认。尝试最小化复现：只构造对象不调方法，看是否崩溃。
 
 ### 5. 方法删除的清理
 
@@ -156,7 +159,7 @@ python3 ${SKILL_DIR}/scripts/export-defects.py upsert \
 
 - 不修改项目源码：只修测试代码和测试 CMakeLists；疑似源码缺陷只标红
 - 不在重试预算耗尽前标红：先尽力修测试侧问题
-- 不跳过根因判定：标红前必须用 `get_code_snippet` 读源码确认
+- 不跳过根因判定：标红前必须用 mcp-scan.py（图谱定位+本地行切片）读源码确认
 - 不把测试代码问题误判为源码缺陷：先排除 stub/include/CMake 问题
 - 不修改已通过的用例：只修失败的 `TEST_F` / `TEST_P` 用例，不动已通过用例
 - 不超过重试预算：per-error 3 次，总计 10 loops

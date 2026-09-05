@@ -2,7 +2,7 @@
 
 > 前置条件：`build-verifier` 已通过目标类（session 中 `status=verified`，`build_result=pass`，`run_result=pass`）。
 
-> 通过 mcp_provider 调用知识图谱工具（详见 references/mcp-providers.md）
+> 通过 GitNexus 代码图谱 MCP 定位符号（详见 references/gitnexus-guide.md）
 
 ## 概述
 
@@ -65,13 +65,12 @@ if iter_count >= MAX_ITERATIONS:
 用图谱拉全量方法，与测试文件中的 TEST_F 名做差集：
 
 ```python
-# 图谱全量 public/protected 方法
-all_methods = codebase_memory_mcp.search_graph(
-    project=project_name_in_graph,
-    label="Method",
-    qn_pattern=f".*\\.{target_class.name}\\..*"
-)
-all_method_names = {m.name for m in all_methods if m.access in ("public", "protected")}
+# 图谱全量方法（HAS_METHOD 边，repo 参数必带；不支持 qn 正则，按类聚合后本地过滤可见性）
+rows = cypher(
+    f"MATCH (c:Class {{name: '{target_class.name}'}})-[r:CodeRelation]->(m:Method) "
+    "WHERE r.type = 'HAS_METHOD' "
+    "RETURN m.name AS name, m.filePath AS filePath, m.startLine AS startLine")
+all_method_names = {r["name"] for r in rows}
 
 # 测试文件中已测方法
 test_content = read(target_class.test_file)
@@ -140,8 +139,8 @@ uncovered_functions = snapshot["uncovered_functions"]
 - **纯 gMock 期望禁令**：用例只有 `EXPECT_CALL`/`ON_CALL` 而无任何传统 `EXPECT_EQ`/`EXPECT_TRUE`/`EXPECT_FALSE` 等断言验证返回值/对象状态 → 违规（gMock 验证了依赖被调用，但未验证 SUT 自身行为）
 - **字面量布尔断言禁令**：用例唯一有效断言为 `EXPECT_TRUE(true)` / `ASSERT_FALSE(false)` 等字面量布尔 → 违规（critical，与空断言同责：占位断言未验证任何行为）；混有真实断言时不报，非字面量布尔归下一条“布尔期望边”只作可疑警告
 - **布尔期望边**：单独 `EXPECT_TRUE(ret);` / `EXPECT_FALSE(ret);` 作唯一有效断言且无注释说明期望分支 → 标记可疑（不强判违规，但流转 test-writer.md 复核是否对应源码分支期望）
-- **副作用断言缺失**：方法有写状态/发信号/调下游的副作用（图谱 `trace_path` 出向调用或源码 `emit` 显示），但用例只断言返回值、无 `QSignalSpy.count()` / stub 调用计数 / 对象状态前后对比 → 违规
-- **返回值断言缺失**：方法有返回值（图谱 `get_code_snippet` 返回类型非 `void`）但用例未断言返回值的具体期望值（只断言不崩溃或无任何返回值检查）→ 违规
+- **副作用断言缺失**：方法有写状态/发信号/调下游的副作用（图谱 CALLS 出向边或源码 `emit` 显示），但用例只断言返回值、无 `QSignalSpy.count()` / stub 调用计数 / 对象状态前后对比 → 违规
+- **返回值断言缺失**：方法有返回值（本地切片签名非 `void`）但用例未断言返回值的具体期望值（只断言不崩溃或无任何返回值检查）→ 违规
 
 **扫描方法**（两侧并行：测试文件用 awk/grep，源码侧用图谱——图谱查函数关系比 grep 源码快且准）：
 
@@ -202,27 +201,24 @@ awk '
 ' "$TEST_FILE"
 ```
 
-源码侧（返回值/副作用判断）——图谱查函数关系比 grep 源码更快更准，避免 grep 源码误报同名方法：
+源码侧（返回值/副作用判断）——图谱查调用边比 grep 源码更快更准，避免 grep 源码误报同名方法：
 ```python
-# 待测方法列表（来自 1a 的 all_methods）
+# 待测方法列表（来自 1a 的 all_methods，含 filePath/startLine 定位信息）
 for method in all_methods:
-    # 返回值类型：get_code_snippet 返回签名，判断返回类型是否非 void
-    snippet = codebase_memory_mcp.get_code_snippet(
-        qualified_name=method.qualified_name   # 必须来自图谱返回值
-    )
+    # 返回值类型：本地切片签名，判断返回类型是否非 void
+    snippet = slice_body(repo_root, method["filePath"],
+                         method["startLine"], method["endLine"])
     has_return_value = not snippet.signature.startswith("void")
 
-    # 副作用：trace_path 出向调用链，命中 emit/写状态/调下游
-    traces = codebase_memory_mcp.trace_path(
-        project=project_name_in_graph,
-        function_name=method.name,
-        direction="outbound",
-        mode="calls"
-    )
-    has_side_effect = any(
-        "emit" in t.callee_code or t.callee_is_signal or t.callee_writes_state
-        for t in traces
-    )
+    # 副作用：CALLS 出向边，命中 emit/写状态/调下游（callee 源码再用本地切片确认）
+    callees = cypher(
+        f"MATCH (src {{filePath: '{method['filePath']}'}})"
+        "-[r:CodeRelation {{type:'CALLS'}}]->(t) "
+        f"WHERE src.name = '{method['name']}' "
+        "RETURN DISTINCT t.filePath AS file_path, t.name AS name")
+    has_side_effect = any("emit" in slice_body(repo_root, c["file_path"], ...) 
+                          or c["name"].endswith("Changed")   # 信号命名约定
+                          for c in callees)
 
     # 对每个用例比对：源码侧有返回值/副作用但测试文件侧未断言对应维度 → 违规
     # （与 awk 输出交叉：用例名匹配源码方法名）
@@ -232,9 +228,9 @@ for method in all_methods:
 
 #### 2c. 分支清单交叉验证（白盒质量门禁，MCP 反查）
 
-§4.1 要求测试文件顶部注释声明「分支清单 → 用例映射」。本步**用 MCP `get_code_snippet` 反查真实源码分支**，校验声明是否对得上实现——这是白盒覆盖质量的硬门禁，不靠 agent 自觉读 test-types.md。
+§4.1 要求测试文件顶部注释声明「分支清单 → 用例映射」。本步**用 extract-branches 反查真实源码分支**，校验声明是否对得上实现——这是白盒覆盖质量的硬门禁，不靠 agent 自觉读 test-types.md。
 
-> **首选方式**：跑 `scripts/mcp-scan.py extract-branches`，脚本固化 §2c 全流程——从 inventory 取类方法、调 MCP `get_code_snippet` 拉方法体、正则数真实分支（if/else if/switch case/for/while/throw/early return/三元）、解析测试文件声明的 `// B1:` 分支清单、做差集输出 `MISSING_BRANCH_LIST` / `BRANCH_NOT_MAPPED` 违规清单。模型只消费违规清单决定补什么用例，不自己回读源码数分支。
+> **首选方式**：跑 `scripts/mcp-scan.py extract-branches`，脚本固化 §2c 全流程——从 inventory 取类方法、图谱定位+本地行切片（`--repo-root`）拉方法体、正则数真实分支（if/else if/switch case/for/while/throw/early return/三元）、解析测试文件声明的 `// B1:` 分支清单、做差集输出 `MISSING_BRANCH_LIST` / `BRANCH_NOT_MAPPED` 违规清单。模型只消费违规清单决定补什么用例，不自己回读源码数分支。
 >
 > ```bash
 > python3 ${SKILL_DIR}/scripts/mcp-scan.py extract-branches \
@@ -249,10 +245,10 @@ for method in all_methods:
 > 脚本核心逻辑（`extract_branches` / `parse_declared_branches` / `cross_check_branches`）为纯函数，下方伪代码仅作原理说明（脚本不可用时兑底）。
 
 ```python
-# 对每个 testable 方法（§1a 的 all_methods），用 MCP 取真实方法体
+# 对每个 testable 方法（§1a 的 all_methods），图谱定位 + 本地行切片取真实方法体
 for method in all_methods:
-    snippet = mcp.get_code_snippet(qualified_name=method.qualified_name)  # qn 必须来自图谱返回
-    body = snippet.body  # 方法体全文（不是 read 源文件）
+    body = slice_body(repo_root, method["filePath"],
+                      method["startLine"], method["endLine"])  # 方法体全文（不是 read 源文件）
 
     # 提取真实分支：if / else if / switch case + default / for / while / throw / early return / 三元
     real = extract_branches(body)          # 返回 dict，real["total"] 为真实分支总数
@@ -270,7 +266,7 @@ for method in all_methods:
 ```
 
 **判定**：
-- `MISSING_BRANCH_LIST`（复杂方法无分支清单注释）→ 流转 `test-writer.md`，用 `get_code_snippet` 补分支清单 + 对应用例
+- `MISSING_BRANCH_LIST`（复杂方法无分支清单注释）→ 流转 `test-writer.md`，用本地切片补分支清单 + 对应用例
 - `BRANCH_NOT_MAPPED`（声明分支数 < 真实分支数）→ 流转 `test-writer.md`，按漏掉的分支补用例
 - 简单方法（complexity<10 且分支<3）无分支清单不判违规（§4.1 允许简单方法省略）
 
@@ -312,7 +308,7 @@ for method in all_methods:
 - **真实时间依赖**：需要确定性结果但未 mock 的 `QDateTime::currentDateTime()`、`QTime::currentTime()`、`QRandomGenerator::system()` → 违规
 - **用例间污染**：单例 `Instance()` 调用但 `TearDown()` 无重置；`stub.set_lamda(` 出现但 `TearDown()` 无 `stub.clear()` → 违规
 
-**扫描方法**（两侧并行：测试文件用 grep 查硬编码/env/未清理；源码侧用图谱 trace_path 查待测方法是否调外部资源——图谱查调用链比 grep 源码快且准）：
+**扫描方法**（两侧并行：测试文件用 grep 查硬编码/env/未清理；源码侧用图谱 CALLS 边查待测方法是否调外部资源——图谱查调用链比 grep 源码快且准）：
 
 测试文件侧（硬编码路径、env 未还原、stub 未清理）—— grep：
 ```bash
@@ -336,7 +332,7 @@ grep -nE 'QProcess::start|::system\(|popen\(|QNetworkAccessManager::(get|post)|Q
 [ "$(grep -c 'stub\.set_lamda(' "$TEST_FILE")" -gt 0 ] && [ "$(grep -c 'stub\.clear()' "$TEST_FILE")" -eq 0 ] && echo "STUB_NOT_CLEARED"
 ```
 
-源码侧（待测方法是否调外部资源、测试是否漏 mock）—— 图谱 trace_path，比 grep 源码更准（能跨文件、跨层级追到 QProcess::start 等终点）：
+源码侧（待测方法是否调外部资源、测试是否漏 mock）—— 图谱 CALLS 出向边，比 grep 源码更准（能跨文件、跨层级追到 QProcess::start 等终点；多跳逐层展开）：
 ```python
 EXTERNAL_ENDPOINTS = {
     "QProcess::start", "system", "popen",
@@ -346,14 +342,9 @@ EXTERNAL_ENDPOINTS = {
     "QRandomGenerator::system", "srand", "qsrand",
 }
 for method in all_methods:
-    traces = codebase_memory_mcp.trace_path(
-        project=project_name_in_graph,
-        function_name=method.name,
-        direction="outbound",
-        mode="calls",
-        depth=5
-    )
-    external_called = {t.callee_qualified_name for t in traces} & EXTERNAL_ENDPOINTS
+    # CALLS 出向逐层展开（depth=5 层）；每层对 callees 重复同一查询
+    callees = expand_calls(repo_root, method, depth=5)   # cypher CALLS 边逐跳组合
+    external_called = {c["qualified"] for c in callees} & EXTERNAL_ENDPOINTS
     # 交叉比对测试文件：external_called 中是否有未出现在 stub.set_lamda(...) 的 → 漏 mock → 违规
 ```
 
@@ -370,7 +361,7 @@ for method in all_methods:
 | SPDX 缺失 | 无头 | 流转至 `test-writer.md` 补 |
 | stub 问题 | 有问题 | 流转至 `test-writer.md` 修正 |
 | 断言强度违规 | NO_FATAL 唯一断言/空断言/纯 gMock 期望/副作用未断言/返回值未断言 | 流转至 `test-writer.md` 重写对应用例 Assert 段 |
-| 分支清单违规 | MISSING_BRANCH_LIST / BRANCH_NOT_MAPPED（声明分支 < 真实分支） | 流转至 `test-writer.md`，用 `get_code_snippet` 补分支清单 + 补用例 |
+| 分支清单违规 | MISSING_BRANCH_LIST / BRANCH_NOT_MAPPED（声明分支 < 真实分支） | 流转至 `test-writer.md`，用本地切片补分支清单 + 补用例 |
 | AAA 结构违规 | 缺少 // Arrange / // Act / // Assert 注释（MISSING_AAA） | 流转至 `test-writer.md` 补 AAA 注释 |
 | 用例数低于下限 | 声明表中 actual < min（BELOW_MIN_CASES） | 流转至 `test-writer.md` 补用例 |
 | 环境隔离违规 | 硬编码路径/env 未还原/真实外部资源/stub 未清理 | 流转至 `test-writer.md` 补 mock 或隔离 |
@@ -430,4 +421,4 @@ for method in all_methods:
 - 覆盖率门禁规则：必须有 `.ut-inventory.json`，按方法分级（详见 `references/coverage-tiers.md`）；无 inventory 时技能不可运行
 - 不跳过断言强度自检：每用例（`TEST_F` 与 `TEST_P` 均需扫描）至少 2 个有效 `EXPECT_*`（NO_FATAL/NO_THROW/EXPECT_CALL 均不计入）
 - 不跳过环境隔离自检：硬编码绝对路径、`qputenv` 无对应 `qunsetenv`、未 mock 的真实外部资源（QProcess/网络/socket/真实时间）、stub 未 `clear()` 必须检出
-- 不跳过分支清单交叉验证：复杂方法必须有分支清单注释，且声明分支数 ≥ `get_code_snippet` 提取的真实分支数；漏报即流转 `test-writer.md` 补用例（白盒质量硬门禁）
+- 不跳过分支清单交叉验证：复杂方法必须有分支清单注释，且声明分支数 ≥ extract-branches 提取的真实分支数；漏报即流转 `test-writer.md` 补用例（白盒质量硬门禁）

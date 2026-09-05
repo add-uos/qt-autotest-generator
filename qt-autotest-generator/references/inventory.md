@@ -1,6 +1,6 @@
 # 函数重要性探测（Mode 1）
 
-> 前置条件：知识图谱已就绪（`environment_check` 通过），MCP 提供方已确定。
+> 前置条件：知识图谱已就绪（`references/environment-check.md` 门禁通过），GitNexus 端点已配置（QTAG_MCP_URL）。
 
 ## 适用时机
 
@@ -22,16 +22,13 @@
 
 ### 1. 环境确认
 
-复用 `environment_check` 的图谱就绪检查：
+复用 `references/environment-check.md` 的图谱就绪检查：
 
 ```python
-mcp = resolved_mcp_provider
-projects = mcp.list_projects()
-project_name = resolve_project_name(project_path, projects)
-status = mcp.index_status(project=project_name)
-# status="ready" → 继续
-# status="indexing" → 等待
-# not found → 需先索引（仅本地提供方）
+repos = list_repos_pages()   # 分页遍历（limit ≤ 200）
+target = next((r for r in repos if r["name"] == project_name), None)
+# target 命中 → 继续，target["lastCommit"] 即图谱基线
+# not found → 平台未索引本项目 → 硬终止（GitNexus 无本地索引可补）
 ```
 
 ### 2. 检查存量
@@ -42,7 +39,7 @@ if file_exists(inventory_path):
     existing = read_json(inventory_path)
     if existing["base_sha"] == current_git_sha() and existing.get("methods"):
         # 表是最新的（且非空骨架）跳过全量扫描，直接输出统计。
-        # methods 守卫：environment_check §6 可能预写空骨架（base_sha=HEAD、
+        # methods 守卫：environment-check §6 可能预写空骨架（base_sha=图谱 lastCommit、
         # methods=[]），不守卫会误判“表最新”而跳过 Mode 1 全量建表，永远建不出真表。
         print_summary(existing)
         return
@@ -99,14 +96,14 @@ python3 scripts/mcp-scan.py fetch \
   --summary
 ```
 
-- **project**：`environment_check` 解析的 MCP 项目名
+- **project**：`references/environment-check.md` 确认的 GitNexus 仓库名
 - **file-pattern**：可选。**不传时扫描整个项目**（`scope_rules` 自动排除 tests/3rdparty/build 等）；仅当需要收窄范围时才传，且不同项目目录结构不同，**不要固化某个默认 pattern**——单源目录项目可传 `"src/**"`，多源目录项目（如 `src/` + `daemon/`）需多次指定
 - **output**：写入 `${test_dir}/.ut-inventory.json`
 - **--summary**：同时产出 `${test_dir}/.ut-inventory-summary.md`（与 output 同名、`.json` 换 `-summary.md`）
-- **--base-sha**：当前 git HEAD SHA（对账用，默认 `unknown`）
+- **--base-sha**：图谱基线 SHA（缺省取 `list_repos.lastCommit`，不传本地 HEAD）
 - **--keep-dump**：保留中间 `mcp_dump.json`（调试用）
 
-脚本内部自动完成 5 步：`search_graph` 分页 → `query_graph` 继承检测 → DBus 槽 → Q_INVOKABLE/Q_PLUGIN → P75 计算 → `build_inventory()` 评分。
+脚本内部自动完成：图谱方法/类分页采集（cypher）→ 继承边检测（EXTENDS/IMPLEMENTS）→ DBus 槽（本地宏解析）→ Q_INVOKABLE/Q_PLUGIN（本地 `--repo-root` 宏扫描）→ P75 计算 → `build_inventory()` 评分。复杂度/认知复杂度/签名/宏扫描一律来自本地仓库，图谱只当索引。
 
 - HTTP 直连 MCP 服务器（JSON-RPC 2.0），~12000 方法端到端仅需 ~2 秒
 - MCP 采集与评分逻辑同在 `mcp-scan.py` 内，`fetch` 子命令直接调用 `build_inventory()` + `generate_summary()`，无跨文件 import
@@ -120,21 +117,21 @@ python3 scripts/mcp-scan.py fetch \
 
 #### Pass 1 — 批量图查询（~15 次 MCP 调用）
 
-**1A. 全量类**：`search_graph(label="Class")` 分页，过滤 `is_test=true`。
+**1A. 全量类**：`MATCH (c:Class) RETURN ...` 分页，按路径前缀过滤 is_test。
 
-**1B. 全量方法（含自由函数）**：分别 `search_graph(label="Method")` 和 `search_graph(label="Function")` 分页，合并后过滤 `is_test=true`。
+**1B. 全量方法（含自由函数）**：分别 `MATCH (m:Method)` 和 `MATCH (m:Function)` 分页（不支持标签析取，两条语句），合并后过滤 is_test。
 
-**1C. 调用热度百分位**：客户端计算 P75（仅非零 in_degree），MCP 不支持 `percentileCont()`。
+**1C. 调用热度百分位**：客户端计算 P75（仅非零 in_degree；in_degree 由 CALLS 边 `r.type='CALLS'` 聚合）。
 
-**1D. 继承链匹配**：`query_graph` 按 `base_classes` 筛选 DBus / 并发 / GUI 基类。
+**1D. 继承链匹配**：`r.type='EXTENDS'/'IMPLEMENTS'` 边 + 基类名白名单筛选 DBus / 并发 / GUI 基类（节点无 base_classes 属性）。
 
-**1E. DBus 内省**：Pass 2 中对 DBus 类调 `get_code_snippet` 解析 Q_SLOTS/Q_SIGNALS。
+**1E. DBus 内省**：Pass 2 中对 DBus 类本地读头文件解析 Q_SLOTS/Q_SIGNALS。
 
 **1F. exempt 文件模式候选**：scope_rules 预定义（3rdparty/**, moc_*, ui_*, .pb. 等）。
 
 #### Pass 2 — 精准源码检查
 
-只对候选类调 `get_code_snippet`（大项目通常 10-50 个候选）。
+只对候选类本地读源文件（图谱定位 filePath，本地读头文件；大项目通常 10-50 个候选）。
 
 **候选类筛选条件**（任一命中即进入 Pass 2）：
 
@@ -312,18 +309,19 @@ Agent 输出 Markdown 摘要 + review_queue，与用户交互：
 代码行数是最直观的规模指标，但大型函数不一定复杂（如纯数据组装）。因此 lines 因子得分保守（+1/+1），
 需叠加 complexity 或 cognitive 才能推到 high。避免对长但简单的函数过度评分。
 
-### MCP 不支持 Cypher 查询
+### GitNexus Cypher 方言限制
 
 - `percentileCont()` 不可用，P75 必须客户端计算
-- `query_graph` 可以返回 `base_classes`，用于 DBus/并发基类直接筛选
-- `search_graph(label="Class")` 不返回 `base_classes` 字段，需用 `query_graph` 替代
+- 不支持标签析取：`(t:Method OR t:Function)` / `(t:Method|t:Function)` 均 Parser exception → 分两条语句
+- `SKIP` 必须在 `LIMIT` 前；`type(r)` 函数不存在，关系类型走边属性 `r.type`
+- 节点无 `base_classes`/命名空间属性 → 继承用 EXTENDS/IMPLEMENTS 边；qn 由 mcp-scan.py 分配（Class.name，撞名 @文件名/@行号）
 
 ### is_exported 不可靠
 
 `is_exported` 字段对大多数方法返回 true（实际含义接近"non-static"），不适合作为公开 API 检测依据。已从评分因子中移除。
 
-### get_code_snippet 限制
+### 图谱 content 截断（方法体不作源）
 
-- 按 `qualified_name` 查询时返回方法级源码（.cpp 实现），非类声明
-- Q_SLOTS/Q_INVOKABLE 声明在头文件中，get_code_snippet 无法直接获取
-- 替代方案：用 `query_graph` 获取类方法列表，或用 `search_code(pattern='Q_INVOKABLE')` 搜索源码文本
+- 图谱 content 字段在 5016 字符硬截断 → 方法体一律本地行切片（`--repo-root`）
+- Q_SLOTS/Q_INVOKABLE 声明在头文件中，图谱不载头文件宏声明
+- 替代方案：本地宏扫描 `scan_qt_macros_in_file`（`class X` 声明上下文内识别 Q_INVOKABLE/Q_SLOTS/Q_PLUGIN_METADATA）

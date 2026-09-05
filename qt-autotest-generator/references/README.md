@@ -14,12 +14,12 @@
 | `failure-repairer.md` | 失败修复：根因判定→重试→标红落盘 | test-writer 子步骤 |
 | `incremental-updater.md` | 增量补全：覆盖率缺口→追加用例 | test-writer 子步骤 |
 | `incremental-inventory.md` | inventory 增量更新：人工标记 overlay | reconcile-logic, inventory.md |
-| `dependency-tracer.md` | 依赖追踪：trace_path→stub 决策矩阵→CMake 目录 | test-writer 子步骤 |
+| `dependency-tracer.md` | 依赖追踪：cypher CALLS 出向→stub 决策矩阵→CMake 目录 | test-writer 子步骤 |
 | `framework-builder.md` | 框架搭建：目录结构/CMake/stub-ext/脚本 | test-writer 子步骤 |
-| `environment-check.md` | 环境门禁：MCP 提供方解析→索引验证 | SKILL.md 所有 Mode |
-| `mcp-providers.md` | MCP 提供方解析规则（唯一权威文档） | environment-check |
-| `dev-preflight.md` | Mode 0 开发预检：本地提供方锁定 + 索引同步 + freshness | SKILL.md Mode 0, reconcile-logic |
-| `codebase-memory-guide.md` | MCP 工具语义、参数、调用样例 | 所有需查图谱的子步骤 |
+| `environment-check.md` | 环境门禁：GitNexus 索引确认→漂移检查 | SKILL.md 所有 Mode |
+| `mcp-providers.md` | GitNexus 单栈说明 + 环境变量覆盖语义 | environment-check |
+| `dev-preflight.md` | Mode 0 开发预检：list_repos 索引确认 + 本地检出校验 + check_drift 漂移检查 | SKILL.md Mode 0, reconcile-logic |
+| `gitnexus-guide.md` | GitNexus MCP 工具语义、cypher 方言、mcp-scan.py 子命令、新旧工具映射 | 所有需查图谱的子步骤 |
 | `reconcile-logic.md` | 对账逻辑：git HEAD vs base_sha→差异路由 | SKILL.md Mode 1/2 |
 | `stale-test-cleanup.md` | 过时测试清理：removed 方法→注释用例+INSTANTIATE | reconcile 后, failure-repairer 兜底 |
 | `coverage-tiers.md` | 三级覆盖率分类体系定义 | self-checker, build-verifier |

@@ -1,6 +1,6 @@
 # 框架搭建
 
-> 前置条件：`environment_check` 已通过（`project_name_in_graph` 已确定（内存变量）），且测试目录（`test_dir`（内存变量，默认 `autotests/`））不存在。
+> 前置条件：`references/environment-check.md` 门禁已通过（`project`（GitNexus 仓库名）已确定（内存变量）），且测试目录（`test_dir`（内存变量，默认 `autotests/`））不存在。
 
 ## 概述
 

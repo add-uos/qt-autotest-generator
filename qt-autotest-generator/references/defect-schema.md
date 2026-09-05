@@ -272,7 +272,7 @@
 | `status` | string | 生命周期状态：`open` / `fixed` / `reopened` / `wontfix`，见 [状态机](#生命周期状态机) |
 | `evidence` | string | 缺陷证据描述（编译错误、运行时崩溃信息、断言失败输出等） |
 | `suggestion` | string | 修复建议 |
-| `root_cause_snippet` | string | `get_code_snippet` 截取的源码片段 |
+| `root_cause_snippet` | string | mcp-scan.py（图谱定位+本地行切片）截取的源码片段 |
 | `discovered_at` | string | 发现时间（ISO 8601） |
 | `discovered_in_batch` | int | 发现时的批次号 |
 | `first_seen_sha` | string | 首次发现时的 `base_sha` |

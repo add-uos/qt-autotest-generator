@@ -180,7 +180,7 @@ class TestReviewTargets:
                 json.dump(structural, f)
             return structural, None
 
-        def fake_branch(path, inv, project, url, out_json):
+        def fake_branch(path, inv, project, url, out_json, repo_root=None):
             calls["branch"] = (path, inv, project)
             if branch_data is not None:
                 with open(out_json, "w") as f:

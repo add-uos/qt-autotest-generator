@@ -1,7 +1,7 @@
 """fetch-mcp-data.py 健壮性测试。
 
 聚焦纯函数与增量更新逻辑的边界场景：空输入、None、缺字段、畸形数据、
-重复数据、异常路径。collect_methods 用 FakeClient mock MCPClient。
+重复数据、异常路径。GitNexusAdapter 采集逻辑见 test_gitnexus_adapter.py。
 """
 import json
 import math
@@ -29,110 +29,37 @@ class FakeClient:
         return self.default
 
 
-# ── _extract_class_from_qn ────────────────────────────────────────────
-
-class TestExtractClassFromQn:
-    def test_normal_method(self, fetch_mcp_data):
-        assert fetch_mcp_data._extract_class_from_qn("proj.path.Calc.add") == "Calc"
-
-    def test_two_segments(self, fetch_mcp_data):
-        assert fetch_mcp_data._extract_class_from_qn("Calc.add") == "Calc"
-
-    def test_single_segment(self, fetch_mcp_data):
-        assert fetch_mcp_data._extract_class_from_qn("add") == "add"
-
-    def test_empty_string(self, fetch_mcp_data):
-        assert fetch_mcp_data._extract_class_from_qn("") is None
-
-    def test_none(self, fetch_mcp_data):
-        assert fetch_mcp_data._extract_class_from_qn(None) is None
-
-    def test_dotted_only(self, fetch_mcp_data):
-        # 只有分隔符的退化输入
-        assert fetch_mcp_data._extract_class_from_qn("a.b") == "a"
-
-
-# ── _parse_bases ──────────────────────────────────────────────────────
-
-class TestParseBases:
-    def test_list_passthrough(self, fetch_mcp_data):
-        assert fetch_mcp_data._parse_bases(["QWidget", "QObject"]) == ["QWidget", "QObject"]
-
-    def test_empty_list(self, fetch_mcp_data):
-        assert fetch_mcp_data._parse_bases([]) == []
-
-    def test_json_string(self, fetch_mcp_data):
-        assert fetch_mcp_data._parse_bases('["QWidget", "QObject"]') == ["QWidget", "QObject"]
-
-    def test_comma_separated(self, fetch_mcp_data):
-        assert fetch_mcp_data._parse_bases("QWidget, QObject") == ["QWidget", "QObject"]
-
-    def test_single_comma_string(self, fetch_mcp_data):
-        assert fetch_mcp_data._parse_bases("QWidget") == ["QWidget"]
-
-    def test_none(self, fetch_mcp_data):
-        assert fetch_mcp_data._parse_bases(None) == []
-
-    def test_empty_string(self, fetch_mcp_data):
-        assert fetch_mcp_data._parse_bases("") == []
-
-    def test_invalid_json_falls_back_to_comma(self, fetch_mcp_data):
-        # 非法 JSON → 按逗号分隔兜底
-        assert fetch_mcp_data._parse_bases("{invalid") == ["{invalid"]
-
-    def test_json_object_not_list(self, fetch_mcp_data):
-        # 合法 JSON 但不是 list → 按逗号分隔兜底
-        assert fetch_mcp_data._parse_bases('{"a":1}') == ['{"a":1}']
-
-
-# ── _dedup_classes ────────────────────────────────────────────────────
-
-class TestDedupClasses:
-    def test_no_dup(self, fetch_mcp_data):
-        classes = [{"qualified_name": "A"}, {"qualified_name": "B"}]
-        assert fetch_mcp_data._dedup_classes(classes) == classes
-
-    def test_dup_removed(self, fetch_mcp_data):
-        classes = [{"qualified_name": "A", "x": 1}, {"qualified_name": "A", "x": 2}]
-        result = fetch_mcp_data._dedup_classes(classes)
-        assert len(result) == 1
-        assert result[0]["x"] == 1  # 保留第一个
-
-    def test_empty(self, fetch_mcp_data):
-        assert fetch_mcp_data._dedup_classes([]) == []
-
-    def test_missing_qualified_name_kept(self, fetch_mcp_data):
-        # 无 qn 的不进 seen，全部保留
-        classes = [{"x": 1}, {"x": 2}]
-        assert fetch_mcp_data._dedup_classes(classes) == classes
-
+# ── resolve_base_sha ──────────────────────────────────────────────────
 
 # ── resolve_base_sha ──────────────────────────────────────────────────
 
 class TestResolveBaseSha:
     def test_explicit_wins(self, fetch_mcp_data):
-        c = FakeClient(responses={"index_status": {"git": {"head_sha": "AAA"}}})
+        c = FakeClient()
         assert fetch_mcp_data.resolve_base_sha(c, "proj", explicit="MYSHA") == "MYSHA"
         assert c.calls == []  # 显式传入不查图谱
 
-    def test_auto_from_head_sha(self, fetch_mcp_data):
-        c = FakeClient(responses={"index_status": {"git": {"head_sha": "276e9d8"}}})
+    def test_from_graph_last_commit(self, fetch_mcp_data):
+        c = FakeClient(responses={"list_repos": {"repositories": [
+            {"name": "other"}, {"name": "proj", "lastCommit": "276e9d8"}]}})
         assert fetch_mcp_data.resolve_base_sha(c, "proj") == "276e9d8"
 
-    def test_fallback_to_base_sha(self, fetch_mcp_data):
-        c = FakeClient(responses={"index_status": {"git": {"base_sha": "BBB"}}})
-        assert fetch_mcp_data.resolve_base_sha(c, "proj") == "BBB"
+    def test_project_missing_returns_unknown(self, fetch_mcp_data):
+        c = FakeClient(responses={"list_repos": {"repositories": [
+            {"name": "other", "lastCommit": "AAA"}]}})
+        assert fetch_mcp_data.resolve_base_sha(c, "proj") == "unknown"
+
+    def test_missing_last_commit_returns_unknown(self, fetch_mcp_data):
+        c = FakeClient(responses={"list_repos": {"repositories": [
+            {"name": "proj"}]}})
+        assert fetch_mcp_data.resolve_base_sha(c, "proj") == "unknown"
+
+    def test_non_dict_response_returns_unknown(self, fetch_mcp_data):
+        c = FakeClient(responses={"list_repos": None})
+        assert fetch_mcp_data.resolve_base_sha(c, "proj") == "unknown"
 
     def test_exception_returns_unknown(self, fetch_mcp_data):
-        c = FakeClient(responses={"index_status": RuntimeError("conn lost")})
-        assert fetch_mcp_data.resolve_base_sha(c, "proj") == "unknown"
-
-    def test_no_git_field(self, fetch_mcp_data):
-        c = FakeClient(responses={"index_status": {"status": "ready"}})
-        assert fetch_mcp_data.resolve_base_sha(c, "proj") == "unknown"
-
-    def test_non_dict_response(self, fetch_mcp_data):
-        c = FakeClient(responses={"index_status": None})
+        c = FakeClient(responses={"list_repos": RuntimeError("conn lost")})
         assert fetch_mcp_data.resolve_base_sha(c, "proj") == "unknown"
 
 
@@ -370,64 +297,3 @@ class TestBuildMcpDump:
         assert "dbus_signals" in dump and dump["dbus_signals"] == {}
 
 
-# ── collect_methods（用 FakeClient mock） ──────────────────────────────
-
-class TestCollectMethods:
-    def _mk_data(self, results, total=None, has_more=False):
-        return {"results": results, "total": total if total is not None else len(results),
-                "has_more": has_more}
-
-    def test_empty_single_page(self, fetch_mcp_data):
-        c = FakeClient(default=self._mk_data([], 0, False))
-        methods, functions = fetch_mcp_data.collect_methods(c, "proj")
-        assert methods == [] and functions == []
-
-    def test_single_pattern(self, fetch_mcp_data):
-        c = FakeClient(default=self._mk_data(
-            [{"qualified_name": "A", "in_degree": 1}], 1, False))
-        methods, functions = fetch_mcp_data.collect_methods(c, "proj", ["src/**"])
-        assert len(methods) == 1
-
-    def test_multi_pattern_dedup(self, fetch_mcp_data):
-        # 两个 pattern 返回相同节点 → 去重
-        c = FakeClient(default=self._mk_data(
-            [{"qualified_name": "dup", "in_degree": 1}], 1, False))
-        methods, functions = fetch_mcp_data.collect_methods(
-            c, "proj", ["src/**", "src/plugins/**"])
-        assert len(methods) == 1  # 去重后只剩 1 个
-
-    def test_none_pattern_full_query(self, fetch_mcp_data):
-        c = FakeClient(default=self._mk_data([], 0, False))
-        fetch_mcp_data.collect_methods(c, "proj", None)
-        # None → 单轮全量，不传 file_pattern
-        for name, args in c.calls:
-            assert "file_pattern" not in args
-
-    def test_no_qn_nodes_kept(self, fetch_mcp_data):
-        # 无 qualified_name 的节点不被去重，全部保留
-        c = FakeClient(default=self._mk_data(
-            [{"in_degree": 1}, {"in_degree": 2}], 2, False))
-        methods, functions = fetch_mcp_data.collect_methods(c, "proj")
-        assert len(methods) == 2
-
-    def test_pagination(self, fetch_mcp_data):
-        # 模拟分页：第一页 has_more=True，第二页 has_more=False
-        responses = [
-            self._mk_data([{"qualified_name": "A", "in_degree": 1}], 2, True),
-            self._mk_data([{"qualified_name": "B", "in_degree": 1}], 2, False),
-        ]
-        call_count = [0]
-
-        class PagingClient:
-            def __init__(self):
-                self.calls = []
-
-            def call_tool(self, name, arguments, retries=3):
-                self.calls.append((name, arguments))
-                idx = call_count[0]
-                call_count[0] += 1
-                return responses[min(idx, len(responses) - 1)]
-
-        c = PagingClient()
-        methods, functions = fetch_mcp_data.collect_methods(c, "proj", limit=1)
-        assert len(methods) == 2

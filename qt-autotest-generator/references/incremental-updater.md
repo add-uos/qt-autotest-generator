@@ -2,7 +2,7 @@
 
 > 前置条件：目标类已有测试文件（`class_status[classname]` 中 `test_file` 存在，`status` 为 `done` 或 `self_check_failed`（内存变量）），图谱 ready。
 
-> 通过 mcp_provider 调用知识图谱工具（详见 references/mcp-providers.md）
+> 通过 GitNexus 代码图谱 MCP 定位符号（详见 references/gitnexus-guide.md）
 
 ## 概述
 
@@ -36,13 +36,12 @@ if iter_count > MAX_ITERATIONS:
 
 #### 来源 A：图谱方法名差集（结构性缺口）
 ```python
-all_methods = codebase_memory_mcp.search_graph(
-    project=project_name_in_graph,
-    label="Method",
-    qn_pattern=f".*\\.{target_class.name}\\..*",
-    limit=100
-)
-all_method_names = {m.name for m in all_methods if m.access in ("public", "protected")}
+# GitNexus：HAS_METHOD 边取类的全部方法（repo 参数必带；关系类型在边属性 r.type 上）
+rows = cypher(
+    f"MATCH (c:Class {{name: '{target_class.name}'}})-[r:CodeRelation]->(m:Method) "
+    "WHERE r.type = 'HAS_METHOD' "
+    "RETURN m.name AS name, m.filePath AS filePath SKIP 0 LIMIT 100")
+all_method_names = {r["name"] for r in rows}  # 按可见性过滤（如节点携带 access 属性）
 
 existing_content = read(target_class.test_file)
 tested_names = extract_tested_methods(existing_content)
@@ -81,17 +80,16 @@ methods_to_add |= uncovered_from_inv   # 三来源并集
 `methods_to_add` 是方法名（字符串）的集合。补全前需将每个名字映射回图谱 `Method` 节点以获取 `qualified_name`：
 
 ```python
-# 用 search_graph 按类名 + 方法名精确定位节点
+# 用 cypher 按类名 + 方法名精确定位节点（返回 filePath/startLine 用于本地切片）
 resolved = {}
 for name in methods_to_add:
-    nodes = codebase_memory_mcp.search_graph(
-        project=project_name_in_graph,
-        label="Method",
-        name_pattern=f".*\\.{target_class.name}\\.{name}$"
-    )
-    if nodes:
-        resolved[name] = nodes[0]  # 取首个匹配，携带 qualified_name
-    # 无匹配：lcov 函数名可能含参数/重载信息，用 name_pattern 宽松匹配重试
+    rows = cypher(
+        f"MATCH (c:Class {{name: '{target_class.name}'}})-[r:CodeRelation]->(m:Method) "
+        "WHERE r.type = 'HAS_METHOD' AND m.name = '" + name + "' "
+        "RETURN m.name AS name, m.filePath AS filePath, m.startLine AS startLine, m.endLine AS endLine")
+    if rows:
+        resolved[name] = rows[0]  # 取首个匹配；重载/多文件命中时按 filePath 消歧
+    # 无匹配：lcov 函数名可能含参数/重载信息，用 CONTAINS 宽松匹配重试
 ```
 
 无图谱匹配的 lcov 函数名（如自由函数、运算符重载）记录后跳过，不阻塞补全。
@@ -102,19 +100,19 @@ for name in methods_to_add:
 
 a. 从图谱获取源码：
 ```python
-snippet = codebase_memory_mcp.get_code_snippet(
-    qualified_name=resolved[name].qualified_name   # 从图谱节点取
-)
+# 本地行切片（图谱 content 5016 字符截断，不作源）
+snippet = slice_body(repo_root, resolved[name]["filePath"],
+                     resolved[name]["startLine"], resolved[name]["endLine"])
 ```
 
 b. 追踪依赖（复用依赖追踪逻辑）：
 ```python
-callees = codebase_memory_mcp.trace_path(
-    project=project_name_in_graph,
-    function_name=resolved[name].qualified_name,
-    direction="outbound",
-    depth=2
-)
+# CALLS 出向边（入向把方向反转；变长路径未实测，逐跳组合）
+callees = cypher(
+    f"MATCH (src {{filePath: '{resolved[name]['filePath']}'}})"
+    "-[r:CodeRelation {{type:'CALLS'}}]->(t) "
+    f"WHERE src.name = '{resolved[name]['name']}' "
+    "RETURN DISTINCT t.filePath AS filePath, t.name AS name")
 # 按 stub 决策矩阵决定 stub
 ```
 
@@ -166,8 +164,8 @@ TEST_F(MyClassTest, MethodX_ValidInput_ReturnsExpected) {
 - 不覆盖已有 TEST_F：只 append，不修改不删除
 - 不修改已有 CMake 行：只追加新依赖
 - 不为 private 方法补测试
-- `qualified_name` 必须从图谱返回值取，不自己拼
-- 新增方法可能引入新依赖：必须 trace_path
+- `qualified_name` 必须与 inventory 一致（Class.name，撞名带 @文件名/@行号），不自己拼
+- 新增方法可能引入新依赖：必须查 CALLS 出向边
 - 不修改项目源码
 - 分支切回原分支时：恢复 `stale_classes`（内存变量）中类的 `add_subdirectory` 行到 CMakeLists.txt，并将 status 从 `stale` 改回原值
 - 追加后必须回到编译验证阶段重新验证

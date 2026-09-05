@@ -2,52 +2,40 @@
 
 > 每次技能触发后必先执行 reconcile，判断源码是否变更，再决定执行哪个步骤。
 
+GitNexus 单栈下对账有**两个轴**：
+
+- **图谱轴**：inventory.base_sha（= 上次 fetch 时的图谱 lastCommit）vs 当前
+  `list_repos` 返回的 lastCommit —— 检测平台是否重新索引过（图谱内容变了）
+- **本地轴**：本地 HEAD vs 图谱 lastCommit（check_drift）—— 检测本地是否有
+  图谱看不到的代码（未 push / 未提交）
+
 ## 流程
 
 ```
 1. 读 {test_dir}/.ut-inventory.json（不存在 → 首次运行）
 2. 首次运行（用户提供本地 project_path）：
-   → 若 session 中 `mode_0_active == true`（由 Mode 0 设置）→ **跳过环境检查的提供方解析**，直接确认图谱可用（Mode 0 已锁定本地 + 同步索引）
+   → 若 session 中 `mode_0_active == true`（由 Mode 0 设置）→ **跳过环境检查的提供方解析**，
+     直接确认图谱可用（Mode 0 已确认索引 + 量化漂移）
    → 否则 → 环境检查（references/environment-check.md）→ 框架搭建（references/framework-builder.md）
 3. 有 inventory：
-   a. 重新校验 MCP 提供方：确认该提供方仍可用（`list_projects()` 可调通）且目标项目仍索引 ready。
-      若提供方已失联：
-      · `mode_0_active == true`（本地）→ **硬终止**：重启本地 daemon 后重跑 Mode 0（不重新解析、不切远端）
-      · 远端 → **硬终止** + 统一指引（`mcp-providers.md` §5：修复远端或显式触发 Mode 0）
-   b. git rev-parse HEAD → 当前 commit
-   c. 与 inventory.base_sha 比较
-   d. 不同 → 源码已变更：
-      - **Freshness 检测（仅远端提供方，见 mcp-providers.md §2/§5）：**
-        若 `mcp_provider_type == "remote"` 且 `mode_0_active == false`：
-        · 工作区 dirty（`git status --porcelain` 非空，含 untracked）
-          → 未提交改动远端必然没有，同样**必然**过时 → **硬终止**并输出统一指引
-          （commit+push 后等远端同步重试，或显式触发 Mode 0），**不回退本地**
-        · 有未推送 commit（`git log @{upstream}..HEAD --oneline` 非空，或无 upstream）
-          → 远端图谱**必然**过时（结构性边界，等待无意义）→ **硬终止**并输出统一指引
-          （push 后等待远端同步重试，或显式触发 Mode 0），**不回退本地**
-        · 已全部推送 → 落入下方索引等待 / 新鲜度验证逻辑
-        · `mode_0_active == true` → 本地提供方，跳过远端检测（Mode 0 已同步）
-      - index_status(project) 若 "indexing" → 等待到 "ready"
-      - 长时间不 ready（硬超时 300 秒 / 5 分钟）：
-        · 本地提供方（仅 Mode 0 路径）→ index_repository(mode="fast") 推一下
-        · 远端提供方 → 等待远端 watcher 自动同步；超时则**硬终止**：
-          「[FATAL] 远端索引未同步。请手动刷新远端，或显式触发 Mode 0 使用本地图谱。」
-          （不回退本地）
-      - 索引 ready 后验证新鲜度（精确比对，不用采样推断）：
-        远端 → 重新读 `list_projects()` 中本项目的 `git.head_sha` 与本地 HEAD 比对；
-        本地（仅 Mode 0 路径）→ `query_graph` 读 `Branch.head_sha` 与本地 HEAD 比对 + `git status --porcelain` 脏检测。
-        一致且干净 → 已同步；不一致 → 同上按提供方类型处理（本地可 index_repository 刷新，远端只能等待/提醒）
+   a. 重新校验 GitNexus：`list_repos` 可调通且目标项目仍在册。
+      失联/不在册 → **硬终止** + 统一指引（`mcp-providers.md` §3）
+   b. 读当前 `lastCommit`（图谱基线）与 `branch`
+   c. 与 inventory.base_sha 比较（图谱轴）：
+      不同 → 平台已重新索引（源码变更已同步进图谱）：
       - 执行 inventory 对账（更新 inventory 本身 + 产出 diff 报告）：
           python3 scripts/mcp-scan.py fetch \
             --project <project_name> --file-pattern "src/**" \
+            --repo-root <repo_root> \
             --output {test_dir}/.ut-inventory.json \
-            --base-sha <HEAD> \
             --incremental --existing {test_dir}/.ut-inventory.json --summary
+        · 省略 --base-sha：脚本默认取 list_repos.lastCommit（图谱基线），
+          不传本地 HEAD（本地领先图谱时传 HEAD 会导致行号错位）
         · 全量重建 methods（图谱最新为准）+ 回写旧 inventory 的人工标记
           （source=manual 的 level、review_status=confirmed、usecase_count）
         · 方法删除直接清理（不留墓碑，不做改名软匹配）
         · 产出 {test_dir}/.ut-inventory-diff.md：新增/删除/签名变更/level 变化
-        · base_sha 由脚本写入新 inventory（= --base-sha）
+        · base_sha 由脚本写入新 inventory（= 当前 lastCommit）
         · 原地覆盖自动备份 .ut-inventory.json.bak
         详见 references/incremental-inventory.md
       - 读 diff 报告驱动后续 Mode 2 动作（上层职责，非对账脚本自身）：
@@ -60,51 +48,51 @@
           - TEST_P 连带移除对应 INSTANTIATE_TEST_SUITE_P
           - 从 .ut-inventory.json 对应类的 methods 中更新 usecase_count
           - 不视为源码缺陷（正常的代码演进）
-   e. 相同 → 看当前状态决定下一步
-   f. 分支切换检测：git branch --show-current 与内存变量记录的分支比较，
-      若不同 → 强制刷新索引后重新对账：
-        · 本地提供方 → index_repository(mode="fast")
-        · 远端提供方 → 等待远端 watcher 同步；超时则**硬终止** + 统一指引（不回退本地）
-        · 重新对账前，检查每个类的 file_path 是否在当前分支仍存在
-        · 不存在 → 标记该类 status="stale"，从 CMakeLists 移除对应 add_subdirectory（避免编译失败）
-        · 保留 stale 类的测试文件（不删除，供切换回原分支后恢复），记录 stale_classes 列表
-        · 新分支重新对账 → 新增/变更的类正常闭环
-        · 更新内存变量 branch + inventory.base_sha + stale_classes
+   d. 图谱轴相同（lastCommit 未变）→ 图谱内容与上次一致：
+      - 本地轴漂移检查（check_drift）：本地 HEAD vs lastCommit
+        · 本地领先 → `git log --name-only lastCommit..HEAD` 列受影响文件：
+          涉及待测模块 → **硬终止**等待平台同步（GitNexus 无本地索引，不可补索引；
+          图谱看不到新方法，无法生成正确测试）；
+          仅无关文件 → **带警告继续**（方法体以本地切片为准）
+        · 本地落后 → 提示拉取最新代码后重试（切片行号以本地为准，落后会错位）
+        · 工作区 dirty → 不一票否决：方法体一律本地切片，dirty 改动即刻反映；
+          但新方法图谱不可见，同样受「本地领先」规则约束
+      - 看当前状态决定下一步
+   e. 分支切换检测：`git branch --show-current` 与内存变量记录的分支比较，
+      同时与 `list_repos` 返回的 `branch` 比对：
+      · 本地切换了分支但图谱仍索引原分支 → 图谱关系网与本地代码不同源，
+        **硬终止**（等待平台切换索引分支；不静默混用两个分支的数据）
+      · 图谱与本地分支一致但与上次会话记录不同 → 正常走对账（图谱轴驱动），
+        重新对账前，检查每个类的 file_path 是否在当前分支仍存在：
+        - 不存在 → 标记该类 status="stale"，从 CMakeLists 移除对应 add_subdirectory（避免编译失败）
+        - 保留 stale 类的测试文件（不删除，供切换回原分支后恢复），记录 stale_classes 列表
+        - 新分支重新对账 → 新增/变更的类正常闭环
+        - 更新内存变量 branch + inventory.base_sha + stale_classes
 ```
 
-## 索引等待超时
+## 图谱基线获取（唯一精确途径）
 
-- 硬超时：300 秒（5 分钟）
-- 本地提供方（仅 Mode 0 路径）超时处理：`index_repository(mode="fast")` 推一下
-- 远端提供方超时处理：**硬终止** + 统一指引（手动刷新远端，或显式触发 Mode 0；不回退本地）
+### get_graph_last_commit(project)
 
-## 本地提供方索引同步
+```python
+repo = next(r for r in list_repos_pages() if r["name"] == project)
+graph_last_commit = repo["lastCommit"]   # 平台索引的精确 commit SHA
+```
 
-> 本地索引同步仅在 Mode 0 路径执行，见 `references/dev-preflight.md` Step 3（项目查找、freshness 检查、首次/增量索引、等待 ready 全套）。Mode 1-5 远端唯一，不触碰本地 MCP。
+- `list_repos` 分页遍历（limit ≤ 200）；项目不在册 → 硬终止（未索引）
+- **不做任何间接推断**——GitNexus 直接给出 lastCommit，无采样、无 Branch 节点查询
 
-## Freshness 检测辅助函数
+> 🚫 **已废弃：采样推断**。旧方案用「search_graph 采样 file_path → `git log -1` →
+> `max(commits)`」近似 graph_head，双重缺陷（SHA 无字典序时间语义、采样可漏判过时），
+> 已随 codebase-memory-mcp 退役删除。
 
-### get_graph_head_sha(provider, project_name)
+## 本地漂移辅助函数
 
-获取图谱记录的 HEAD commit SHA（**精确值**，非推断）。本地与远端提供方各有一条精确途径：
+### check_drift（mcp-scan.py 内建）
 
-- **本地（仅 Mode 0）**：图谱原生 `Branch` 节点携带 `head_sha`，
-  实测与 `git rev-parse HEAD` 精确一致（codebase-memory-mcp 0.10.8 实测）：
-
-  ```python
-  graph_head = provider.query_graph(
-      project=project_name,
-      query="MATCH (b:Branch) RETURN b.branch AS branch, b.head_sha AS head_sha LIMIT 1"
-  ).head_sha   # None → 视为过时，触发 fast 同步（失败方向安全）
-  ```
-
-- **远端（Mode 1-5）**：直接读 `list_projects()` 返回的 `git.head_sha` / `git.branch` 元数据
-  （实测携带，见 codebase-memory-guide.md），无需查询。
-
-> 🚫 **已废弃：采样推断**。曾用「search_graph 采样 file_path → `git log -1 -- <file>` →
-> `max(commits)`」近似 graph_head，双重缺陷：① SHA 无字典序时间语义，`max()` 随机；
-> ② 采样可漏判过时（图谱停在 X、本地到 Y、采样文件恰被 Y 或其后 commit 改过时误判 fresh）。
-> 「宁可误判过时、绝不漏判」的承诺在该方案下不成立，已删除。
+```python
+drift = check_drift()   # 本地 HEAD vs list_repos.lastCommit；fetch 前自动执行并警告
+```
 
 ### git_unpushed_commits(project_path)
 
@@ -112,9 +100,9 @@
 git -C <project_path> log @{upstream}..HEAD --oneline
 ```
 
-- 有输出 → 返回 commit 列表（非空）
-- `@{upstream}` 不存在（无远程追踪分支）→ git 返回错误，`has_upstream = false`
-  此时远端图谱天然不可能同步本地 → 同样视为「图谱必然过时」→ 硬终止 + 指引 Mode 0
+- 有输出 → 返回 commit 列表（非空）→ 本地领先图谱，进入漂移决策（受影响文件判定）
+- `@{upstream}` 不存在 → `has_upstream = false`；GitNexus 从远端 git 同步，
+  无 upstream 的本地提交**永远进不了图谱** → 涉及待测模块即硬终止
 
 ### git_worktree_dirty(project_path)
 
@@ -123,15 +111,16 @@ git -C <project_path> status --porcelain
 ```
 
 - 非空（含 `??` untracked）→ dirty。
-  - 远端路径：未提交改动远端必然没有 → **硬终止** + 指引（commit+push 或 Mode 0）
-  - 本地路径（Mode 0）：`Branch.head_sha` 不随未提交改动变化，dirty 时无论 SHA 比较结果
-    如何都必须 `index_repository(mode="fast")` 重索引（实测：dirty 改动后 Branch.head_sha 不变）
+  GitNexus 双源架构下 dirty **不再一票否决**：方法体/复杂度/宏扫描以本地切片为准，
+  未提交改动即刻反映；但**新方法**图谱不可见（CALLS 边、qn 都缺），
+  待测模块有新增代码时仍受「本地领先」硬终止规则约束。
 
 ## 分支切换处理
 
-1. 检查每个类的 `file_path` 是否在当前分支仍存在
-2. 不存在 → 标记 `status="stale"`，从 CMakeLists 移除对应 `add_subdirectory`
-3. 保留 stale 类的测试文件（不删除，供切回原分支后恢复）
-4. 记录 `stale_classes` 列表（内存变量）
-5. 新分支重新对账 → 新增/变更的类正常闭环
-6. 更新内存变量 `branch` + `inventory.base_sha` + `stale_classes`
+1. 图谱 `branch` 与本地分支不一致 → 硬终止（平台索引分支切换请求）
+2. 一致时，检查每个类的 `file_path` 是否在当前分支仍存在
+3. 不存在 → 标记 `status="stale"`，从 CMakeLists 移除对应 `add_subdirectory`
+4. 保留 stale 类的测试文件（不删除，供切回原分支后恢复）
+5. 记录 `stale_classes` 列表（内存变量）
+6. 新分支重新对账 → 新增/变更的类正常闭环
+7. 更新内存变量 `branch` + `inventory.base_sha` + `stale_classes`
