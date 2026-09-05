@@ -1,23 +1,53 @@
 #!/usr/bin/env python3
-"""
-从 MCP list_projects 同步项目注册表 (projects.json)
+# -*- coding: utf-8 -*-
 
-- 新项目: 自动加入 (mcp_name/nodes→size/git.branch)
-- 已有项目: 更新 nodes/branch (可选按 nodes 重算规模), 保留 enabled/source/build 等手工字段
-- MCP 已不存在的项目: 保留不动 (报告中标注)
+# SPDX-FileCopyrightText: 2026 UnionTech Software Technology Co., Ltd.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
 
-规模阈值: nodes <1000=S, <5000=M, <15000=L, >=15000=XL
+"""从 GitNexus MCP list_repos 同步项目注册表 (projects.json)
+
+- 新项目: 自动加入（mcp_name=GitNexus 仓库名 / branch）
+- 已有项目: 更新 branch, 保留 enabled/source/build/size 等字段
+- GitNexus 已不存在的项目: 保留不动（报告中标注 stale）
+
+GitNexus 迁移说明（相对旧 codebase-memory-mcp）：
+  - list_projects → list_repos（分页遍历，limit ≤ 200，offset 翻页）
+  - 仓库名即 gh 风格名（如 dde-file-manager），无路径前缀
+  - nodes 计数取 list_repos 返回的 stats.nodes（规模阈值逻辑不变）
 用法:
   python3 sync-registry-from-mcp.py [--dry-run] [--keep-size] [--json] [--mcp-url URL]
 """
-import json, os, sys, argparse
-import urllib.request
+import json
+import os
+import sys
+import argparse
+import importlib.util
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REGISTRY = SCRIPT_DIR.parent / "projects.json"
 CONFIG = SCRIPT_DIR.parent / "config.json"
-MCP_PREFIX = "home-uos-service-codebase-repos-"
+DEFAULT_MCP_URL = "https://codegraph.uniontech.com/api/mcp"
+
+_LEGACY_PREFIX = "home-uos-service-codebase-repos-"  # 旧 MCP 路径前缀，防残留
+
+
+_MCP_SCAN = None
+
+
+def _load_mcp_scan():
+    """加载同目录 mcp-scan.py，复用 MCPClient/list_repos_all（进程内缓存）。"""
+    global _MCP_SCAN
+    if _MCP_SCAN is not None:
+        return _MCP_SCAN
+    path = SCRIPT_DIR / "mcp-scan.py"
+    spec = importlib.util.spec_from_file_location("mcp_scan", path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["mcp_scan"] = mod
+    spec.loader.exec_module(mod)
+    _MCP_SCAN = mod
+    return mod
 
 
 def _mcp_url_from_config():
@@ -34,60 +64,21 @@ def size_from_nodes(n: int) -> str:
     return "XL"
 
 
-def list_mcp_projects(mcp_url: str, timeout: int = 60):
-    """调 MCP list_projects, 返回 [{name, nodes, branch}]"""
-    headers = {"Content-Type": "application/json"}
-
-    def rpc(payload, extra=None):
-        req = urllib.request.Request(
-            mcp_url, data=json.dumps(payload).encode(),
-            headers={**headers, **(extra or {})})
-        resp = urllib.request.urlopen(req, timeout=timeout)
-        sid = resp.headers.get("Mcp-Session-Id")
-        if sid:
-            rpc._session_id = sid
-        return json.loads(resp.read().decode())
-
-    init = rpc({
-        "jsonrpc": "2.0", "method": "initialize",
-        "params": {"protocolVersion": "2024-11-05", "capabilities": {},
-                   "clientInfo": {"name": "sync-registry", "version": "1.0"}},
-        "id": 1,
-    })
-    if "error" in init:
-        raise RuntimeError(f"initialize: {init['error']}")
-    # 发送 initialized 通知 + 带 session 调 list_projects
-    sid = getattr(rpc, "_session_id", None)
-    if sid:
-        try:
-            urllib.request.urlopen(urllib.request.Request(
-                mcp_url, data=json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}).encode(),
-                headers={**headers, "Mcp-Session-Id": sid}), timeout=timeout)
-        except Exception:
-            pass
-    req = urllib.request.Request(mcp_url, data=json.dumps({
-        "jsonrpc": "2.0", "method": "tools/call",
-        "params": {"name": "list_projects", "arguments": {}}, "id": 2,
-    }).encode(), headers={**headers, **({"Mcp-Session-Id": sid} if sid else {})})
-    try:
-        body = urllib.request.urlopen(req, timeout=timeout).read().decode()
-    except urllib.error.HTTPError as e:
-        # 带 session 重试 (初始化响应头里有)
-        raise RuntimeError(f"MCP 调用失败: HTTP {e.code}") from e
-    result = json.loads(body)
-    if "error" in result:
-        raise RuntimeError(f"list_projects: {result['error']}")
-    content = result["result"]["content"][0]["text"]
-    data = json.loads(content)
-    if isinstance(data, dict):
-        data = data.get("projects", [])
+def list_gitnexus_repos(client):
+    """list_repos 全量遍历（mcp-scan.list_repos_all：有 total 时并发拉取）
+    → [{name, gh_name, branch, lastCommit, nodes}]。"""
+    repos = _load_mcp_scan().list_repos_all(client)
     out = []
-    for p in data:
+    for r in repos:
+        name = r.get("name", "")
+        stats = r.get("stats") or {}
         out.append({
-            "mcp_name": p["name"],
-            "gh_name": p["name"][len(MCP_PREFIX):] if p["name"].startswith(MCP_PREFIX) else p["name"],
-            "nodes": p.get("nodes", 0),
-            "branch": (p.get("git") or {}).get("branch", ""),
+            "name": name,
+            "gh_name": (name[len(_LEGACY_PREFIX):]
+                        if name.startswith(_LEGACY_PREFIX) else name),
+            "branch": r.get("branch", "") or "",
+            "lastCommit": r.get("lastCommit", "") or "",
+            "nodes": int(stats.get("nodes", 0) or 0),
         })
     return out
 
@@ -117,30 +108,37 @@ def build_default_entry(gh, mcp, nodes, size, branch, defaults):
 
 def sync(dry_run=False, keep_size=False, mcp_url=None):
     url = mcp_url or os.environ.get("QTAG_MCP_URL") or _mcp_url_from_config() \
-          or "http://10.8.12.80:13626/mcp"
-    mcp_projects = list_mcp_projects(url)
+        or DEFAULT_MCP_URL
+    mcp_scan = _load_mcp_scan()
+    client = mcp_scan.MCPClient(url=url)
+    client.initialize()
+    mcp_projects = list_gitnexus_repos(client)
+
     reg = load_registry()
     defaults = reg.get("defaults", {})
     by_name = {p["name"]: p for p in reg["projects"]}
 
-    added, size_changed, branch_changed, nodes_updated = [], [], [], []
+    added, size_changed, branch_changed = [], [], []
     for mp in mcp_projects:
         gh, size = mp["gh_name"], size_from_nodes(mp["nodes"])
         cur = by_name.get(gh)
         if cur is None:
-            entry = build_default_entry(gh, mp["mcp_name"], mp["nodes"], size, mp["branch"], defaults)
+            entry = build_default_entry(gh, mp["name"], mp["nodes"], size,
+                                        mp["branch"], defaults)
             reg["projects"].append(entry)
             by_name[gh] = entry
             added.append({"name": gh, "size": size, "nodes": mp["nodes"]})
             continue
+        cur["mcp_name"] = mp["name"]
         cur["nodes"] = mp["nodes"]
-        cur["mcp_name"] = mp["mcp_name"]
-        nodes_updated.append(gh)
         if not keep_size and cur.get("size") != size:
-            size_changed.append({"name": gh, "old": cur.get("size"), "new": size, "nodes": mp["nodes"]})
+            size_changed.append({"name": gh, "old": cur.get("size"),
+                                 "new": size, "nodes": mp["nodes"]})
             cur["size"] = size
         if mp["branch"] and (cur.get("git") or {}).get("branch") != mp["branch"]:
-            branch_changed.append({"name": gh, "old": (cur.get("git") or {}).get("branch"), "new": mp["branch"]})
+            branch_changed.append({"name": gh,
+                                   "old": (cur.get("git") or {}).get("branch"),
+                                   "new": mp["branch"]})
             cur.setdefault("git", {})["branch"] = mp["branch"]
 
     mcp_names = {mp["gh_name"] for mp in mcp_projects}
@@ -160,14 +158,14 @@ def sync(dry_run=False, keep_size=False, mcp_url=None):
         "mcp_total": len(mcp_projects),
         "registry_total": len(reg["projects"]),
         "added": added, "size_changed": size_changed,
-        "branch_changed": branch_changed, "nodes_updated": len(nodes_updated),
+        "branch_changed": branch_changed,
         "stale": stale,
         "dry_run": dry_run,
     }
 
 
 def main():
-    ap = argparse.ArgumentParser(description="从 MCP 同步项目注册表")
+    ap = argparse.ArgumentParser(description="从 GitNexus MCP 同步项目注册表")
     ap.add_argument("--dry-run", action="store_true", help="只报告不写盘")
     ap.add_argument("--keep-size", action="store_true", help="不按 nodes 重算已有项目规模")
     ap.add_argument("--json", action="store_true", help="JSON 输出")
@@ -182,7 +180,7 @@ def main():
         sys.exit(0 if r.get("ok") else 1)
     if not r.get("ok"):
         print(f"❌ {r['msg']}"); sys.exit(1)
-    print(f"MCP 项目 {r['mcp_total']} 个, 注册表现有 {r['registry_total']} 个"
+    print(f"GitNexus 仓库 {r['mcp_total']} 个, 注册表现有 {r['registry_total']} 个"
           f"{' (dry-run)' if r['dry_run'] else ''}")
     for a in r["added"]:
         print(f"  + {a['name']:<28} {a['size']:<3} nodes={a['nodes']}")
@@ -191,7 +189,7 @@ def main():
     for b in r["branch_changed"]:
         print(f"  🌿 {b['name']:<26} 分支 {b['old']} → {b['new']}")
     if r["stale"]:
-        print(f"  ⚠ MCP 已无: {', '.join(r['stale'])}")
+        print(f"  ⚠ GitNexus 已无: {', '.join(r['stale'])}")
 
 
 if __name__ == "__main__":

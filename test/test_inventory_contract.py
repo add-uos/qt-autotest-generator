@@ -105,14 +105,14 @@ class TestCreateToRead:
 # ── UPDATE-A：Mode 1 fetch / test-mapping 回写 test_* 字段 ──────────────
 
 class TestExternalMappingUpdate:
-    def test_writes_test_fields(self, fetch_test_mapping):
+    def test_writes_test_fields(self, fetch_mcp_data):
         inv = {"methods": [
             {"qualified_name": "proj.src.Calc.add", "usecase_count": 0},
         ]}
-        mapping = fetch_test_mapping.build_mapping(
+        mapping = fetch_mcp_data.build_test_mapping(
             {"proj.src.Calc.add": {"autotests/test_calc.cpp"}},
             {"autotests/test_calc.cpp": ["Add_Normal", "Add_Edge"]})
-        updated, unmatched, _ = fetch_test_mapping.update_inventory(inv, mapping)
+        updated, unmatched, _ = fetch_mcp_data.update_inventory_test_mapping(inv, mapping)
         m = inv["methods"][0]
         assert updated == 1 and unmatched == 0
         assert m["test_cover_count"] == 1
@@ -120,28 +120,28 @@ class TestExternalMappingUpdate:
         assert m["test_cases"] == ["Add_Normal", "Add_Edge"]
         assert m["test_source"] == "mcp_calls"
 
-    def test_usecase_takes_max(self, fetch_test_mapping):
+    def test_usecase_takes_max(self, fetch_mcp_data):
         """已有 Mode 2 精确计数保留，否则用覆盖文件数作下界。"""
         inv = {"methods": [
             {"qualified_name": "proj.src.Calc.add", "usecase_count": 5},
         ]}
-        mapping = fetch_test_mapping.build_mapping(
+        mapping = fetch_mcp_data.build_test_mapping(
             {"proj.src.Calc.add": {"a.cpp", "b.cpp"}})
-        fetch_test_mapping.update_inventory(inv, mapping)
+        fetch_mcp_data.update_inventory_test_mapping(inv, mapping)
         assert inv["methods"][0]["usecase_count"] == 5  # max(5, 2)
 
-    def test_unmatched_preserved(self, fetch_test_mapping):
+    def test_unmatched_preserved(self, fetch_mcp_data):
         inv = {"methods": [
             {"qualified_name": "proj.src.Calc.add", "usecase_count": 3},
         ]}
-        mapping = fetch_test_mapping.build_mapping({"proj.other.foo": {"a.cpp"}})
-        updated, unmatched, _ = fetch_test_mapping.update_inventory(inv, mapping)
+        mapping = fetch_mcp_data.build_test_mapping({"proj.other.foo": {"a.cpp"}})
+        updated, unmatched, _ = fetch_mcp_data.update_inventory_test_mapping(inv, mapping)
         m = inv["methods"][0]
         assert updated == 0 and unmatched == 1
         assert m["usecase_count"] == 3
         assert "test_cover_count" not in m
 
-    def test_normalize_qn_bridge(self, fetch_test_mapping):
+    def test_normalize_qn_bridge(self, fetch_mcp_data):
         """两侧 qn 归一化后能对上：inventory 带仓库前缀、dump 不带。
 
         update_inventory 对 method qn 和 mapping key 都过 normalize_qn，
@@ -150,24 +150,30 @@ class TestExternalMappingUpdate:
         from_inventory = ("home-uos-service-codebase-repos-"
                           "deepin-image-viewer.src.Calc.add")
         from_dump = "deepin-image-viewer.src.Calc.add"
-        assert fetch_test_mapping.normalize_qn(from_inventory) == from_dump
+        # 新语义（_tm_normalize_qn）：剥掉所有含 '-' 的前导段
+        assert fetch_mcp_data._tm_normalize_qn(from_inventory) == "src.Calc.add"
+        assert fetch_mcp_data._tm_normalize_qn(from_dump) == "src.Calc.add"
+        # 两侧不同形态归一化到同一值（桥接的本质属性）
+        assert (fetch_mcp_data._tm_normalize_qn(from_inventory)
+                == fetch_mcp_data._tm_normalize_qn(from_dump))
         # 幂等：已归一化的不再变化
-        assert fetch_test_mapping.normalize_qn(from_dump) == from_dump
+        norm = fetch_mcp_data._tm_normalize_qn(from_dump)
+        assert fetch_mcp_data._tm_normalize_qn(norm) == norm
 
 
 # ── UPDATE-A → READ：外部回写后查询工具正确识别 ───────────────────────
 
 class TestUpdateAToRead:
-    def test_utq_reads_external_fields(self, fetch_test_mapping, utq, tmp_path):
+    def test_utq_reads_external_fields(self, fetch_mcp_data, utq, tmp_path):
         inv = {"methods": [
             {"qualified_name": "proj.src.Calc.add", "name": "add",
              "class_qn": "proj.src.Calc", "file_path": "src/calc.cpp",
              "level": "high", "testable": True, "score": 3,
              "usecase_count": 0},
         ]}
-        mapping = fetch_test_mapping.build_mapping(
+        mapping = fetch_mcp_data.build_test_mapping(
             {"proj.src.Calc.add": {"autotests/test_calc.cpp"}})
-        fetch_test_mapping.update_inventory(inv, mapping)
+        fetch_mcp_data.update_inventory_test_mapping(inv, mapping)
         _write_inv(tmp_path / ".ut-inventory.json", inv)
         q = utq.Inv(tmp_path)
         m = q.methods[0]
@@ -288,7 +294,7 @@ class TestUpdateCConsistency:
 # ── 全链路：CREATE → UPDATE-A/B → READ → UPDATE-C → READ ─────────────
 
 class TestFullPipeline:
-    def test_end_to_end(self, scan_inventory, fetch_test_mapping,
+    def test_end_to_end(self, scan_inventory, fetch_mcp_data,
                         update_usecase_count, stale_test_cleanup, utq,
                         tmp_path):
         # CREATE：建表
@@ -311,9 +317,9 @@ class TestFullPipeline:
         # UPDATE-A：外部工具随后回写 test_* 字段（回写 inv_path，使 UPDATE-C 能读到）
         inv = json.loads(inv_path.read_text(encoding="utf-8"))
         assert inv["methods"][0]["usecase_count"] == 2  # Mode 2 精确计数不被下界覆盖
-        mapping = fetch_test_mapping.build_mapping(
+        mapping = fetch_mcp_data.build_test_mapping(
             {"proj.src.Calc.add": {str(test_file)}})
-        fetch_test_mapping.update_inventory(inv, mapping)
+        fetch_mcp_data.update_inventory_test_mapping(inv, mapping)
         assert inv["methods"][0]["test_cover_count"] == 1
         assert inv["methods"][0]["usecase_count"] == 2  # max(2, 1)
         _write_inv(inv_path, inv)  # 回写：UPDATE-C 必须读到 test_* 才能验证 A→C 衔接
@@ -341,7 +347,7 @@ class TestReconcilePreservesExternalFields:
     """
 
     def test_reconcile_preserves_test_fields(self, scan_inventory,
-                                             fetch_test_mapping, utq, tmp_path):
+                                             fetch_mcp_data, utq, tmp_path):
         # CREATE 建表
         dump = _minimal_dump([_dump_method("add")])
         inv_v1 = scan_inventory.build_inventory(dump, "proj", "sha_v1")
@@ -350,9 +356,9 @@ class TestReconcilePreservesExternalFields:
         # UPDATE-B：Mode 2 写完回写 usecase_count
         inv_v1["methods"][0]["usecase_count"] = 2
         # UPDATE-A：Mode 1 fetch / test-mapping 回写 test_* 字段
-        mapping = fetch_test_mapping.build_mapping(
+        mapping = fetch_mcp_data.build_test_mapping(
             {"proj.src.Calc.add": {"autotests/test_calc.cpp"}})
-        fetch_test_mapping.update_inventory(inv_v1, mapping)
+        fetch_mcp_data.update_inventory_test_mapping(inv_v1, mapping)
         _write_inv(inv_path, inv_v1)
         before = inv_v1["methods"][0]
         assert before["test_cover_count"] == 1
@@ -378,14 +384,14 @@ class TestReconcilePreservesExternalFields:
         assert q.is_todo(q.methods[0]) is False
 
     def test_reconcile_preserves_cleaned_state(self, scan_inventory,
-                                               fetch_test_mapping, utq, tmp_path):
+                                               fetch_mcp_data, utq, tmp_path):
         """stale-test-cleanup 归零的 test_* 不被 reconcile 翻案复活。"""
         dump = _minimal_dump([_dump_method("add")])
         inv_v1 = scan_inventory.build_inventory(dump, "proj", "sha_v1")
         inv_v1["methods"][0]["usecase_count"] = 2
-        mapping = fetch_test_mapping.build_mapping(
+        mapping = fetch_mcp_data.build_test_mapping(
             {"proj.src.Calc.add": {"autotests/test_calc.cpp"}})
-        fetch_test_mapping.update_inventory(inv_v1, mapping)
+        fetch_mcp_data.update_inventory_test_mapping(inv_v1, mapping)
         # stale-test-cleanup 清理后：test_* 归零/清空、test_source pop、usecase=0
         inv_v1["methods"][0].update({
             "usecase_count": 0, "test_cover_count": 0,

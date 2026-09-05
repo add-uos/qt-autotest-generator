@@ -9,6 +9,7 @@ FakeCypherClient 模拟的是 call_tool 已解码后的返回形态（{cols, row
   - find_repo 分页 / repo_head_sha / check_drift / resolve_base_sha / open_adapter
 """
 import subprocess
+import types
 
 import pytest
 
@@ -550,8 +551,8 @@ class TestFindRepo:
             "repositories": [{"name": "other"}]})
         assert adapter.find_repo() is None
     def test_pagination_beyond_first_page(self, fetch_mcp_data):
-        """第一页满 100 条 → 继续翻页直到找到。"""
-        page1 = [{"name": "r%02d" % i} for i in range(100)]
+        """第一页满 200 条 → 继续翻页直到找到。"""
+        page1 = [{"name": "r%02d" % i} for i in range(200)]
         adapter, c = make_adapter(fetch_mcp_data, list_repos=[
             {"repositories": page1},
             {"repositories": [{"name": "demo-proj", "lastCommit": "D1"}]},
@@ -559,7 +560,7 @@ class TestFindRepo:
         info = adapter.find_repo()
         assert info["lastCommit"] == "D1"
         assert c.list_calls[0]["offset"] == 0
-        assert c.list_calls[1]["offset"] == 100
+        assert c.list_calls[1]["offset"] == 200
 
     def test_non_dict_response(self, fetch_mcp_data):
         adapter, _ = make_adapter(fetch_mcp_data, list_repos=None)
@@ -677,3 +678,89 @@ class TestPathAndSlice:
     def test_slice_body_no_repo(self, fetch_mcp_data):
         adapter, _ = make_adapter(fetch_mcp_data)
         assert adapter.slice_body("src/calc.cpp", 1, 2) == ""
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# list_repos_all 并发全量遍历 / find_repo 缓存
+# ════════════════════════════════════════════════════════════════════════════
+
+class TestListReposAll:
+    def test_parallel_uses_pagination_total(self, fetch_mcp_data, monkeypatch):
+        """真机响应带 pagination.total + workers>1 → 剩余页并发拉取并按序拼接。"""
+        monkeypatch.setenv("QTAG_LIST_REPOS_WORKERS", "4")
+        first = {"repositories": [{"name": "r%03d" % i} for i in range(200)],
+                 "pagination": {"total": 450, "limit": 200, "offset": 0,
+                                "returned": 200, "hasMore": True}}
+        created = []
+
+        class FakePageClient:
+            def __init__(self, url=None, timeout=None, extra_headers=None):
+                self.init_calls = 0
+                created.append(self)
+
+            def initialize(self):
+                self.init_calls += 1
+
+            def call_tool(self, name, arguments):
+                assert name == "list_repos"
+                off = arguments["offset"]
+                assert arguments["limit"] == 200
+                if off == 200:
+                    return {"repositories": [{"name": "r%03d" % i}
+                                             for i in range(200, 400)]}
+                if off == 400:
+                    return {"repositories": [{"name": "r%03d" % i}
+                                             for i in range(400, 450)]}
+                raise AssertionError(f"unexpected offset {off}")
+
+        monkeypatch.setattr(fetch_mcp_data, "MCPClient", FakePageClient)
+        main_client = types.SimpleNamespace(
+            url="http://x", timeout=5, extra_headers={"A": "b"},
+            call_tool=lambda name, args: first)
+        repos = fetch_mcp_data.list_repos_all(main_client)
+        assert [r["name"] for r in repos] == ["r%03d" % i for i in range(450)]
+        assert len(created) == 2                      # 2 个剩余页，各一个会话
+        assert all(c.init_calls == 1 for c in created)
+
+    def test_no_pagination_sequential_fallback(self, fetch_mcp_data):
+        """无 pagination 元数据（桩/旧响应）→ 顺序翻页兜底，直到短页。"""
+        p1 = [{"name": "a%03d" % i} for i in range(200)]
+        p2 = [{"name": "b%02d" % i} for i in range(3)]
+        c = FakeCypherClient(list_repos=[{"repositories": p1},
+                                         {"repositories": p2}])
+        repos = fetch_mcp_data.list_repos_all(c)
+        assert len(repos) == 203
+        assert c.list_calls[0]["offset"] == 0
+        assert c.list_calls[1]["offset"] == 200
+
+    def test_single_page_probes_next_then_stops(self, fetch_mcp_data):
+        """无 pagination 单页 → 顺序兜底探测下一页，短页即停。"""
+        c = FakeCypherClient(list_repos=[{"repositories": [{"name": "only"}]},
+                                         {"repositories": []}])
+        assert [r["name"] for r in fetch_mcp_data.list_repos_all(c)] == ["only"]
+        assert c.list_calls[0]["offset"] == 0
+        assert c.list_calls[1]["offset"] == 200
+
+    def test_non_dict_response(self, fetch_mcp_data):
+        c = FakeCypherClient(list_repos=None)
+        assert fetch_mcp_data.list_repos_all(c) == []
+
+
+class TestFindRepoCache:
+    def test_second_call_hits_cache(self, fetch_mcp_data):
+        """find_repo 结果缓存：第二次调用不再发起 list_repos。"""
+        adapter, c = make_adapter(fetch_mcp_data, list_repos={
+            "repositories": [{"name": "demo-proj", "lastCommit": "C1"}]})
+        assert adapter.find_repo()["lastCommit"] == "C1"
+        n = len(c.list_calls)
+        assert adapter.find_repo()["lastCommit"] == "C1"
+        assert len(c.list_calls) == n                 # 缓存命中，零新调用
+
+    def test_miss_then_hit_same_session(self, fetch_mcp_data):
+        """未索引（None）也缓存搜索结论，check_drift/resolve_base_sha 不重复遍历。"""
+        adapter, c = make_adapter(fetch_mcp_data, list_repos={
+            "repositories": [{"name": "other"}]})
+        assert adapter.repo_head_sha() == ""
+        n = len(c.list_calls)
+        assert adapter.repo_head_sha() == ""
+        assert len(c.list_calls) == n

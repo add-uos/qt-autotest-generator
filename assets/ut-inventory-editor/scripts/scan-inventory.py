@@ -13,11 +13,11 @@ scan-inventory.py — 模式一：函数重要性探测
 
 示例:
   python3 scan-inventory.py \
-    --project home-uos-service-codebase-repos-deepin-calculator \
+    --project deepin-calculator \
     --output /tmp/inventory-calculator.json
 
   python3 scan-inventory.py \
-    --project home-uos-service-codebase-repos-dde-file-manager \
+    --project dde-file-manager \
     --output /tmp/inventory-filemanager.json
 
 本脚本通过 MCP 工具扫描知识图谱，为每个方法/函数评分并生成 .ut-inventory.json。
