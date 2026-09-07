@@ -868,3 +868,111 @@ class TestCallToolEmptyContent:
         # text 非 JSON/markdown 表 → parse_tool_result 返回原文，不炸
         d = c.call_tool("cypher", {"statement": "MATCH (n) RETURN n"})
         assert isinstance(d, (dict, str))
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 无本地仓库时图谱 File.content 降级（TEST_F 解析 / Qt 宏扫描）
+# ════════════════════════════════════════════════════════════════════════════
+
+class TestGraphContentFallback:
+    def _adapter(self, fetch_mcp_data):
+        c = fetch_mcp_data.MCPClient(url="http://mock")
+        return fetch_mcp_data.GitNexusAdapter(c, project="p", repo_root=None)
+
+    def test_fetch_test_cases_graph_fallback(self, fetch_mcp_data, monkeypatch):
+        """无本地仓：fetch_test_cases 用图谱 content 解析 TEST_F。"""
+        ad = self._adapter(fetch_mcp_data)
+        text = ("TEST_F(UrlRouteTest, RegScheme) { }\n"
+                "TEST_F(UrlRouteTest, UnregScheme) { }\n")
+        monkeypatch.setattr(ad, "_graph_file_contents",
+                            lambda fps, batch=30: {f: text for f in fps})
+        got = ad.fetch_test_cases([{"file_path": "autotests/x/test_a.cpp"}])
+        assert got == {"autotests/x/test_a.cpp":
+                       ["UrlRouteTest.RegScheme", "UrlRouteTest.UnregScheme"]}
+
+    def test_local_repo_takes_priority(self, fetch_mcp_data, tmp_path):
+        """本地可读时不触发图谱查询（结果与本地文件一致）。"""
+        f = tmp_path / "test_b.cpp"
+        f.write_text("TEST_F(S, LocalCase) { }\n", encoding="utf-8")
+        ad = self._adapter(fetch_mcp_data)
+        ad.repo_root = str(tmp_path)
+        calls = []
+        monkeypatch = __import__("pytest").MonkeyPatch()
+        monkeypatch.setattr(ad, "_graph_file_contents",
+                            lambda fps, batch=30: calls.append(fps) or {})
+        got = ad.fetch_test_cases([{"file_path": "test_b.cpp"}])
+        assert got == {"test_b.cpp": ["S.LocalCase"]}
+        assert calls == []            # 本地命中，图谱未被查询
+
+    def test_macro_scan_graph_fallback(self, fetch_mcp_data, monkeypatch):
+        """无本地仓：宏扫描用图谱 content；超过上限跳过。"""
+        ad = self._adapter(fetch_mcp_data)
+        text = "class A : public QObject {\nQ_OBJECT\npublic:\nQ_INVOKABLE void go();\n};\n"
+        files = [f"src/f{i}.cpp" for i in range(3)]
+        monkeypatch.setattr(ad, "list_source_files",
+                            lambda file_patterns=None: files)
+        monkeypatch.setattr(ad, "_graph_file_contents",
+                            lambda fps, batch=30: {f: text for f in fps})
+        inv, plugins = ad.collect_qt_macros()
+        assert inv, "图谱降级应产出 Q_INVOKABLE"
+        # 超上限 → 跳过返回空
+        ad2 = self._adapter(fetch_mcp_data)
+        big = [f"src/g{i}.cpp" for i in range(fetch_mcp_data.MAX_GRAPH_MACRO_FILES + 1)]
+        monkeypatch.setattr(ad2, "list_source_files",
+                            lambda file_patterns=None: big)
+        inv2, _ = ad2.collect_qt_macros()
+        assert inv2 == {}
+
+    def test_graph_contents_batching(self, fetch_mcp_data, monkeypatch):
+        """_graph_file_contents 按 batch 分批查询并缓存。"""
+        ad = self._adapter(fetch_mcp_data)
+        batches = []
+
+        def fake_cypher_rows(match, return_cols, order_cols, max_rows=0, page_size=0):
+            batches.append(match)
+            # 从 IN 子句解析本批文件名
+            import re as _re
+            names = _re.findall(r"'([^']+)'", match)
+            return [{"fp": n, "content": f"c:{n}"} for n in names]
+
+        monkeypatch.setattr(ad, "cypher_rows", fake_cypher_rows)
+        files = [f"f{i}" for i in range(75)]     # 30/批 → 3 批
+        got = ad._graph_file_contents(files, batch=30)
+        assert len(batches) == 3
+        assert got["f0"] == "c:f0"
+        # 第二次调用命中缓存，不再查询
+        ad._graph_file_contents(files, batch=30)
+        assert len(batches) == 3
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# File.content markdown 截断对抗：换行/竖线哨兵转义 + 还原
+# ════════════════════════════════════════════════════════════════════════════
+
+class TestGraphContentEscape:
+    def test_escape_roundtrip(self, fetch_mcp_data, monkeypatch):
+        """SQL 带 replace 转义；还原 ⏎→\n、⏐→|。"""
+        c = fetch_mcp_data.MCPClient(url="http://mock")
+        ad = fetch_mcp_data.GitNexusAdapter(c, project="p", repo_root=None)
+        captured = {}
+
+        def fake_cypher_rows(match, return_cols, order_cols, max_rows=0, page_size=0):
+            captured["return_cols"] = return_cols
+            # 模拟服务端转义后的单行单元格
+            return [{"fp": "t.cpp",
+                     "content": "line1⏎a|b⏎line3"}]
+
+        monkeypatch.setattr(ad, "cypher_rows", fake_cypher_rows)
+        got = ad._graph_file_contents(["t.cpp"])
+        assert "replace" in captured["return_cols"]   # RETURN 端已转义
+        assert got["t.cpp"] == "line1\na|b\nline3"  # 客户端还原
+
+    def test_missing_file_not_in_result(self, fetch_mcp_data, monkeypatch):
+        """图谱无此文件（行缺失）→ 结果不含该键，调用方判 None。"""
+        c = fetch_mcp_data.MCPClient(url="http://mock")
+        ad = fetch_mcp_data.GitNexusAdapter(c, project="p", repo_root=None)
+        monkeypatch.setattr(ad, "cypher_rows",
+                            lambda *a, **k: [{"fp": "other.cpp", "content": "x"}])
+        got = ad._graph_file_contents(["t.cpp"])
+        assert "t.cpp" not in got
+        assert ad.read_file_text("t.cpp") is None

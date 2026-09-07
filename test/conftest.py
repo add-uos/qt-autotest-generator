@@ -155,3 +155,20 @@ def fetch_test_mapping():
     sys.modules[mod_name] = mod
     spec.loader.exec_module(mod)
     return mod
+
+
+@pytest.fixture(scope="session")
+def batch_collect():
+    return _load_module_path("batch_collect",
+                             ASSETS_SCRIPTS_DIR / "batch-collect.py")
+
+
+def _load_module_path(mod_name: str, path):
+    """按绝对路径加载脚本模块（ASSETS 下连字符文件名无法 import）。"""
+    if mod_name in sys.modules:
+        return sys.modules[mod_name]
+    spec = importlib.util.spec_from_file_location(mod_name, path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[mod_name] = mod
+    spec.loader.exec_module(mod)
+    return mod

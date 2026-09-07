@@ -254,8 +254,13 @@ def main():
         total_methods += tm; total_testable += tb
         total_high += h; total_mid += m
         total_with_tc += tc; total_no_h += nh; total_no_m += nm
-        ok_count += 1
-        print(f"{name:<28} {tm:>6} {tb:>6} {h:>4} {m:>4} {tc:>6} {nh:>7} {nm:>7}")
+        all_ok = fm_ok and tm_ok            # 任一步骤失败即计失败（tm 失败时 stats 仍存在）
+        if all_ok:
+            ok_count += 1
+        else:
+            fail_count += 1
+        print(f"{name:<28} {tm:>6} {tb:>6} {h:>4} {m:>4} {tc:>6} {nh:>7} {nm:>7}"
+              f"  {'' if all_ok else '❌'}")
 
     print("-" * 80)
     print(f"{'合计':<28} {total_methods:>6} {total_testable:>6} {total_high:>4} {total_mid:>4} {total_with_tc:>6} {total_no_h:>7} {total_no_m:>7}")

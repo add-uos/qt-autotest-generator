@@ -1092,6 +1092,7 @@ def _file_where(alias, patterns):
 PAGE_SIZE = 500
 MAX_CYPHER_ROWS = 20000
 LIST_REPOS_PAGE = 200    # list_repos 单页条数（实测 cap 200）：768 仓全量 = 4 页 ≈ 2.5min
+MAX_GRAPH_MACRO_FILES = 400  # 无本地仓时宏扫描图谱降级的源文件数上限（大仓跳过）
 
 
 def _list_repos_workers():
@@ -1354,6 +1355,8 @@ class GitNexusAdapter:
         self._parent_cache = None
         self._indegree_cache = None
         self._repo_cache = None  # find_repo 结果缓存（check_drift/resolve_base_sha 复用）
+        self._graph_content_cache = {}   # 图谱 File.content 缓存（filePath → text）
+        self._graph_content_warned = False
 
     # ── 基础查询 ──
 
@@ -1431,6 +1434,52 @@ class GitNexusAdapter:
                 return f.readlines()
         except OSError:
             return None
+
+    def _graph_file_contents(self, file_paths, batch=30):
+        """批量拉取图谱 File.content → {filePath: content}（缺失键不含）。
+
+        服务端 cypher 结果是 markdown 表格：多行 content 会被单元格
+        截到首行（实测 7607 字符文件只剩首行 78 字符）→ 查询时把换行
+        与竖线替换为哨兵字符，客户端还原；并分批 IN 查询防语句过长。
+        """
+        todo = [f for f in file_paths
+                if f and f not in self._graph_content_cache]
+        for i in range(0, len(todo), batch):
+            chunk = todo[i:i + batch]
+            clause = ",".join(_cypher_str(f) for f in chunk)
+            try:
+                rows = self.cypher_rows(
+                    f"MATCH (f:File) WHERE f.filePath IN [{clause}]",
+                    "f.filePath AS fp, "
+                    "replace(replace(coalesce(f.content,''), '\\n', '⏎'), '|', '⏐') "
+                    "AS content",
+                    "fp, content", max_rows=len(chunk))
+            except Exception as e:
+                if not self._graph_content_warned:
+                    print(f"   ⚠️  图谱 File.content 拉取失败（本地降级不可用）: {e}")
+                    self._graph_content_warned = True
+                continue
+            for r in rows:
+                text = (r["content"] or "").replace("⏎", "\n").replace("⏐", "|")
+                self._graph_content_cache[r["fp"]] = text
+        return {f: self._graph_content_cache[f] for f in file_paths
+                if f in self._graph_content_cache}
+
+    def read_file_text(self, file_path):
+        """读文件全文：本地仓库优先 → 图谱 File.content 降级；不可得返回 None。
+
+        batch-collect 等无本地仓库场景依赖图谱降级（TEST_F 解析、
+        Qt 宏扫描）；本地可读时与旧行为完全一致。
+        """
+        lines = self.read_local_lines(file_path)
+        if lines is not None:
+            return "".join(lines)
+        if not file_path:
+            return None
+        content = self._graph_file_contents([file_path]).get(file_path)
+        if content:
+            return content
+        return None
 
     def slice_body(self, file_path, start_line, end_line):
         """按图谱行范围 [startLine, endLine]（1-based 闭区间）本地切片。
@@ -1710,25 +1759,35 @@ class GitNexusAdapter:
         return dbus_slots
 
     def collect_qt_macros(self, file_patterns=None):
-        """Step 4: Q_INVOKABLE / Q_PLUGIN_METADATA 本地扫描。
+        """Step 4: Q_INVOKABLE / Q_PLUGIN_METADATA 扫描。
 
         GitNexus 图谱无 annotations 属性、Macro 标签不可查（实测）→
-        图谱 File 枚举 + 本地逐文件正则（同旧 search_code 正则）。
+        逐文件正则（同旧 search_code 正则）。文件内容：本地仓库优先 →
+        图谱 File.content 降级；无本地仓库且图谱源文件数超过
+        MAX_GRAPH_MACRO_FILES 时跳过（避免大仓全量拉 content）。
         Returns (q_invokables, q_plugins)。
         """
         print(f"\n📊 [4/5] Detecting Q_INVOKABLE / Q_PLUGIN_METADATA...")
         q_invokables = {}
         q_plugins = {}
-        if not self.repo_root:
-            print("   ⚠️  未提供 --repo-root，跳过本地宏扫描")
-            return q_invokables, q_plugins
         files = self.list_source_files(file_patterns)
+        use_graph = not self.repo_root
+        if use_graph:
+            if len(files) > MAX_GRAPH_MACRO_FILES:
+                print(f"   ⚠️  未提供 --repo-root 且图谱源文件 {len(files)} > "
+                      f"{MAX_GRAPH_MACRO_FILES}，跳过宏扫描（评分降级，不影响枚举）")
+                return q_invokables, q_plugins
+            print(f"   未提供 --repo-root，降级图谱 File.content 扫描 {len(files)} 文件")
+        graph_texts = self._graph_file_contents(files) if use_graph else {}
         scanned = 0
         for fp in files:
-            lines = self.read_local_lines(fp)
-            if lines is None:
+            text = graph_texts.get(fp)
+            if text is None:
+                lines = self.read_local_lines(fp)
+                text = "".join(lines) if lines is not None else None
+            if not text:
                 continue
-            inv, has_plugin = scan_qt_macros_in_file("".join(lines))
+            inv, has_plugin = scan_qt_macros_in_file(text)
             scanned += 1
             for cls_name, method_names in inv.items():
                 bucket = q_invokables.setdefault(cls_name, [])
@@ -1881,16 +1940,17 @@ class GitNexusAdapter:
         return dict(source_to_tests)
 
     def fetch_test_cases(self, test_modules):
-        """本地解析 TEST_F(Suite, Case) → {file: ["Suite.Case", ...]}。
+        """解析 TEST_F(Suite, Case) → {file: ["Suite.Case", ...]}。
 
-        GitNexus 无 docstring 属性 → 用例注释暂缺（旧值来自图谱 docstring）。
+        本地文件优先；无本地仓库时降级图谱 File.content（batch-collect
+        场景，修复 test_cases 全空）。GitNexus 无 docstring 属性，
+        用例注释暂缺（旧值来自图谱 docstring）。
         """
         file_to_cases = defaultdict(list)
         for m in test_modules:
-            lines = self.read_local_lines(m["file_path"])
-            if lines is None:
+            text = self.read_file_text(m["file_path"])
+            if not text:
                 continue
-            text = "".join(lines)
             for mm in self.TEST_F_RE.finditer(text):
                 file_to_cases[m["file_path"]].append(f"{mm.group(1)}.{mm.group(2)}")
         return dict(file_to_cases)
