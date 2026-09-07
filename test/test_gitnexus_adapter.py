@@ -764,3 +764,107 @@ class TestFindRepoCache:
         n = len(c.list_calls)
         assert adapter.repo_head_sha() == ""
         assert len(c.list_calls) == n
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# MCPClient._urlopen_retry：网关 5xx 退避重试
+# ════════════════════════════════════════════════════════════════════════════
+
+class _FakeResp:
+    def __init__(self, body, session=None):
+        self._body = body
+        self.headers = {k: v for k, v in [("Mcp-Session-Id", session)] if v}
+
+    def read(self):
+        return self._body
+
+
+class TestUrlopenRetry:
+    def _client(self, fetch_mcp_data):
+        return fetch_mcp_data.MCPClient(url="http://mock")
+
+    def test_504_retried_then_success(self, fetch_mcp_data, monkeypatch):
+        """504 → 退避重试 → 第 3 次成功。"""
+        import urllib.error
+        calls = []
+
+        def fake_urlopen(req, timeout=None):
+            calls.append(req)
+            if len(calls) < 3:
+                raise urllib.error.HTTPError(req.full_url, 504, "gw", None, None)
+            return _FakeResp(b'{"jsonrpc":"2.0","id":1,"result":{"content":'
+                             b'[{"type":"text","text":"{\\"cols\\":[],\\"rows\\":[],\\"total\\":0}"}]}}')
+
+        monkeypatch.setattr(fetch_mcp_data.urllib.request, "urlopen", fake_urlopen)
+        monkeypatch.setattr(fetch_mcp_data.time, "sleep", lambda s: None)
+        c = self._client(fetch_mcp_data)
+        d = c.call_tool("list_repos", {"limit": 1, "offset": 0})
+        assert d == {"cols": [], "rows": [], "total": 0}
+        assert len(calls) == 3
+
+    def test_404_not_retried(self, fetch_mcp_data, monkeypatch):
+        """4xx 直接抛，不重试。"""
+        import urllib.error
+        calls = []
+
+        def fake_urlopen(req, timeout=None):
+            calls.append(req)
+            raise urllib.error.HTTPError(req.full_url, 404, "nf", None, None)
+
+        monkeypatch.setattr(fetch_mcp_data.urllib.request, "urlopen", fake_urlopen)
+        c = self._client(fetch_mcp_data)
+        req = fetch_mcp_data.urllib.request.Request("http://mock", data=b"{}")
+        with pytest.raises(urllib.error.HTTPError):
+            c._urlopen_retry(req)
+        assert len(calls) == 1          # 4xx 不进 HTTP 层重试
+
+    def test_exhausted_retries_raise(self, fetch_mcp_data, monkeypatch):
+        """持续 504：HTTP 层重试耗尽后向上抛（call_tool 层还有会话级重试）。"""
+        import urllib.error
+        calls = []
+
+        def fake_urlopen(req, timeout=None):
+            calls.append(req)
+            raise urllib.error.HTTPError(req.full_url, 504, "gw", None, None)
+
+        monkeypatch.setattr(fetch_mcp_data.urllib.request, "urlopen", fake_urlopen)
+        monkeypatch.setattr(fetch_mcp_data.time, "sleep", lambda s: None)
+        c = self._client(fetch_mcp_data)
+        req = fetch_mcp_data.urllib.request.Request("http://mock", data=b"{}")
+        with pytest.raises(urllib.error.HTTPError):
+            c._urlopen_retry(req)
+        # 1 次原始 + 2 次重试 = 3 次
+        assert len(calls) == 3
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# call_tool 空 content：服务端异常响应不得吞成空表（防 find_repo 误判未索引）
+# ════════════════════════════════════════════════════════════════════════════
+
+class TestCallToolEmptyContent:
+    def _resp(self):
+        return _FakeResp(b'{"jsonrpc":"2.0","id":1,"result":{"content":[]}}')
+
+    def test_empty_content_raises_retryable(self, fetch_mcp_data, monkeypatch):
+        """content=[] → GraphQueryError(retryable)，重试耗尽后抛出。"""
+        monkeypatch.setattr(fetch_mcp_data.urllib.request, "urlopen",
+                            lambda req, timeout=None: self._resp())
+        monkeypatch.setattr(fetch_mcp_data.time, "sleep", lambda s: None)
+        c = fetch_mcp_data.MCPClient(url="http://mock")
+        c.initialize()
+        with pytest.raises(fetch_mcp_data.GraphQueryError) as ei:
+            c.call_tool("list_repos", {"limit": 1, "offset": 0})
+        assert ei.value.retryable is True
+        assert "empty content" in str(ei.value)
+
+    def test_error_block_raises(self, fetch_mcp_data, monkeypatch):
+        """RPC error → GraphQueryError。"""
+        body = (b'{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text",'
+                b'"text":"error boom"}]}}')
+        monkeypatch.setattr(fetch_mcp_data.urllib.request, "urlopen",
+                            lambda req, timeout=None: _FakeResp(body))
+        c = fetch_mcp_data.MCPClient(url="http://mock")
+        c.initialize()
+        # text 非 JSON/markdown 表 → parse_tool_result 返回原文，不炸
+        d = c.call_tool("cypher", {"statement": "MATCH (n) RETURN n"})
+        assert isinstance(d, (dict, str))

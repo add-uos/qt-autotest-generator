@@ -41,13 +41,21 @@ def require_registry_projects():
         sys.exit("❌ 注册表无启用项目 — 在编辑器「设置」页勾选启用, 或运行 sync-registry-from-mcp.py")
     return projects
 
-def run_step(cmd, label, project_dir):
-    """运行子进程命令，返回 (success, elapsed_sec, output_tail)"""
+def run_step(cmd, label, project_dir, timeout=900):
+    """运行子进程命令，返回 (success, elapsed_sec, output_tail)。
+
+    超时不抛异常（返回失败），避免 TimeoutExpired 打断整个批量编排。
+    默认 900s：真机实测大仓 test-mapping 含服务端重试可超过 600s。
+    """
     t0 = time.time()
-    result = subprocess.run(
-        cmd, capture_output=True, text=True, timeout=600,
-        env={**os.environ, "PYTHONUNBUFFERED": "1"}
-    )
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=timeout,
+            env={**os.environ, "PYTHONUNBUFFERED": "1"}
+        )
+    except subprocess.TimeoutExpired:
+        elapsed = time.time() - t0
+        return False, elapsed, f"[timeout] {label} 超过 {timeout}s 被终止"
     elapsed = time.time() - t0
     tail = (result.stdout + result.stderr)[-500:]
     ok = result.returncode == 0

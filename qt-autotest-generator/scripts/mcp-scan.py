@@ -1133,6 +1133,10 @@ def paginate_cypher(client, match_clause, return_cols, order_cols,
     return {"cols": cols, "rows": rows, "total": len(rows)}
 
 
+MCP_RETRY_CODES = {502, 503, 504}   # 网关瞬态错误：重试
+MCP_RETRY_DELAYS = (5, 15)          # 两次重试退避（秒）；实测服务端偶发 504 后可恢复
+
+
 class MCPClient:
     """Minimal MCP HTTP JSON-RPC 2.0 client."""
 
@@ -1179,6 +1183,24 @@ class MCPClient:
         # 纯 JSON
         return json.loads(body)
 
+    def _urlopen_retry(self, req):
+        """urlopen 包装：网关 5xx / 连接类异常退避重试（4xx 直接抛）。"""
+        for attempt in range(len(MCP_RETRY_DELAYS) + 1):
+            try:
+                return urllib.request.urlopen(req, timeout=self.timeout)
+            except urllib.error.HTTPError as e:
+                if e.code in MCP_RETRY_CODES and attempt < len(MCP_RETRY_DELAYS):
+                    print(f"   ⚠️  HTTP {e.code}，{MCP_RETRY_DELAYS[attempt]}s 后重试"
+                          f" ({attempt + 1}/{len(MCP_RETRY_DELAYS)})")
+                    time.sleep(MCP_RETRY_DELAYS[attempt])
+                    continue
+                raise
+            except (urllib.error.URLError, TimeoutError, OSError):
+                if attempt < len(MCP_RETRY_DELAYS):
+                    time.sleep(MCP_RETRY_DELAYS[attempt])
+                    continue
+                raise
+
     def initialize(self):
         """Initialize MCP session and capture session ID."""
         headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream", **self.extra_headers}
@@ -1193,7 +1215,7 @@ class MCPClient:
         }
         req = urllib.request.Request(
             self.url, data=json.dumps(payload).encode(), headers=headers)
-        resp = urllib.request.urlopen(req, timeout=self.timeout)
+        resp = self._urlopen_retry(req)
         self.session_id = resp.headers.get("Mcp-Session-Id")
         body = resp.read().decode()
         result = self._parse_body(body)
@@ -1207,7 +1229,7 @@ class MCPClient:
         req2 = urllib.request.Request(
             self.url, data=json.dumps(notif).encode(),
             headers=notif_headers)
-        urllib.request.urlopen(req2, timeout=self.timeout)
+        self._urlopen_retry(req2)
         return result
 
     def call_tool(self, name, arguments, retries=3):
@@ -1233,7 +1255,7 @@ class MCPClient:
                     headers["Mcp-Session-Id"] = self.session_id
                 req = urllib.request.Request(
                     self.url, data=json.dumps(payload).encode(), headers=headers)
-                resp = urllib.request.urlopen(req, timeout=self.timeout)
+                resp = self._urlopen_retry(req)
                 result = self._parse_body(resp.read().decode())
                 if "error" in result:
                     raise GraphQueryError(
@@ -1245,8 +1267,12 @@ class MCPClient:
                         return parse_tool_result(block["text"])
                 if content:
                     return content
-                # 空 content：视作空表（cypher 无结果）
-                return {"cols": [], "rows": [], "total": 0}
+                # 空 content：响应结构异常（服务端抖动/网关拦截），而非合法空结果
+                # （cypher 空结果也带 text block；list_repos 必有 repositories）。
+                # 静默返回空表会让 find_repo 误判「未索引」，故按可重试错误抛出。
+                raise GraphQueryError(
+                    f"empty content for tool {name!r} (server hiccup?)",
+                    retryable=True)
             except GraphQueryError as e:
                 if e.retryable and attempt < retries - 1:
                     wait = 4 * (attempt + 1) * 2  # 索引重建锁耗时较长，加倍退避
