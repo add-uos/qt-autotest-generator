@@ -79,6 +79,21 @@ MATCH (c:Class)-[r:CodeRelation {type:'EXTENDS'}]->(base) RETURN c.name, base.na
 
 按节点取上下文内容；**content 在 5016 字符截断**，只用于降级查看，方法体一律走本地切片。
 
+### 2.4 cypher 返回多行字符串的截断陷阱（重要）
+
+cypher 结果是 **markdown 表格**：多行字符串（如 `File.content`）在单元格内被
+截到**首行**（实测 7607 字符文件只返回首行 78 字符，与旧 MCP JSON 返回的关键
+差异）。需要完整内容时（TEST_F 解析 / Qt 宏扫描）：
+
+- RETURN 端用 `replace(content, '\\n', '⏎')` 把换行替换为哨兵字符（`|` 同理替换
+  为 `⏐` 防 markdown 列错位），客户端再还原——真机验证 7607 字符完整往返；
+- 实现：`GitNexusAdapter._graph_file_contents`（分批 30 条 IN 查询 + 缓存）与
+  `read_file_text`（本地优先 → 图谱降级）；
+- 方法体切片仍优先本地行切片（slice_body），图谱 content 仅作降级。
+
+无本地仓库（batch-collect 批量场景）时 `fetch_test_cases` / `collect_qt_macros`
+自动走图谱降级；后者源文件 >400 时跳过（仅评分降级，不影响方法枚举）。
+
 ## 3. `scripts/mcp-scan.py` 子命令（日常主入口）
 
 四个子命令共用 `--project`（list_repos 中的仓库名）、`--mcp-url`、`--repo-root`
@@ -94,7 +109,7 @@ MATCH (c:Class)-[r:CodeRelation {type:'EXTENDS'}]->(base) RETURN c.name, base.na
 
 test_* 采集逻辑：`discover_test_modules`（测试目录 File 节点，`ut_*.cpp` 与 `test_*.cpp`
 命名均兼容）→ `collect_all_calls`（测试模块发出的 CALLS 边）→ `fetch_test_cases`
-（本地解析 TEST_F/TEST 宏）→ 按 qn 回写。
+（解析 TEST_F/TEST 宏；本地优先 → 图谱 File.content 降级）→ 按 qn 回写。
 
 ## 4. qualified_name（qn）语义变化
 
