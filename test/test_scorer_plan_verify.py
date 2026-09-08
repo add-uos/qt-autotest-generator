@@ -159,6 +159,26 @@ class TestLoadPlanVerifications:
         assert ev["foo"]["base_commit"] == "abc1234"
         assert ev["foo"]["base_drift"]["file_changed"] is True
 
+    def test_load_plan_methods_by_suite_and_name(self, tmp_path):
+        plan = {"repo": "demo", "blocks": [
+            {"block_id": "B1", "status": "done", "name": "SqliteHelper",
+             "file_path": "src/x.h", "cluster": "c", "level_summary": {},
+             "priority": 1, "context_bytes": 0,
+             "methods": [{"name": "typeString", "level": "high", "file_path": "src/x.h"},
+                         {"name": "~SqliteHelper", "level": "low", "file_path": "src/x.h"}],
+             "last_verify": {"ts": "t", "suite": "SqliteHelperTest",
+                             "run": {"passed": 1, "failed": 0, "exit": 0}}},
+            {"block_id": "B2", "status": "pending", "name": "Bar",
+             "file_path": "src/y.h", "cluster": "c", "level_summary": {},
+             "priority": 1, "context_bytes": 0,
+             "methods": [{"name": "baz", "level": "mid", "file_path": "src/y.h"}]}]}
+        path = tmp_path / "plan.json"
+        path.write_text(json.dumps(plan))
+        pm = score.load_plan_methods(str(path))
+        assert set(pm) == {"sqlitehelper", "bar"}
+        assert [m["name"] for m in pm["sqlitehelper"]] == ["typeString"]  # 析构剔除
+        assert pm["bar"][0]["level"] == "mid"
+
     def test_no_drift_key_when_absent(self, tmp_path):
         plan = {"repo": "demo", "blocks": [
             {"block_id": "B1", "status": "done",
@@ -206,6 +226,43 @@ class TestScoreFilePlanVerify:
                              None, dict(score.DEFAULT_WEIGHTS), True, 70,
                              plan_verify={"sqlitehelper": ev})
         assert "修复" in s["plan_verify"]["note"]
+
+    def test_plan_methods_sufficiency(self, tmp_path):
+        """plan_methods（无 inventory）时 sufficiency 按块 methods 校核。"""
+        f = self._write_test(tmp_path)
+        pm = {"sqlitehelper": [
+            {"name": "A", "level": "high", "factors": []},
+            {"name": "B", "level": "mid", "factors": []}]}
+        s = score.score_file(f, None, None, None, None, None,
+                             dict(score.DEFAULT_WEIGHTS), True, 70,
+                             plan_methods=pm)
+        det = next(d for d in s["dimensions"] if d["name"] == "sufficiency")
+        assert det["details"].get("source") == "plan_methods"
+        # A(high) 需 3 例，B(mid) 需 2 例；用例名 A/B 各 1 → 部分满足
+        assert det["score"] < 100.0
+        assert s["inputs_used"]["plan_methods"] is True
+
+    def test_case_names_counted_not_deduped(self, tmp_path):
+        """同名方法首段下多条用例应按全名计数（首段集合去重会低估）。"""
+        f = tmp_path / "test_foo.cpp"
+        f.write_text(
+            "// SPDX-FileCopyrightText: 2026 UnionTech Software Technology Co., Ltd.\n"
+            "// SPDX-License-Identifier: GPL-3.0-or-later\n"
+            "#include <gtest/gtest.h>\n"
+            "TEST(FooTest, Bar_A) {}\nTEST(FooTest, Bar_B) {}\nTEST(FooTest, Bar_C) {}\n")
+        pm = {"foo": [{"name": "Bar", "level": "high", "factors": []}]}
+        s = score.score_file(str(f), None, None, None, None, None,
+                             dict(score.DEFAULT_WEIGHTS), True, 70, plan_methods=pm)
+        det = next(d for d in s["dimensions"] if d["name"] == "sufficiency")
+        assert det["score"] == 100.0  # 3 例 ≥ high 下限 3（此前 partial=50）
+
+    def test_plan_methods_no_token_match(self, tmp_path):
+        f = self._write_test(tmp_path)
+        s = score.score_file(f, None, None, None, None, None,
+                             dict(score.DEFAULT_WEIGHTS), True, 70,
+                             plan_methods={"other": [{"name": "A", "level": "high"}]})
+        det = next(d for d in s["dimensions"] if d["name"] == "sufficiency")
+        assert det["details"].get("source") is None  # 未命中走原路径
 
     def test_drift_flagged_in_note(self, tmp_path):
         ev = {"block_id": "B1", "ts": "2026-09-08 19:29:25",
