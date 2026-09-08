@@ -456,6 +456,64 @@ def cmd_show(plan_path, brief=True):
                   f"{b['kind']:10s} {b['name'][:36]:36s} {b['level_summary']}")
 
 
+# ── report（Phase 6）：按模块聚合 ───────────────────────────────
+
+LEVEL_KEYS = ("high", "mid", "low")
+
+
+def build_report(plan):
+    """按模块（cluster）聚合块状态/分级/验证结果（纯函数，供 CLI 与 scorer 消费）。
+
+    聚合键 = 块的 cluster（即 module_of(file_path)）；验证结果取各块
+    last_verify.run 的 passed/failed 求和（未 verify 的块不计）。
+    """
+    mods = {}
+    for b in plan["blocks"]:
+        m = mods.setdefault(b["cluster"], {
+            "module": b["cluster"], "blocks": 0, "methods": 0,
+            "high": 0, "mid": 0, "low": 0,
+            "pending": 0, "selected": 0, "done": 0, "failed": 0,
+            "test_passed": 0, "test_failed": 0,
+        })
+        m["blocks"] += 1
+        m["methods"] += len(b["methods"])
+        for lv in LEVEL_KEYS:
+            m[lv] += (b.get("level_summary") or {}).get(lv, 0)
+        if b["status"] in BLOCK_STATES:
+            m[b["status"]] += 1
+        run = (b.get("last_verify") or {}).get("run") or {}
+        m["test_passed"] += run.get("passed", 0)
+        m["test_failed"] += run.get("failed", 0)
+    modules = sorted(mods.values(), key=lambda x: (-x["methods"], x["module"]))
+    keys = ["blocks", "methods", *LEVEL_KEYS,
+            "pending", "selected", "done", "failed", "test_passed", "test_failed"]
+    total = {k: sum(m[k] for m in modules) for k in keys}
+    return {"repo": plan.get("repo"), "version": plan.get("version"),
+            "modules": modules, "total": total}
+
+
+def cmd_report(plan_path, as_json=False, top=None):
+    """report：按模块聚合 plan（stdout 表格；--json 输出供 CI/scorer 消费）。"""
+    rep = build_report(load_plan(plan_path))
+    if as_json:
+        print(json.dumps(rep, ensure_ascii=False, indent=2))
+        return rep
+    t = rep["total"]
+    print(f"repo={rep['repo']} version={rep['version']} modules={len(rep['modules'])} "
+          f"blocks={t['blocks']} methods={t['methods']}")
+    print(f"{'module':<44} {'blk':>4} {'mtd':>5} {'hi':>5} {'mid':>5} {'low':>5}"
+          f" {'pend':>5} {'sel':>4} {'done':>5} {'fail':>5} {'test':>6}")
+    shown = rep["modules"][:top] if top else rep["modules"]
+    for m in shown:
+        print(f"{m['module'][:43]:<44} {m['blocks']:>4} {m['methods']:>5} "
+              f"{m['high']:>5} {m['mid']:>5} {m['low']:>5} "
+              f"{m['pending']:>5} {m['selected']:>4} {m['done']:>5} {m['failed']:>5} "
+              f"{m['test_passed']:>6}")
+    if top and len(rep["modules"]) > top:
+        print(f"… 另有 {len(rep['modules']) - top} 个模块（--top 控制）")
+    return rep
+
+
 # ── generate（Phase 4，逐块）：上下文组装 → 生成会话输入 ────────────
 
 PROMPT_CONVENTIONS = """\
@@ -739,6 +797,11 @@ def main(argv=None):
     w.add_argument("plan", help=".ut-plan.json 路径")
     w.add_argument("--all", action="store_true", help="打印全部块")
 
+    rp = sub.add_parser("report", help="按模块聚合 plan（状态/分级/验证结果）")
+    rp.add_argument("plan", help=".ut-plan.json 路径")
+    rp.add_argument("--json", action="store_true", help="输出 JSON（供 CI/scorer 消费）")
+    rp.add_argument("--top", type=int, help="只显示前 N 个模块（按方法数）")
+
     g = sub.add_parser("generate", help="单块上下文组装（生成会话输入）")
     g.add_argument("plan", help=".ut-plan.json 路径")
     g.add_argument("--block", required=True, help="block_id")
@@ -802,6 +865,10 @@ def main(argv=None):
 
     if args.command == "show":
         cmd_show(args.plan, brief=not args.all)
+        return 0
+
+    if args.command == "report":
+        cmd_report(args.plan, as_json=args.json, top=args.top)
         return 0
 
     if args.command == "generate":
