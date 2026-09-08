@@ -1,6 +1,7 @@
 # 基于代码知识图谱的单元测试技能架构设计
 
-> 版本 v2.2（白盒修订：基于 GitNexus 源码 /home/zhy/source/GitNexus，v1.6.10 核实）。
+> 版本 v2.3（白盒修订：基于 GitNexus 源码 /home/zhy/source/GitNexus，v1.6.10 核实；
+> **只保留秒级路径**——数据面单一 REST 通道，不可用即硬终止，不降级分钟级 MCP 通道）。
 > 替代旧 `.ut-inventory.json` 全量清单模式，可不兼容。
 > 依据：《new_代码图谱MCP_使用文档.md》+ dde-file-manager 真机实测（2804 类 / 25041 方法 / 4084 文件 / 16894 调用边）+ 源码白盒核实。
 
@@ -16,7 +17,7 @@
 |---|------|----------|----------|
 | C1 | MCP 服务端单会话敏感，并发触发全线 504 | `--parallel 2` 全失败 | 串行访问 + 客户端退避重试（已落地） |
 | C2 | MCP 单页请求固定 ~40s 开销；**REST `/api/query` 通道存在且免分页**（实测全量骨架 23307 行 4.5s、聚合 0.7s） | MCP list_repos 一页 42s | **规划数据走 REST**（无会话无分页）；语义工具走 MCP；统计下推服务端聚合 |
-| C3 | cypher 结果为 markdown 表格，多行文本截到首行 | 7607 字符文件只剩首行 78 字符 | 哨兵转义读取（`⏎`/`⏐`，已验证往返） |
+| C3 | cypher 结果为 markdown 表格，多行文本截到首行 | 7607 字符文件只剩首行 78 字符 | **数据面不走 MCP cypher**：内容一律 REST 纯 JSON（天然免截断）；哨兵转义仅存量 mcp-scan.py 保留 |
 | C4 | 符号 `content` 在**索引写入时**截断（源码 `csv-generator.ts`: `MAX_SNIPPET=5000` + `\n... [truncated]` = 5016，永久性）；但 **`File.content` 全量存储不截断**（源码注释 "intentionally NOT length-capped"） | 266 行方法 content 只回 46 行 | 行数用 startLine/endLine（永远精确）；**方法体完整重建：File.content + 行切片**（含无本地仓场景，cc_proxy 永远可精确） |
 | C5 | 内容级全量不可行（业务方法内容总量 **9.9MB**，单方法内容库内截 5016 字符）；**骨架级全量可行**（REST 一次 4.5s / 5.7MB） | 23307 方法 content 合计 9.9MB；同查询去 content 仅 5.7MB 一次拉回 | **骨架级全量 + 内容级按需**（候选方法才拉 content） |
 | C6 | 边全部存于 `CodeRelation` 单表，按 `type` 区分 | `-[:HAS_METHOD]->` 独立边表语法直接报错 | 统一用 `-[r:CodeRelation]-> WHERE r.type='…'`（官方文档 §4 的简写形式在本服务端**不可用**，属文档勘误） |
@@ -36,12 +37,12 @@
 │ L2 语义分析层   impact · trace · detect_changes ——「测什么、
 │                 先测谁」；Community/Process 节点（聚类+流程）     │
 ├─────────────────────────────────────────────────────────────┤
-│ L1 图谱访问层   双通道：REST /api/query（规划主通道：免分页免      │
-│                 markdown 截断）+ MCP cypher/context/search       │
-│                 （语义工具）；统一重试/缓存/错误分类              │
+│ L1 图谱访问层   数据面单通道：REST /api/query（免分页免 markdown  │
+│                 截断，不可用即硬终止）+ MCP 仅 impact/trace/      │
+│                 detect_changes 三语义工具；统一重试/缓存/错误分类 │
 ├─────────────────────────────────────────────────────────────┤
 │ L0 接入层       REST 直连（HTTP POST，无会话）+ MCPClient         │
-│                 （单会话串行、退避重试）                          │
+│                 （仅语义工具：单会话串行、退避重试）              │
 └─────────────────────────────────────────────────────────────┘
                     全部状态落盘于 .ut-plan.json
 ```
@@ -60,7 +61,7 @@
 | 17+ 工具（含 query/explain/pdg_query） | 17 个工具：cypher、context、search、impact、trace、detect_changes、list_repos + `api_impact/group_list/group_sync/route_map/tool_map/shape_check/check/rename/explain/pdg_query/query` | 契约/编排类工具（group_*、api_impact、route_map）属微服务场景，测试工作流不涉及 |
 | 资源 `gitnexus://repo/{n}/clusters` / `processes` | MCP 资源不存在，**但数据在库**：`Community`（功能聚类）1169 个、`Process`（执行流程）275 个，cypher 直查可用；关联边 `MEMBER_OF` 5684、`STEP_IN_PROCESS` 946（真机实测） | 聚类/流程作为**图谱节点**纳入架构（§3.3），不经资源通道 |
 | detect_changes / trace / impact 参数 | 实测齐全：`detect_changes(scope, base_ref, worktree, repo, branch)`、`trace(from_uid, to_uid, maxDepth, includeTests, repo…)`、`impact(target, direction, maxDepth, includeTests, repo…)`；**仅 MCP 暴露，REST 无对应端点（404 实测）** | 直接可用，语义分析走 MCP 通道 |
-| REST `/api/query`（官方文档未提） | 实测存在：POST `{"cypher": …, "repo": …}` → `{"result":[…]}` 纯 JSON，**免分页、免 markdown 表格截断**；请求字段名是 `cypher` 非 `statement`（400 报错提示确认）；GET 形式 405 | 规划数据主通道（哨兵转义仅作为 MCP 通道降级手段保留） |
+| REST `/api/query`（官方文档未提） | 实测存在：POST `{"cypher": …, "repo": …}` → `{"result":[…]}` 纯 JSON，**免分页、免 markdown 表格截断**；请求字段名是 `cypher` 非 `statement`（400 报错提示确认）；GET 形式 405 | 规划数据**唯一**数据通道（v2.3 起：REST 不可用即硬终止，不降级 MCP 分钟级通道） |
 | REST `/api/graph` | 源码存在（`app.get('/api/graph')`，含 includeContent/stream 参数），本部署 **405**（网关或版本差异） | 不依赖；用 `/api/query` 等价实现（骨架/内容均可查） |
 | Kuzu 函数子集 | `percentile_cont` / `split()` / `char()` / 一元 `round()` **不存在**；`MATCH (n:Macro)` 表不可用（500 实测）；可用：`count/sum/size/avg/coalesce/replace`、`File/Class/Method/Function/Community/Process/Struct` 等节点表 | 分位数与模块聚合**本地计算**；宏信息不走图谱节点表 |
 
@@ -72,7 +73,7 @@
 | 工具 | 在测试流程中的角色 | 阶段 | 成本 |
 |---|---|---|---|
 | `list_repos` | 仓库在册确认、`lastCommit` 固化为 base 版本 | preflight | ● |
-| `cypher`（REST 优先） | 骨架采集、指标计算、覆盖统计、**Community/Process 聚类与流程查询**——主力数据通道：REST 免分页免截断（骨架全量 4.5s），MCP 作降级 | plan/select | ●◐ |
+| `cypher`（仅 REST） | 骨架采集、指标计算、覆盖统计、**Community/Process 聚类与流程查询**——**唯一数据通道**：REST 免分页免截断（骨架全量 4.5s）；MCP 同名工具不用于数据面 | plan/select | ● |
 | `context` | 单符号 360° 视图（定义+引用+所属流程）——生成期的语义包装 | generate | ○ |
 | `search` | 测试骨架定位、符号消歧 | generate | ● |
 | `impact` | 修改影响面 → 变更驱动模式的选块依据 | select（增量） | ● |
@@ -89,7 +90,7 @@
 - L2 的三个决策工具（impact/trace/detect_changes）把「测什么、先测谁、按什么增量」
   从**启发式规则**升级为**图谱语义查询**——这是相比旧 inventory 模式的本质增强；
 - Community/Process 虽未暴露为 MCP 资源，但作为**图谱节点**始终可查（cypher 直查，
-  REST/MCP 双通道均可）——聚类给「按功能域分组攻坚」，流程给「跨类集成场景」提示；
+  REST 唯一数据通道）——聚类给「按功能域分组攻坚」，流程给「跨类集成场景」提示；
 - 模块分组不依赖服务端：目录前缀聚合是纯本地确定性计算，作为聚类不可用时的兑底。
 
 ---
@@ -170,7 +171,7 @@
 | 指标 | 来源 | 性质 |
 |---|---|---|
 | `lines` | `endLine - startLine + 1` | 图谱结构，精确 |
-| `cc_proxy` | 方法体内 `if/for/while/case/catch/&&/‖/?:` 计数 +1 | **精确**：方法体 = File.content（全量存储）按 startLine/endLine 本地行切片；符号 content 仅作降级（源码白盒：符号级截断 5000 字符） |
+| `cc_proxy` | 方法体内 `if/for/while/case/catch/&&/‖/?:` 计数 +1 | **精确**：方法体 = File.content（全量存储）按 startLine/endLine 本地行切片；符号 content 仅作切片失败时的降级（REST 拉取；源码白盒：符号级截断 5000 字符） |
 | `in_degree/out_degree` | 调用边计数（服务端聚合） | 精确 |
 | `param_count / is_public` | 节点属性 | 精确 |
 | `tested` | 测试目录方法经调用边指向本方法（服务端聚合） | 精确 |
@@ -217,7 +218,7 @@ priority = high 方法占比 × log2(1 + 方法数)      // 高价值密集、�
 |---|---|---|
 | 块内方法体（File.content 行切片，REST 纯 JSON **免截断**，实测 7607 字符完整往返） | REST 按 file_path 批量 | ≈ Σ body_bytes |
 | 一跳邻接清单（谁调我/我调谁：名字+路径，**不带内容**） | 调用边（REST 聚合） | ~60B/条 × ≤30 条 |
-| 既有测试骨架（该类已有测试则给桩） | search（MCP）/ 测试文件边 | 0–4KB |
+| 既有测试骨架（该类已有测试则给桩） | 测试文件边（REST，确定性） | 0–4KB |
 | 固定提示词模板 | 本地 | ~4KB |
 
 超 48KB 的块拆子块；**邻接只给清单不给内容**是控制规模的关键一手。
@@ -286,11 +287,11 @@ REST `/api/query` 聚合拿类/方法/文件/边计数（0.7s 实测）；目录
 | 失效 | 降级链 |
 |---|---|
 | 服务端 504/空响应 | 指数退避重试 → 仍败则该块标 `failed` 续跑下一块（不阻塞整批） |
-| REST 通道不可用（404/网络策略变更） | 降级 MCP cypher + 哨兵转义分页（性能回退分钟级，功能等价）；L1 屏蔽通道差异，上层无感知 |
+| REST 通道不可用（404/网络策略变更） | **硬终止**并给出排查提示（v2.3 决策：只保留秒级路径，不降级分钟级 MCP 通道——与「仓库未索引硬终止」同一哲学） |
 | 符号 `content` 截断（库内 5000 字符，源码实锤） | 方法体一律 File.content + startLine/endLine 行切片（REST 实测全量）；切片失败才降级符号 content 并标 `body_source` |
 | 仓库未索引 | preflight 硬终止（不静默降级为空结果——旧方案的最大教训） |
 | 图谱版本漂移（base_commit ≠ 当前 lastCommit） | report 标注漂移；select 拒绝复用旧块状态，提示重跑 plan |
-| 本地仓库缺失 | 方法体走图谱重建（File.content 行切片，双通道均验证全量）；无本地则跳过编译，仅产出待检用例 |
+| 本地仓库缺失 | 方法体走图谱重建（File.content REST 行切片，实测全量）；无本地则跳过编译，仅产出待检用例 |
 | 服务端语法版本差异 | L1 统一封装边表写法（`CodeRelation`+type），屏蔽单表/独立边表差异（C6） |
 
 ---
@@ -313,7 +314,7 @@ REST `/api/query` 聚合拿类/方法/文件/边计数（0.7s 实测）；目录
 
 | 步骤 | 交付 | 验收标准 |
 |---|---|---|
-| R1 | L1 封装：REST 直连（主）+ MCP 哨兵转义降级 + 聚合下推（沉淀为 `graph-access.py`） | dde-file-manager 规划数据采集 <2 分钟（骨架 4.5s 已实测） |
+| R1 | L1 封装：REST 直连（唯一数据通道）+ MCP 语义工具客户端 + 聚合下推（沉淀为 `graph-access.py`） | dde-file-manager 规划数据采集 <2 分钟（骨架 4.5s 已实测） |
 | R2 | L3：`ut-plan.py plan`（survey+plan 两阶段 → .ut-plan.json） | 25041 方法全部分级；分级分布合理（high ≤15%） |
 | R3 | `select/generate/verify`：单块闭环（挑 1 个 high 块端到端） | 用例编译通过、plan 状态正确回写 |
 | R4 | report + scorer 消费 v2 字段 | 报告可按模块（目录前缀）聚合 |
