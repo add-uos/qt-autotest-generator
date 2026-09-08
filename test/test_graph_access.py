@@ -14,10 +14,15 @@ import sys
 from pathlib import Path
 
 _SCRIPT = Path(__file__).resolve().parent.parent / "qt-autotest-generator" / "scripts" / "graph-access.py"
-_spec = importlib.util.spec_from_file_location("graph_access", _SCRIPT)
-ga = importlib.util.module_from_spec(_spec)
-sys.modules["graph_access"] = ga
-_spec.loader.exec_module(ga)
+# 复用已加载实例（test_ut_plan 等可能先注册；重复 exec 会产生两个 GraphAccessError 类，
+# 导致 except 判定跨类不命中）
+if "graph_access" in sys.modules:
+    ga = sys.modules["graph_access"]
+else:
+    _spec = importlib.util.spec_from_file_location("graph_access", _SCRIPT)
+    ga = importlib.util.module_from_spec(_spec)
+    sys.modules["graph_access"] = ga
+    _spec.loader.exec_module(ga)
 
 
 # ── Fake HTTP 层 ──

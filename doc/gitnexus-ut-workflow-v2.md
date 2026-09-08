@@ -317,7 +317,7 @@ REST `/api/query` 聚合拿类/方法/文件/边计数（0.7s 实测）；目录
 |---|---|---|
 | ~~R1~~ ✅ | ~~L1 封装~~ 已交付 `qt-autotest-generator/scripts/graph-access.py`（REST 唯一数据通道 + 固化领域查询 + 切片/cc_proxy） | 真机验收通过：skeleton 25041 方法 **5.1s**、count 0.11s（验收线 <2 分钟）；35 个离线单测 |
 | ~~R2~~ ✅ | ~~L3：`ut-plan.py plan`~~ 已交付 `qt-autotest-generator/scripts/ut-plan.py`（plan/select/update/show 四子命令 + 块状态机 + 44 个离线单测） | 真机验收：25041 方法全部分级 **28s**（验收线 <2 分钟）；5517 块（含 723 test-file 自动 skip）；high 19.6% 略超 15% 期望线——dde-file-manager 长方法占比高（lines P90=23），公式语义正确，见 §5.2 退化保护 |
-| R3 | `select/generate/verify`：单块闭环（挑 1 个 high 块端到端） | 用例编译通过、plan 状态正确回写 |
+| ~~R3~~ ✅ | ~~select/generate 单块闭环~~ 已交付 `ut-plan.py` 六子命令全链（`generate` 按 §6 组装上下文 → `.ut-gen/<block>/context.md`；`verify` 拷入→cmake 重配+构建→跑测→状态回写） | 真机 E2E 通过：B1010 SqliteHelper（dfm-base）→ 上下文 18.6KB → 生成 `test_sqlitehelper.cpp`（10 用例）→ `ut-dfm-base` 编译通过、`--gtest_filter=SqliteHelperTest.*` **10 passed / 0 failed** → plan 回写 `done` + `last_verify`（ts/suite/run/error）；15 个离线单测（FakeGenClient/FakeRunner 注入） |
 | R4 | report + scorer 消费 v2 字段 | 报告可按模块（目录前缀）聚合 |
 | R5 | 变更驱动模式（detect_changes+impact 选块） | 人为改动后仅生成受影响块的用例 |
 

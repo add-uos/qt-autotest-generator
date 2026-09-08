@@ -2,6 +2,7 @@
 import importlib.util
 import json
 import math
+import os
 import sys
 from pathlib import Path
 
@@ -522,3 +523,244 @@ class TestShow:
         up.cmd_show(plan_file, brief=False)
         out = capsys.readouterr().out
         assert "B0000" in out and "C0" in out
+
+
+# ── generate（上下文组装） ──
+
+class FakeGenClient:
+    """generate 依赖的三个图谱接口替身。"""
+
+    def __init__(self, files=None, syms=None, neighbors=None):
+        self.files = files or {}
+        self.syms = syms or {}
+        self.neighbors = neighbors or []
+        self.neighbor_ids = None
+
+    def file_contents(self, paths):
+        return {p2: self.files[p2] for p2 in paths if p2 in self.files}
+
+    def symbol_contents(self, ids):
+        return {i: self.syms[i] for i in ids if i in self.syms}
+
+    def method_neighbors(self, ids):
+        self.neighbor_ids = list(ids)
+        return self.neighbors
+
+
+@pytest.fixture
+def gen_plan(tmp_path):
+    """单块 plan：SqliteHelper 样板（1 个 file-slice 方法 + 1 个 none 方法）。"""
+    methods = [
+        {"id": "Method:h:SqliteHelper.excute#1", "name": "excute",
+         "file_path": "src/dfm-base/base/db/sqlitehelper.h", "lines": 10,
+         "start_line": 2, "end_line": 11, "in_degree": 3, "out_degree": 1,
+         "param_count": 4, "is_public": True, "content_bytes": 400,
+         "tested": None, "cc_proxy": 3, "body_source": "file-slice",
+         "score": 0.8, "level": "high"},
+        {"id": "Method:h:SqliteHelper.typeString#1", "name": "typeString",
+         "file_path": "src/dfm-base/base/db/sqlitehelper.h", "lines": 3,
+         "start_line": 20, "end_line": 22, "in_degree": 0, "out_degree": 0,
+         "param_count": 1, "is_public": True, "content_bytes": 120,
+         "tested": None, "cc_proxy": 0, "body_source": "none",
+         "score": 0.3, "level": "mid"},
+    ]
+    plan = {
+        "version": up.PLAN_VERSION, "repo": "demo",
+        "survey": {"classes": 1, "methods": 2, "files": 1, "call_edges": 3,
+                   "modules": {"src/dfm-base": 2}, "top_in_degree": []},
+        "quantile": {"lines": {"p50": 6, "p75": 8, "p90": 10},
+                     "cc": {"p50": 0, "p75": 1, "p90": 3},
+                     "in_deg": {"p50": 0, "p75": 1, "p90": 3}},
+        "blocks": [{"block_id": "B0001", "kind": "class", "node_id": None,
+                    "name": "SqliteHelper",
+                    "file_path": "src/dfm-base/base/db/sqlitehelper.h",
+                    "cluster": "src/dfm-base", "methods": methods,
+                    "level_summary": {"high": 1, "mid": 1}, "priority": 0.8,
+                    "context_bytes": 520, "status": "pending"}],
+        "stats": {"blocks": 1, "methods": 2, "high": 1, "mid": 1, "low": 0},
+    }
+    path = tmp_path / "plan.json"
+    up.save_plan(plan, path)
+    return path
+
+
+HEADER = "line0\nbool excute(const QString &sql) { return true; }\n" * 1  # 2-11 行切片源
+HEADER = ("// header line 1\nbool excute(int a) {\n  if (a) return true;\n"
+          "  return false;\n}\n// l6\n// l7\n// l8\n// l9\n// l10\n// l11\n"
+          "// l12 static content")
+
+
+class TestGenerate:
+    def test_context_sections_and_slicing(self, gen_plan, tmp_path):
+        client = FakeGenClient(files={"src/dfm-base/base/db/sqlitehelper.h": HEADER},
+                               neighbors=[{"method_id": "Method:h:SqliteHelper.excute#1",
+                                           "direction": "caller", "peer": "toMaps",
+                                           "peer_file": "src/dfm-base/base/db/sqlitequeryable.h"}])
+        ctx = up.cmd_generate(gen_plan, "B0001", client, out_dir=str(tmp_path / "gen"))
+        text = open(ctx, encoding="utf-8").read()
+        assert "块 B0001 SqliteHelper" in text
+        assert "bool excute(int a) {" in text          # 行切片命中
+        assert "// （无内容）" in text                   # none 方法体占位
+        assert "(caller) toMaps" in text               # 邻接行
+        assert "## 生成约定" in text                    # 固定提示词
+        assert "SPDX-License-Identifier: GPL-3.0-or-later" in text
+        assert client.neighbor_ids == ["Method:h:SqliteHelper.excute#1",
+                                       "Method:h:SqliteHelper.typeString#1"]
+        # pending → selected 回写
+        plan = up.load_plan(gen_plan)
+        assert plan["blocks"][0]["status"] == "selected"
+
+    def test_slice_fail_falls_to_symbol(self, gen_plan, tmp_path):
+        client = FakeGenClient(syms={"Method:h:SqliteHelper.excute#1": "// sym body"})
+        ctx = up.cmd_generate(gen_plan, "B0001", client, out_dir=str(tmp_path / "gen"))
+        assert "// sym body" in open(ctx, encoding="utf-8").read()
+
+    def test_truncation_to_max_bytes(self, gen_plan, tmp_path):
+        client = FakeGenClient(files={"src/dfm-base/base/db/sqlitehelper.h": HEADER * 50})
+        ctx = up.cmd_generate(gen_plan, "B0001", client,
+                              out_dir=str(tmp_path / "gen"), max_bytes=2000)
+        text = open(ctx, encoding="utf-8").read()
+        assert len(text.encode("utf-8")) <= 2000 + 64
+        assert "truncated" in text
+
+    def test_done_block_refused(self, gen_plan, tmp_path):
+        plan = up.load_plan(gen_plan)
+        plan["blocks"][0]["status"] = "done"
+        up.save_plan(plan, gen_plan)
+        with pytest.raises(ValueError, match="已 done"):
+            up.cmd_generate(gen_plan, "B0001", FakeGenClient(),
+                            out_dir=str(tmp_path / "gen"))
+
+    def test_existing_test_skeleton_found(self, gen_plan, tmp_path):
+        repo = tmp_path / "repo"
+        (repo / "autotests" / "libs").mkdir(parents=True)
+        (repo / "autotests" / "libs" / "test_other.cpp").write_text(
+            "TEST(SqliteHelperTest, Smoke) {}")
+        ctx = up.cmd_generate(gen_plan, "B0001", FakeGenClient(),
+                              out_dir=str(tmp_path / "gen"), repo_root=str(repo))
+        assert "既有测试骨架" in open(ctx, encoding="utf-8").read()
+
+    def test_unknown_block(self, gen_plan, tmp_path):
+        with pytest.raises(ValueError, match="不存在"):
+            up.cmd_generate(gen_plan, "B9999", FakeGenClient(),
+                            out_dir=str(tmp_path / "gen"))
+
+
+# ── verify（编译 + 跑测 + 回写） ──
+
+class FakeRunner:
+    """按命令类别分派的 runner 替身。"""
+
+    def __init__(self, build_rc=0, run_rc=0, run_stdout="[  PASSED  ] 3 tests"):
+        self.build_rc = build_rc
+        self.run_rc = run_rc
+        self.run_stdout = run_stdout
+        self.calls = []
+
+    def __call__(self, cmd, cwd=None, timeout=600):
+        self.calls.append(list(cmd))
+        import collections
+        r = collections.namedtuple("R", "returncode stdout stderr")
+        if cmd[0] == "cmake":
+            # 模拟构建产物：--build 时创建二进制（verify 有存在性检查）
+            if "--build" in cmd and self.build_rc == 0:
+                binary = os.path.join("build-autotests", "autotests", "libs",
+                                      "dfm-base", "ut-dfm-base")
+                os.makedirs(os.path.join(cwd, os.path.dirname(binary)),
+                            exist_ok=True)
+                open(os.path.join(cwd, binary), "w").write("#!/bin/sh\n")
+            return r(self.build_rc, "ok", "")
+        return r(self.run_rc, self.run_stdout, "" if self.run_rc == 0 else "boom")
+
+
+@pytest.fixture
+def verify_env(tmp_path, gen_plan):
+    repo = tmp_path / "repo"
+    (repo / "autotests" / "libs" / "dfm-base").mkdir(parents=True)
+    gen = tmp_path / ".ut-gen" / "B0001"  # 与 cmd_verify 发现路径一致（plan 同目录）
+    gen.mkdir(parents=True)
+    (gen / "test_sqlitehelper.cpp").write_text(
+        "TEST(SqliteHelperTest, TypeString) { EXPECT_EQ(1, 1); }")
+    return {"repo": str(repo), "plan": gen_plan, "gen": str(gen)}
+
+
+class TestVerify:
+    def test_happy_path_done(self, verify_env):
+        runner = FakeRunner()
+        ok, detail = up.cmd_verify(verify_env["plan"], "B0001", verify_env["repo"],
+                                   test_file=verify_env["gen"] + "/test_sqlitehelper.cpp",
+                                   runner=runner)
+        assert ok and detail["status"] == "done"
+        assert detail["run"] == {"passed": 3, "failed": 0, "exit": 0}
+        # cmake configure + build + run 三个调用
+        kinds = [c[0] for c in runner.calls]
+        assert kinds == ["cmake", "cmake", os.path.join(
+            ".", "build-autotests", "autotests", "libs", "dfm-base",
+            "ut-dfm-base")]
+        assert "--gtest_filter=SqliteHelperTest.*" in runner.calls[-1]
+        plan = up.load_plan(verify_env["plan"])
+        b = plan["blocks"][0]
+        assert b["status"] == "done"
+        assert b["last_verify"]["suite"] == "SqliteHelperTest"
+
+    def test_copy_into_repo_when_outside(self, verify_env):
+        ok, detail = up.cmd_verify(verify_env["plan"], "B0001", verify_env["repo"],
+                                   test_file=verify_env["gen"] + "/test_sqlitehelper.cpp",
+                                   runner=FakeRunner())
+        assert detail["test_file"] == "autotests/libs/dfm-base/test_sqlitehelper.cpp"
+        assert os.path.exists(os.path.join(
+            verify_env["repo"], "autotests", "libs", "dfm-base",
+            "test_sqlitehelper.cpp"))
+
+    def test_build_failure_marks_failed(self, verify_env):
+        ok, detail = up.cmd_verify(verify_env["plan"], "B0001", verify_env["repo"],
+                                   test_file=verify_env["gen"] + "/test_sqlitehelper.cpp",
+                                   runner=FakeRunner(build_rc=1))
+        assert not ok and detail["status"] == "failed"
+        assert "失败" in detail["error"]
+        plan = up.load_plan(verify_env["plan"])
+        assert plan["blocks"][0]["status"] == "failed"
+        # 编译失败时不再跑测
+        assert detail["run"] is None
+
+    def test_run_failure_marks_failed(self, verify_env):
+        ok, detail = up.cmd_verify(verify_env["plan"], "B0001", verify_env["repo"],
+                                   test_file=verify_env["gen"] + "/test_sqlitehelper.cpp",
+                                   runner=FakeRunner(run_rc=1, run_stdout="[  FAILED  ] 1 test"))
+        assert not ok and detail["status"] == "failed"
+        assert detail["run"]["failed"] == 1
+
+    def test_skip_run(self, verify_env):
+        runner = FakeRunner()
+        ok, detail = up.cmd_verify(verify_env["plan"], "B0001", verify_env["repo"],
+                                   test_file=verify_env["gen"] + "/test_sqlitehelper.cpp",
+                                   skip_run=True, runner=runner)
+        assert ok and len(runner.calls) == 2  # configure + build，无 run
+
+    def test_default_test_file_discovery(self, verify_env):
+        ok, detail = up.cmd_verify(verify_env["plan"], "B0001", verify_env["repo"],
+                                   runner=FakeRunner())
+        assert detail["test_file"].endswith("test_sqlitehelper.cpp")
+
+    def test_module_path_mapping(self):
+        dest, target, binary = up._module_paths("src/dfm-base", "/repo")
+        assert (dest, target) == ("autotests/libs/dfm-base", "ut-dfm-base")
+        assert binary == os.path.join("build-autotests", "autotests", "libs",
+                                      "dfm-base", "ut-dfm-base")
+        dest, target, _ = up._module_paths("src/services/filemanager", "/repo",
+                                           dest_dir="autotests/services/fm")
+        assert dest == "autotests/services/fm" and target == "ut-filemanager"
+
+    def test_parse_suite_name(self, tmp_path):
+        f = tmp_path / "t.cpp"
+        f.write_text("TEST(FooBarTest, Baz) {}")
+        assert up._parse_suite_name(str(f)) == "FooBarTest"
+        f.write_text("TEST_F(FooBarTest, Baz) {}")
+        assert up._parse_suite_name(str(f)) == "FooBarTest"
+
+    def test_missing_test_file_raises(self, verify_env, tmp_path):
+        import shutil as _sh
+        _sh.rmtree(verify_env["gen"])
+        with pytest.raises(ValueError, match="test_"):
+            up.cmd_verify(verify_env["plan"], "B0001", verify_env["repo"],
+                          runner=FakeRunner())

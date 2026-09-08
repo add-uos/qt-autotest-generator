@@ -311,6 +311,36 @@ class RestQueryClient:
                     out[row["id"]] = row.get("content") or ""
         return out
 
+    def method_neighbors(self, method_ids, repo=None):
+        """一跳邻接（generate 阶段 §6）：谁调我（caller）/ 我调谁（callee）。
+
+        返回 [{method_id, direction('caller'|'callee'), peer, peer_file}]。
+        真机确认：CALLS 边直接挂在头文件声明节点上（sqlitehelper.h 实测），
+        因此按 plan 里的方法 id（多为头节点）查即可。
+        """
+        out = []
+        ids = list(dict.fromkeys(method_ids))
+        for i in range(0, len(ids), IN_CHUNK):
+            chunk = ids[i:i + IN_CHUNK]
+            literals = ", ".join(
+                "'" + x.replace("\\", "\\\\").replace("'", "\\'") + "'"
+                for x in chunk)
+            # callers：边方向 (src)->(m)
+            out.extend(self.query(
+                "MATCH (src)-[r:CodeRelation]->(m:Method) "
+                "WHERE r.type='CALLS' AND m.id IN [" + literals + "] "
+                "RETURN m.id AS method_id, 'caller' AS direction, "
+                "src.name AS peer, coalesce(src.filePath,'') AS peer_file",
+                repo=repo))
+            # callees：边方向 (m)->(t)，t 限 Method 节点
+            out.extend(self.query(
+                "MATCH (m:Method)-[r:CodeRelation]->(t:Method) "
+                "WHERE r.type='CALLS' AND m.id IN [" + literals + "] "
+                "RETURN m.id AS method_id, 'callee' AS direction, "
+                "t.name AS peer, coalesce(t.filePath,'') AS peer_file",
+                repo=repo))
+        return out
+
 
 def slice_body(content, start_line, end_line):
     """按 1-based 行号切片方法体（File.content → 方法体，v2.3 精确路径）。"""

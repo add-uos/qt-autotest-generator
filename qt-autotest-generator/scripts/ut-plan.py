@@ -36,7 +36,10 @@ import json
 import math
 import os
 import re
+import shutil
+import subprocess
 import sys
+import time
 from collections import defaultdict
 
 import importlib.util as _ilu
@@ -453,6 +456,249 @@ def cmd_show(plan_path, brief=True):
                   f"{b['kind']:10s} {b['name'][:36]:36s} {b['level_summary']}")
 
 
+# ── generate（Phase 4，逐块）：上下文组装 → 生成会话输入 ────────────
+
+PROMPT_CONVENTIONS = """\
+## 生成约定（必须遵守）
+
+1. 输出单个自包含 C++ 测试文件，框架 = GTest（TEST(Suite, Case) 宏，不用 gmock）。
+2. 文件头必须有 SPDX 头：
+   // SPDX-FileCopyrightText: 2026 UnionTech Software Technology Co., Ltd.
+   //
+   // SPDX-License-Identifier: GPL-3.0-or-later
+3. 测试套名 = <被测类名>Test（如 SqliteHelperTest）；套内用例覆盖块内每个
+   high 方法的主路径与关键分支；mid 方法覆盖主路径；纯存取器可不测。
+4. include 风格：项目头用尖括号包含路径（参照头文件内容中的项目内路径推算），
+   Qt 头单独分组。
+5. 只能调用被测类公开可及的 API；私有方法不可直接调用（static inline 例外：
+   若类本身可构造且方法为 public static，则可直接调）。
+6. 禁止：网络/DBus/图形界面真实交互；必须能在 CI 无头环境跑通。
+   涉及临时文件/数据库时用 QTemporaryDir 隔离。
+7. 断言用 EXPECT_*/ASSERT_*；每个用例独立构造与清理，不依赖执行顺序。
+8. 不要输出任何解释性文字，只输出代码。
+"""
+
+
+def _fmt_adjacency(neighbors, limit=30):
+    """邻接清单 → ≤limit 行文本（谁调我/我调谁：名字+文件基名）。"""
+    lines = []
+    for n in neighbors[:limit]:
+        base = n["peer_file"].rsplit("/", 1)[-1] if n["peer_file"] else "?"
+        lines.append(f"- ({n['direction']}) {n['peer']}  [{base}]")
+    if len(neighbors) > limit:
+        lines.append(f"- …另有 {len(neighbors) - limit} 条略")
+    return "\n".join(lines) if lines else "（无调用边）"
+
+
+def _find_existing_tests(repo_root, class_name):
+    """本地 autotests/ 下找已测试骨架（grep 类名，取首个命中文件 ≤4KB 摘录）。"""
+    if not repo_root:
+        return None
+    at_dir = os.path.join(repo_root, "autotests")
+    if not os.path.isdir(at_dir):
+        return None
+    import subprocess as _sp
+    try:
+        r = _sp.run(["grep", "-rl", "--include=*.cpp", class_name, at_dir],
+                    capture_output=True, text=True, timeout=30)
+        hits = [x for x in r.stdout.splitlines() if x]
+    except Exception:
+        return None
+    if not hits:
+        return None
+    path = hits[0]
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            return {"path": os.path.relpath(path, repo_root),
+                    "excerpt": f.read(4096)}
+    except OSError:
+        return None
+
+
+def cmd_generate(plan_path, block_id, client, out_dir=".ut-gen",
+                 repo_root=None, max_bytes=MAX_BLOCK_BYTES):
+    """generate：按 §6 组装单块上下文 → <out_dir>/<block_id>/context.md。
+
+    组装件：块信息 + 类头文件内容 + 方法清单与方法体（行切片）+ 一跳邻接
+    （≤30 条，只有名字+路径不带内容）+ 既有测试骨架（≤4KB）+ 固定生成约定。
+    超限从尾部截断方法体（方法已按 score 降序，high 优先保留）。
+    就地回写块状态 pending→selected（failed 允许重试）。
+    返回 context.md 路径。
+    """
+    plan = load_plan(plan_path)
+    block = next((b for b in plan["blocks"] if b["block_id"] == block_id), None)
+    if block is None:
+        raise ValueError(f"块 {block_id} 不存在")
+    if block["status"] == "done":
+        raise ValueError(f"块 {block_id} 已 done，如需重做先 update 回 pending")
+    if block["status"] == "pending":
+        block["status"] = "selected"
+        save_plan(plan, plan_path)
+
+    mids = [m["id"] for m in block["methods"]]
+    # 文件集：块文件 + 各方法文件（去重）——头文件内容优先
+    files = list(dict.fromkeys(
+        [block["file_path"]] + [m["file_path"] for m in block["methods"]]))
+    contents = client.file_contents(files)
+    # 行切片方法体；失败降级符号 content
+    bodies, missed = {}, [m["id"] for m in block["methods"]
+                          if m.get("body_source") != "file-slice"]
+    for m in block["methods"]:
+        c = contents.get(m["file_path"])
+        body = slice_body(c, m["start_line"], m["end_line"]) if c else ""
+        if body:
+            bodies[m["id"]] = body
+    still = [mid for mid in mids if mid not in bodies]
+    if still:
+        syms = client.symbol_contents(still)
+        bodies.update(syms)
+    neighbors = client.method_neighbors(mids)
+    existing = _find_existing_tests(repo_root, block["name"].split("#")[0])
+
+    parts = [f"# 生成上下文：块 {block['block_id']} {block['name']}\n",
+             f"仓库 {plan['repo']} · kind={block['kind']} · file={block['file_path']} "
+             f"· levels={block['level_summary']} · priority={block['priority']}\n",
+             "\n## 方法清单与方法体（按 score 降序）\n"]
+    for m in block["methods"]:
+        parts.append(f"\n### {m['name']}  (id={m['id']})\n"
+                     f"lines={m['lines']} ({m['start_line']}-{m['end_line']}) "
+                     f"cc={m['cc_proxy']} in_deg={m['in_degree']} "
+                     f"public={m['is_public']} level={m['level']} "
+                     f"body_source={m['body_source']}\n"
+                     f"```cpp\n{bodies.get(m['id'], '// （无内容）')}\n```\n")
+    parts.append("\n## 相关文件内容\n")
+    for fp in files:
+        parts.append(f"\n### 文件 {fp}\n```cpp\n{contents.get(fp, '// （未取到）')}\n```\n")
+    parts.append(f"\n## 一跳邻接（≤30 条，只列名字与路径）\n{_fmt_adjacency(neighbors)}\n")
+    if existing:
+        parts.append(f"\n## 既有测试骨架（{existing['path']} 摘录）\n"
+                     f"```cpp\n{existing['excerpt']}\n```\n")
+    parts.append("\n" + PROMPT_CONVENTIONS)
+
+    text = "".join(parts)
+    # 上限按字节计：先编码再切片（中文多字节直接按字符切会超限）
+    raw = text.encode("utf-8")
+    if len(raw) > max_bytes:
+        text = (raw[:max_bytes].decode("utf-8", errors="ignore")
+                + f"\n… [truncated to fit {max_bytes} bytes]\n")
+    ctx_dir = os.path.join(out_dir, block_id)
+    os.makedirs(ctx_dir, exist_ok=True)
+    ctx_path = os.path.join(ctx_dir, "context.md")
+    with open(ctx_path, "w", encoding="utf-8") as f:
+        f.write(text)
+    return ctx_path
+
+
+# ── verify（Phase 5）：编译 + 跑测 + 状态回写 ───────────────────────
+
+def _default_runner(cmd, cwd=None, timeout=600):
+    """子进程执行（verify 的真实通道；测试中注入替身）。"""
+    return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True,
+                          timeout=timeout)
+
+
+def _parse_suite_name(test_file):
+    """从测试文件解析 GTest 套名（首个 TEST(X, ...) 的 X）。"""
+    with open(test_file, "r", encoding="utf-8", errors="replace") as f:
+        m = re.search(r"\bTEST(?:_F)?\s*\(\s*(\w+)\s*,", f.read())
+    return m.group(1) if m else None
+
+
+def _module_paths(cluster, repo_root, dest_dir=None, build_dir="build-autotests"):
+    """cluster → (dest_dir, target, binary_path)。
+
+    dfm-base 特例：autotests/libs/dfm-base（与既有仓库布局一致）；
+    其它模块默认 autotests/libs/<tail>，可用 --dest-dir 覆盖。
+    """
+    tail = cluster.split("/")[-1] if cluster else "misc"
+    dest = dest_dir or f"autotests/libs/{tail}"
+    target = f"ut-{tail}"
+    binary = os.path.join(build_dir, "autotests", "libs", tail, target)
+    return dest, target, binary
+
+
+def cmd_verify(plan_path, block_id, repo_root, test_file=None,
+               build_dir="build-autotests", dest_dir=None, skip_run=False,
+               runner=_default_runner):
+    """verify：拷入测试文件 → cmake 构建 → 跑测 → 回写块状态。
+
+    编译+跑测通过 → done；任一步失败 → failed（last_verify 存错误摘要）。
+    返回 (ok, detail)。
+    """
+    plan = load_plan(plan_path)
+    block = next((b for b in plan["blocks"] if b["block_id"] == block_id), None)
+    if block is None:
+        raise ValueError(f"块 {block_id} 不存在")
+
+    gen_dir = os.path.join(os.path.dirname(os.path.abspath(plan_path)),
+                           ".ut-gen", block_id)
+    if not test_file:
+        cands = sorted(
+            f for f in os.listdir(gen_dir) if f.startswith("test_")
+            and f.endswith(".cpp")) if os.path.isdir(gen_dir) else []
+        if not cands:
+            raise ValueError(f"{gen_dir} 下无 test_*.cpp，先用 --test-file 指定")
+        test_file = os.path.join(gen_dir, cands[0])
+    suite = _parse_suite_name(test_file)
+
+    dest, target, binary = _module_paths(block["cluster"], repo_root,
+                                         dest_dir=dest_dir, build_dir=build_dir)
+    abs_dest_dir = os.path.join(repo_root, dest)
+    os.makedirs(abs_dest_dir, exist_ok=True)
+    # 已在仓库内则原位，否则拷入
+    test_rel = os.path.relpath(os.path.abspath(test_file), repo_root)
+    if test_rel.startswith(".."):
+        test_rel = os.path.join(dest, os.path.basename(test_file))
+        shutil.copy(test_file, os.path.join(repo_root, test_rel))
+
+    errs, logs = [], []
+    ok = True
+    # 1. 重新 configure（GLOB 拾取新文件）+ 构建目标
+    for cmd, desc in (
+        (["cmake", "-S", repo_root, "-B", build_dir], "cmake configure"),
+        (["cmake", "--build", build_dir, "--target", target, "-j", "4"],
+         f"build {target}"),
+    ):
+        r = runner(cmd, cwd=repo_root)
+        logs.append(f"$ {' '.join(cmd)}\n{(r.stdout or '')[-2000:]}")
+        if r.returncode != 0:
+            errs.append(f"{desc} 失败（exit {r.returncode}）:\n{(r.stderr or '')[-2000:]}")
+            ok = False
+            break
+    # 2. 跑测（gtest_filter 限定本块套名）
+    run_summary = None
+    if ok and not skip_run:
+        if not os.path.exists(os.path.join(repo_root, binary)):
+            errs.append(f"二进制不存在：{binary}")
+            ok = False
+        else:
+            # gtest 仅识别 --gtest_filter=X 等号形式（空格分隔会打印 usage 并静默退出）
+            filt = [f"--gtest_filter={suite}.*"] if suite else []
+            r = runner([os.path.join(".", binary)] + filt, cwd=repo_root)
+            logs.append(f"$ {binary} {' '.join(filt)}\n{(r.stdout or '')[-3000:]}")
+            passed = re.search(r"\[  PASSED  \]\s*(\d+) tests?", r.stdout or "")
+            failed = re.search(r"\[  FAILED  \]\s*(\d+) tests?", r.stdout or "")
+            run_summary = {"passed": int(passed.group(1)) if passed else 0,
+                           "failed": int(failed.group(1)) if failed else 0,
+                           "exit": r.returncode}
+            if r.returncode != 0:
+                errs.append(f"跑测失败（exit {r.returncode}）:\n{(r.stderr or '')[-1500:]}")
+                ok = False
+
+    # 3. 状态回写（原子写盘）
+    block["status"] = "done" if ok else "failed"
+    block["last_verify"] = {
+        "ts": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "test_file": test_rel, "suite": suite,
+        "run": run_summary,
+        "error": "\n".join(errs)[-2000:] if errs else None,
+    }
+    save_plan(plan, plan_path)
+    return ok, {"block": block_id, "status": block["status"],
+                "test_file": test_rel, "run": run_summary,
+                "error": block["last_verify"]["error"]}
+
+
 def load_plan(path):
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
@@ -492,6 +738,22 @@ def main(argv=None):
     w = sub.add_parser("show", help="查看 plan 摘要")
     w.add_argument("plan", help=".ut-plan.json 路径")
     w.add_argument("--all", action="store_true", help="打印全部块")
+
+    g = sub.add_parser("generate", help="单块上下文组装（生成会话输入）")
+    g.add_argument("plan", help=".ut-plan.json 路径")
+    g.add_argument("--block", required=True, help="block_id")
+    g.add_argument("--out-dir", default=".ut-gen")
+    g.add_argument("--repo-root", help="本地仓库根（找既有测试骨架用）")
+    g.add_argument("--repo", help="仓库名（默认 QTAG_GN_REPO）")
+
+    v = sub.add_parser("verify", help="拷入测试→cmake 构建→跑测→回写状态")
+    v.add_argument("plan", help=".ut-plan.json 路径")
+    v.add_argument("--block", required=True, help="block_id")
+    v.add_argument("--repo-root", required=True, help="本地仓库根")
+    v.add_argument("--test-file", help="测试文件（默认 .ut-gen/<block>/test_*.cpp）")
+    v.add_argument("--build-dir", default="build-autotests")
+    v.add_argument("--dest-dir", help="拷入目录（默认 autotests/libs/<模块>）")
+    v.add_argument("--skip-run", action="store_true", help="只编译不跑测")
 
     args = parser.parse_args(argv)
 
@@ -541,6 +803,36 @@ def main(argv=None):
     if args.command == "show":
         cmd_show(args.plan, brief=not args.all)
         return 0
+
+    if args.command == "generate":
+        client = RestQueryClient(repo=args.repo or os.environ.get("QTAG_GN_REPO"))
+        if not client.repo:
+            print("ut-plan: 需要 --repo 或 QTAG_GN_REPO", file=sys.stderr)
+            return 2
+        try:
+            ctx = cmd_generate(args.plan, args.block, client,
+                               out_dir=args.out_dir, repo_root=args.repo_root)
+        except (ValueError, GraphAccessError) as e:
+            print(f"ut-plan: generate 失败: {e}", file=sys.stderr)
+            return 2
+        print(f"context → {ctx}")
+        return 0
+
+    if args.command == "verify":
+        try:
+            ok, detail = cmd_verify(args.plan, args.block, args.repo_root,
+                                    test_file=args.test_file,
+                                    build_dir=args.build_dir,
+                                    dest_dir=args.dest_dir,
+                                    skip_run=args.skip_run)
+        except (ValueError, subprocess.TimeoutExpired) as e:
+            print(f"ut-plan: verify 失败: {e}", file=sys.stderr)
+            return 2
+        if detail["error"]:
+            print(detail["error"], file=sys.stderr)
+        print(f"{detail['block']} → {detail['status']} "
+              f"({detail['test_file']}, run={detail['run']})")
+        return 0 if ok else 1
 
     return 2
 
