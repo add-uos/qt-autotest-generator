@@ -84,4 +84,5 @@ python3 scripts/ut-plan.py select .ut-plan.json --mode changed --repo-root /path
 4. **`.ut-gen` 锚定 plan 目录**：产物与 plan 同级，不随 CWD 漂移。
 5. **方法体三态**：file-slice（精确）→ symbol-snippet（降级）→ none（仅签名），
    生成会话按三态自适应，none 态用例以行为约定为主、不臆造实现细节。
-6. **plan verify 证据诚实**：last_verify 只作证据标注，不改评分权重。
+6. **plan verify 证据诚实**：last_verify（含 base_commit/base_drift）只作证据标注，不改评分权重。
+7. **sufficiency 降级**：scorer 无 inventory 且 `--plan` 给定时，块 methods（name/level）作充分性校核输入（`sufficiency_source=plan_methods`）。
