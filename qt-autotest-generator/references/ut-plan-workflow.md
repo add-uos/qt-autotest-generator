@@ -37,7 +37,8 @@ python3 scripts/ut-plan.py generate .ut-plan.json --block B1010 --repo-root /pat
 #    （GTest；套名 <Class>Test；断言借 QObject 免 moc；方法体行切片可能降级 symbol——照常写）
 
 # 5) 验证：拷入 → cmake configure+build → --gtest_filter=<Suite>.* 跑测 → 状态回写
-python3 scripts/ut-plan.py verify .ut-plan.json --block B1010 --repo-root /path/to/repo
+#    可选 --base <ref>：块文件自基准起有变更时 last_verify.base_drift 标注（不阻断）
+python3 scripts/ut-plan.py verify .ut-plan.json --block B1010 --repo-root /path/to/repo --base HEAD~1
 
 # 6) 状态手工流转（跳过某块 / 重置重做）
 python3 scripts/ut-plan.py update .ut-plan.json B3215 --status failed
