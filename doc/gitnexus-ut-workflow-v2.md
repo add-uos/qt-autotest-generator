@@ -1,6 +1,6 @@
 # 基于代码知识图谱的单元测试技能架构设计
 
-> 版本 v2.3（白盒修订：基于 GitNexus 源码 /home/zhy/source/GitNexus，v1.6.10 核实；
+> 版本 v2.4（白盒修订：基于 GitNexus 源码 /home/zhy/source/GitNexus，v1.6.10 核实；
 > **只保留秒级路径**——数据面单一 REST 通道，不可用即硬终止，不降级分钟级 MCP 通道）。
 > 替代旧 `.ut-inventory.json` 全量清单模式，可不兼容。
 > 依据：《new_代码图谱MCP_使用文档.md》+ dde-file-manager 真机实测（2804 类 / 25041 方法 / 4084 文件 / 16894 调用边）+ 源码白盒核实。
@@ -320,6 +320,7 @@ REST `/api/query` 聚合拿类/方法/文件/边计数（0.7s 实测）；目录
 | ~~R3~~ ✅ | ~~select/generate 单块闭环~~ 已交付 `ut-plan.py` 六子命令全链（`generate` 按 §6 组装上下文 → `.ut-gen/<block>/context.md`；`verify` 拷入→cmake 重配+构建→跑测→状态回写） | 真机 E2E 通过：B1010 SqliteHelper（dfm-base）→ 上下文 18.6KB → 生成 `test_sqlitehelper.cpp`（10 用例）→ `ut-dfm-base` 编译通过、`--gtest_filter=SqliteHelperTest.*` **10 passed / 0 failed** → plan 回写 `done` + `last_verify`（ts/suite/run/error）；15 个离线单测（FakeGenClient/FakeRunner 注入） |
 | ~~R4~~ ✅ | ~~report + scorer 消费 v2 字段~~ `ut-plan.py report`（按 cluster 聚合状态/分级/验证结果，stdout+`--json`）+ scorer `score.py --plan`（消费 last_verify 跑测证据，不进权重、失败标注，summary 加 verify passed 列） | 真机验收：dde-file-manager 14 模块聚合表（dfm-base done=1/test=10）；dfm-base 全目 116 文件项目评分，Sqlitehelper 评分卡带 `plan_verify.passed=10`；11 个离线单测 |
 | ~~R5~~ ✅ | ~~变更驱动选块~~ `select --mode changed`：`detect_changes`（本地 git diff HEAD+未跟踪）→ `compute_impact`（`methods_in_files` 图谱反查 + 一跳 caller 文件集，外溢去重）→ 命中块选中（done 跳过）；graph-access.py 新增 `methods_in_files`（IN 分批+转义） | 真机验收：dde-file-manager 改 sqlitehelper.h → impact changed=2/methods=24/impact_files=11/callers=9 → 选中 20 块（B1010 done 正确跳过）；14 个离线单测 |
-| R5 | 变更驱动模式（detect_changes+impact 选块） | 人为改动后仅生成受影响块的用例 |
+
+R1–R5 全部落地。v2 全链路：`plan`（一次）→ 日常迭代 `select --mode changed` → 逐块 `generate` → 生成会话写用例 → `verify` → `report`/scorer 评分。
 
 R2 完成即可做**分级合理性评审**：抽 30 个 high/low 方法人工核对，通过后再进 R3。
