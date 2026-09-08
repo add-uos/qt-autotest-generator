@@ -311,6 +311,24 @@ class RestQueryClient:
                     out[row["id"]] = row.get("content") or ""
         return out
 
+    def methods_in_files(self, file_paths, repo=None):
+        """按文件集合取方法（变更驱动 R5 入口）：变更文件 → 方法 id 清单。
+
+        返回 [{id, file}]。与 method_neighbors 串联可得受影响 caller 集合。
+        """
+        out = []
+        files = list(dict.fromkeys(file_paths))
+        for i in range(0, len(files), IN_CHUNK):
+            chunk = files[i:i + IN_CHUNK]
+            literals = ", ".join(
+                "'" + x.replace("\\", "\\\\").replace("'", "\\'") + "'"
+                for x in chunk)
+            out.extend(self.query(
+                "MATCH (m:Method) WHERE m.filePath IN [" + literals + "] "
+                "RETURN m.id AS id, m.filePath AS file",
+                repo=repo))
+        return out
+
     def method_neighbors(self, method_ids, repo=None):
         """一跳邻接（generate 阶段 §6）：谁调我（caller）/ 我调谁（callee）。
 

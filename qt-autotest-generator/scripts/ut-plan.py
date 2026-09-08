@@ -393,23 +393,42 @@ def build_plan(client, repo, module=None, content_min_lines=CONTENT_MIN_LINES,
     return plan
 
 
-def cmd_select(plan_path, mode="full", module=None, limit=None, by_block=None):
-    """select：标记本批要做的块（full/delta/module 三模式，§7）。
+def cmd_select(plan_path, mode="full", module=None, limit=None, by_block=None,
+               client=None, repo_root=None, detect_fn=None):
+    """select：标记本批要做的块（full/delta/module/changed 四模式，§7）。
 
     - full:   按 priority 降序全量选中 pending 块（可选 limit 截断）
     - module: 只选 cluster == module 的块
     - delta:  跳过已 done 的块，选中其余 pending（增量重跑）
+    - changed: 变更驱动（R5）——本地 git 变更 + 图谱一跳 caller 反查
+              影响文件集，命中块选中。需 client（图谱）+ repo_root（git）。
     返回选中的 block_id 列表（就地写回 plan 文件 status=selected）。
     """
     plan = load_plan(plan_path)
     blocks = plan["blocks"]
     selected = []
+    impact = None
     if by_block:
         wanted = set(by_block)
         for b in blocks:
             if b["block_id"] in wanted and b["status"] in ("pending", "selected"):
                 b["status"] = "selected"
                 selected.append(b["block_id"])
+    elif mode == "changed":
+        if client is None or repo_root is None:
+            raise ValueError("changed 模式需要图谱 client 与 --repo-root")
+        changed = (detect_fn or detect_changes)(repo_root)
+        changed_src = [f for cat in ("added", "modified", "renamed")
+                       for f in changed.get(cat, []) if _is_source_path(f)]
+        impact = compute_impact(client, changed_src, plan.get("repo"))
+        for b in blocks:
+            if b["file_path"] in impact["impact_files"] and b["status"] != "done":
+                b["status"] = "selected"
+                selected.append(b["block_id"])
+        # 影响摘要供 CLI 打印（纯计算结果不写盘）
+        cmd_select.last_impact = {
+            "changed_files": len(changed_src), "methods": impact["methods"],
+            "impact_files": len(impact["impact_files"]), "callers": impact["callers"]}
     else:
         for b in sorted(blocks, key=lambda x: -x["priority"]):
             if b["status"] != "pending":
@@ -512,6 +531,80 @@ def cmd_report(plan_path, as_json=False, top=None):
     if top and len(rep["modules"]) > top:
         print(f"… 另有 {len(rep['modules']) - top} 个模块（--top 控制）")
     return rep
+
+
+# ── 变更驱动（R5，逐块闭环前选块）：detect_changes + impact ────────
+
+SOURCE_SUFFIXES = (".h", ".hpp", ".cpp", ".cc", ".cxx", ".c", ".hpp")
+
+
+def _is_source_path(path):
+    """仅关注 C++ 源文件（测试文件已在 select 阶段排除）。"""
+    return path.lower().endswith(SOURCE_SUFFIXES)
+
+
+def detect_changes(repo_root, base="HEAD", run=None):
+    """本地 git 变更文件（相对 base）。
+
+    base="HEAD" 时含已暂存+未暂存+未跟踪；传 "A..B" 时为两提交区间。
+    返回 {"added": [], "modified": [], "deleted": [], "renamed": []}，
+    路径相对 repo_root；非 git 仓库抛 ValueError。run 可注入供测试。
+    """
+    if run is None:
+        def run(cmd, cwd):
+            try:
+                r = subprocess.run(cmd, cwd=cwd, capture_output=True,
+                                   text=True, timeout=60)
+            except FileNotFoundError as e:
+                raise ValueError(f"无法执行 git: {e}") from e
+            if r.returncode != 0:
+                raise ValueError(f"git 失败（exit {r.returncode}）: "
+                                 f"{(r.stderr or '').strip()[:300]}")
+            return r.stdout
+    out = {"added": [], "modified": [], "deleted": [], "renamed": []}
+    for line in (run(["git", "diff", "--name-status", base], repo_root) or "").splitlines():
+        parts = line.split("\t")
+        code, path = parts[0], parts[-1]
+        if code.startswith("R"):
+            out["renamed"].append(path)
+        elif code in ("A", "M", "D"):
+            out[{"A": "added", "M": "modified", "D": "deleted"}[code]].append(path)
+    if base == "HEAD":
+        for line in (run(["git", "ls-files", "--others", "--exclude-standard"],
+                         repo_root) or "").splitlines():
+            if line.strip():
+                out["added"].append(line.strip())
+    return out
+
+
+def compute_impact(client, changed_files, repo, hops=1):
+    """图谱反查影响面（§7 delta 模式依据）：变更文件的方法 + 一跳 caller 所在文件。
+
+    CALLS 边挂在头文件声明节点（R1 真机确认），caller 的 peer_file 即
+    调用方声明文件，可与 plan 块 file_path 直接匹配。
+    返回 {"methods": n, "impact_files": set, "callers": n}。
+    """
+    files = [f for f in changed_files if _is_source_path(f)]
+    if not files:
+        return {"methods": 0, "impact_files": set(), "callers": 0}
+    mlist = client.methods_in_files(files)
+    ids = [m["id"] for m in mlist if m.get("id")]
+    impact = set(files)
+    n_callers = 0
+    if ids and hops >= 1:
+        neighbors = client.method_neighbors(ids)
+        # caller 文件去掉变更文件自身（同文件改动不算外溢）
+        caller_files = {n["peer_file"] for n in neighbors
+                        if n["direction"] == "caller" and n.get("peer_file")}
+        impact |= caller_files
+        n_callers = len(caller_files - set(files))
+    return {"methods": len(ids), "impact_files": impact, "callers": n_callers}
+
+
+def select_changed_blocks(plan, impact_files):
+    """影响文件集 → plan 块命中清单（done 块跳过，不重复劳动）。"""
+    return [b["block_id"] for b in plan["blocks"]
+            if b["file_path"] in impact_files and b["status"] != "done"]
 
 
 # ── generate（Phase 4，逐块）：上下文组装 → 生成会话输入 ────────────
@@ -781,12 +874,14 @@ def main(argv=None):
     p.add_argument("--content-min-lines", type=int, default=CONTENT_MIN_LINES)
     p.add_argument("--limit-methods", type=int, help="冒烟：截断方法数（调试用）")
 
-    s = sub.add_parser("select", help="标记本批要做的块（full/delta/module）")
+    s = sub.add_parser("select", help="标记本批要做的块（full/delta/module/changed）")
     s.add_argument("plan", help=".ut-plan.json 路径")
-    s.add_argument("--mode", choices=("full", "delta", "module"), default="full")
+    s.add_argument("--mode", choices=("full", "delta", "module", "changed"),
+                   default="full")
     s.add_argument("--module", help="module 模式：cluster 名")
     s.add_argument("--limit", type=int, help="最多选中 N 块")
     s.add_argument("--block", action="append", help="指定 block_id（可重复）")
+    s.add_argument("--repo-root", help="changed 模式：本地仓库根（git diff 基准 HEAD）")
 
     u = sub.add_parser("update", help="块状态流转（done/failed/pending）")
     u.add_argument("plan", help=".ut-plan.json 路径")
@@ -852,8 +947,25 @@ def main(argv=None):
         return 0
 
     if args.command == "select":
-        selected = cmd_select(args.plan, mode=args.mode, module=args.module,
-                              limit=args.limit, by_block=args.block)
+        client = None
+        if args.mode == "changed":
+            client = RestQueryClient(repo=os.environ.get("QTAG_GN_REPO"))
+            if not client.repo:
+                print("ut-plan: changed 模式需要 QTAG_GN_REPO", file=sys.stderr)
+                return 2
+        try:
+            selected = cmd_select(args.plan, mode=args.mode, module=args.module,
+                                  limit=args.limit, by_block=args.block,
+                                  client=client, repo_root=args.repo_root)
+        except (ValueError, GraphAccessError) as e:
+            print(f"ut-plan: select 失败: {e}", file=sys.stderr)
+            return 2
+        if args.mode == "changed":
+            imp = getattr(cmd_select, "last_impact", {})
+            print(f"impact: changed_files={imp.get('changed_files', 0)} "
+                  f"methods={imp.get('methods', 0)} "
+                  f"impact_files={imp.get('impact_files', 0)} "
+                  f"callers={imp.get('callers', 0)}")
         print(f"selected {len(selected)}: {' '.join(selected[:10])}"
               f"{' …' if len(selected) > 10 else ''}")
         return 0
