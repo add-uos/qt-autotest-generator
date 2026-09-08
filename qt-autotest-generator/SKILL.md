@@ -1,8 +1,8 @@
 ---
 name: qt-autotest-generator
-description: "Qt CMake 项目 GTest 单元测试自动生成与质量闭环。基于 GitNexus 代码图谱 MCP，支持：开发预检与图谱漂移检查（Mode 0）、函数重要性探测与分级（Mode 1）、按分级补全 GTest 用例（Mode 2，编译验证+覆盖率门禁）、覆盖率采集与汇总（Mode 3）、变异测试（Mode 4，可选，验证测试有效性）、源码缺陷导出与统计（Mode 5，可选，用例级标红清单）、测试质量审查（Mode 6，只读，审查已有/他人提交的测试）。触发于：生成单测/补全测试/扫描函数重要性/采集覆盖率/变异测试/导出源码缺陷/审查测试质量/review tests/审查 commit 里的测试/未缓存测试/dev preflight/unpushed/add gtest/coverage gap/fix test failures/mutation score/defect report 等。硬门禁：GitNexus 图谱（list_repos 确认仓库已索引，未索引硬终止不回退；Mode 6 只读审查除外，无 MCP 硬依赖）。不触发于：非 Qt 或非 CMake 项目、Qt Test/Catch2/doctest、仅运行测试/配 CI/不生成测试代码。"
+description: "Qt CMake 项目 GTest 单元测试自动生成与质量闭环。基于 GitNexus 代码图谱 MCP，支持：开发预检与图谱漂移检查（Mode 0）、函数重要性探测与分级（Mode 1）、按分级补全 GTest 用例（Mode 2，编译验证+覆盖率门禁）、覆盖率采集与汇总（Mode 3）、变异测试（Mode 4，可选，验证测试有效性）、源码缺陷导出与统计（Mode 5，可选，用例级标红清单）、测试质量审查（Mode 6，只读，审查已有/他人提交的测试）。触发于：生成单测/补全测试/扫描函数重要性/采集覆盖率/变异测试/导出源码缺陷/审查测试质量/review tests/审查 commit 里的测试/未缓存测试/dev preflight/unpushed/add gtest/coverage gap/fix test failures/mutation score/defect report/技能复盘/总结技能问题/沉淀经验/retro/backlog/复盘报告 等。硬门禁：GitNexus 图谱（list_repos 确认仓库已索引，未索引硬终止不回退；Mode 6 只读审查除外，无 MCP 硬依赖）。不触发于：非 Qt 或非 CMake 项目、Qt Test/Catch2/doctest、仅运行测试/配 CI/不生成测试代码。"
 metadata:
-  version: "3.5.0"
+  version: "3.6.0"
 user-invocable: true
 argument-hint: "[项目路径 / 模块路径 / 类名]"
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash
@@ -35,6 +35,7 @@ compatibility:
 | **Mode 4 · 变异测试**（可选） | 验证已有测试能否拦住缺陷（变异得分） | `Read references/mutation-testing.md` + `scripts/mutation-score.py` |
 | **Mode 5 · 源码缺陷导出与统计** | 导出/统计单元测试发现的源码缺陷 | `Read references/defect-exporter.md` + `scripts/export-defects.py` |
 | **Mode 6 · 测试质量审查**（只读） | 审查已有/他人提交的测试质量 | `Read references/test-review.md` + `scripts/test-review.py` |
+| **Mode 7 · 技能复盘**（可选） | 实战后总结技能问题、沉淀 backlog、生成复盘报告 | 下文 + `scripts/skill-retro.py` |
 | **Plan 驱动工作流**（可选入口） | 全仓规划/断点续跑/变更驱动（块粒度，替代逐类补全） | `Read references/ut-plan-workflow.md` + `scripts/ut-plan.py` |
 
 Mode 2 启动时若 `.ut-inventory.json` 不存在 → **自动触发 Mode 1**。
@@ -65,6 +66,7 @@ Mode 5 为**可选增强**，在 Mode 2 闭环中实时持久化发现的源码�
 - **Mode 5**：导出源码缺陷、统计源码缺陷、defect report、缺陷清单、导出缺陷数据、源码缺陷标红清单
 - **Mode 6**：审查测试质量、review tests、审查这个 commit 的测试、测试写得怎么样、审查未缓存测试、uncached tests、test review、只读审查（注意：本模式只出报告，不修改/生成任何测试或源码）
 - **Plan 驱动**：全仓规划、测试规划器、变更驱动选块、断点续跑、plan driven、ut-plan、select changed、受影响块
+- **Mode 7**：技能复盘、总结技能问题、沉淀经验、迭代技能、复盘报告、retro、backlog、技能哪里有问题（注意：本模式沉淀的是**技能自身**的问题，不是被测项目的问题）
 
 **不触发于**：非 Qt 或非 CMake 项目、Qt Test/Catch2/doctest 框架、仅运行测试/配 CI/看日志、集成测试/性能测试/UI 自动化
 
@@ -161,6 +163,20 @@ Mode 6 **只读**：不生成/不修改测试与源码、不编译、不运行�
 
 ---
 
+## Mode 7 · 技能复盘（可选）
+
+实战（生成/验证/评分全链）结束后，把**技能自身**暴露的问题结构化沉淀，驱动技能迭代：
+
+1. **`Read`** 本节 → 调用 `scripts/skill-retro.py add` 逐条记录问题
+2. 六类 taxonomy：`G` 文档缺口 / `R` 规则缺陷 / `S` 脚本缺陷 / `Q` 生成质量 / `E` 工具链坑 / `T` 触发路由；severity：`P0` 结果不可信（假绿/数据错）/ `P1` 效率受损 / `P2` 体验瑕疵
+3. 每条记录必须带 **evidence**（复现/引用证据）与 **fix**（改哪个文件哪一节）——没有修复建议的问题不记录
+4. 立即可修的顺手修复后 `resolve --note <commit/文件>`；遗留项保持 open 供下次迭代
+5. 收尾：`skill-retro.py report --out retro/` 生成 `retro-report.md`；`eval-suggest [--all]` 产出 evals 候选 JSON（open→新行为约束，resolved→回归固化）
+
+数据面：`retro/backlog.json`（随技能入库，可版本追溯）。**只读技能文件 + 写 backlog/report，不碰项目源码与测试**。
+
+---
+
 ## 核心原则（Iron Laws）
 
 1. **知识图谱 MCP 硬门禁** —— 无图谱索引不执行
@@ -174,7 +190,7 @@ Mode 6 **只读**：不生成/不修改测试与源码、不编译、不运行�
 9. **批次提交** —— 只 commit，不 push
 10. **全局闭环迭代上限** —— 同一类最多循环 3 轮；3 轮后仍未通过，标记 `failed` + `max_iterations_exceeded` 并跳过
 11. **usecase_count 实时更新** —— 每类编译通过后立即更新 `.ut-inventory.json` 的 `usecase_count` 字段
-12. **项目源码只走图谱** —— 被测类的实现/签名/调用链/分支/隐式依赖**必须**通过 GitNexus 图谱获取（`scripts/mcp-scan.py` 子命令拿方法体/调用链/分支——图谱定位 + 本地切片，`cypher` 工具拿任意图查询）。**禁止**用 `read`/`grep`/`glob` 直读项目源码文件去理解被测代码——图谱是预解析的全局视角，毫秒级拿到调用链与传递依赖；逐文件 `read` 慢、漏传递依赖、漏隐式分支，是低质单测的首要根因。`read` 仅限：本技能自带文件（`references/`/`templates/`/`scripts/`）、inventory/defects JSON、**已生成的**测试文件。
+12. **项目源码只走图谱** —— 被测类的实现/签名/调用链/分支/隐式依赖**必须**通过 GitNexus 图谱获取（`scripts/mcp-scan.py` 子命令拿方法体/调用链/分支——图谱定位 + 本地切片，`cypher` 工具拿任意图查询）。**禁止**用 `read`/`grep`/`glob` 直读项目源码文件去理解被测代码——图谱是预解析的全局视角，毫秒级拿到调用链与传递依赖；逐文件 `read` 慢、漏传递依赖、漏隐式分支，是低质单测的首要根因。`read` 仅限：本技能自带文件（`references/`/`templates/`/`scripts/`）、inventory/defects JSON、**已生成的**测试文件。（Plan 驱动工作流下，context.md 方法体为 **none 态**（仅签名、无内容）时同样禁止 read 源码——按行为约定写用例，不臆造实现细节，见 `references/ut-plan-workflow.md` 硬规则 5。）
 13. **白盒质量用图谱反查校验** —— 测试文件顶部声明分支清单后，自检必须用 `scripts/mcp-scan.py extract-branches`（图谱定位 + 本地切片）取真实源码分支（if/switch/for/while/throw/early-return）做差集，声明分支缺失真实分支即 `BRANCH_NOT_MAPPED` 违规；不得只写注释不核对源码。
 
 ---
@@ -201,6 +217,7 @@ Mode 6 **只读**：不生成/不修改测试与源码、不编译、不运行�
 | 缺陷数据文件 | `.ut-defects.json`（本地，不入 git） |
 | 测试质量审查 | `scripts/test-review.py`（Mode 6，只读，commit/未缓存测试两场景，`--strict` 可作 CI 门禁） |
 | 全仓规划/变更驱动 | `scripts/ut-plan.py`（plan/select/generate/verify/update/show/report 七子命令，见 `references/ut-plan-workflow.md`） |
+| 技能复盘/问题沉淀 | `scripts/skill-retro.py`（Mode 7，add/list/resolve/reopen/report/eval-suggest，backlog 随库） |
 
 ---
 
@@ -244,6 +261,7 @@ Mode 6 **只读**：不生成/不修改测试与源码、不编译、不运行�
 □ 每类编译通过后：已更新 .ut-inventory.json 的 usecase_count
 □ 批次提交：本批次自检通过后已执行代码提交（只 commit 不 push）
 □ Plan 驱动（若走该入口）：已 Read references/ut-plan-workflow.md；REST 三环境变量已就绪；状态机流转只经 ut-plan.py（不经手工改 JSON）；changed 模式结果已用 impact 行核对
+□ Mode 7（若执行复盘）：每条记录带 evidence+fix；已 resolve 的标注修复位置；report 已生成到 retro/；eval-suggest 候选已评估是否合入 evals/
 □ 疑似源码缺陷：已标红，未自行修源码；已调 export-defects.py upsert 落盘到 .ut-defects.json
 □ 全部批次提交完成（Mode 2 结束）：最终退出前已统一生成一次 Mode 3 覆盖率报告 + Mode 5 缺陷导出（不在每笔提交后触发）
 □ Mode 4（可选）：已 Read references/mutation-testing.md；变异后 git diff --exit-code 通过；存活变异体清单已交付（回 Mode 2 补强）

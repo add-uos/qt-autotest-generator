@@ -233,6 +233,18 @@ protected:
 
 ## 5. 异常与错误路径测试
 
+### 5.0 Debug assert 分支（Q_ASSERT/DCHECK/assert 不可测，retro E-002）
+
+被测方法内含 `Q_ASSERT`/`Q_ASSERT_X`/`assert` 守卫的分支（典型：非法参数/非法状态），
+在 **Debug 构建**下触发即 `abort()` 整个测试进程，跑测直接崩、verify 误判 failed。
+
+**识别**：图谱/源码分支清单里出现 `assert`/`Q_ASSERT` 关键字的 early-return 分支。
+
+**处理**：
+1. **不写**触发 assert 的用例（Debug 下必然 abort）；
+2. 若该分支是重要契约，用例体首行 `GTEST_SKIP() << "Debug assert 分支，Release 下才可测";` 留档意图；
+3. 在测试文件分支清单注释中标注 `// assert-guarded: untestable in Debug`，self-check 不计为漏测。
+
 ### 5.1 Google Test 异常断言
 
 | 宏 | 语义 |

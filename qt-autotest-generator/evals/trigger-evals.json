@@ -1,7 +1,7 @@
 {
   "name": "qt-autotest-generator-trigger-evals",
   "description": "测试技能 description 触发精准度：应触发的表述必须触发，不应触发的表述必须不触发",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "should_trigger": [
     {
       "id": "zh-scan-importance",
@@ -200,6 +200,36 @@
       "input": "统计单元测试发现的源码缺陷",
       "expected": true,
       "reason": "Mode 5 触发语"
+    },
+    {
+      "id": "zh-plan-driven-scan",
+      "input": "全仓规划单测",
+      "expected": true,
+      "reason": "Plan 驱动入口触发语"
+    },
+    {
+      "id": "zh-plan-driven-changed",
+      "input": "变更驱动选块，只补受影响块的测试",
+      "expected": true,
+      "reason": "select --mode changed"
+    },
+    {
+      "id": "zh-plan-driven-resume",
+      "input": "上次单测做到一半，断点续跑",
+      "expected": true,
+      "reason": "plan 状态机续跑"
+    },
+    {
+      "id": "en-plan-driven",
+      "input": "plan driven workflow for unit tests",
+      "expected": true,
+      "reason": "英文触发语"
+    },
+    {
+      "id": "zh-local-dev-mode2",
+      "input": "我本地开发中改了个类，帮我补个测试",
+      "expected": true,
+      "reason": "『本地』字样不路由 Mode 0——补测试归 Mode 2"
     }
   ],
   "should_not_trigger": [
@@ -280,6 +310,12 @@
       "input": "用 doctest 写测试",
       "expected": false,
       "reason": "明确要求 doctest 框架"
+    },
+    {
+      "id": "run-only-not-plan",
+      "input": "帮我把已有的单测跑一下看看结果",
+      "expected": false,
+      "reason": "仅运行测试不生成，不触发本技能（也不触发 Plan 驱动）"
     }
   ]
 }

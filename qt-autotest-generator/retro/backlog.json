@@ -1,0 +1,161 @@
+{
+ "version": 1,
+ "items": [
+  {
+   "id": "S-002",
+   "category": "S",
+   "title": "gtest --gtest_filter 空格分隔形式静默 exit 0（假绿）",
+   "severity": "P0",
+   "evidence": "verify 管道里 ['--gtest_filter','X.*'] 空格传参：gtest 打印 usage 后 exit 0，跑测 0 例也算通过，差点把假绿测试标 done 入库",
+   "fix": "ut-plan.py cmd_verify 强制等号形式 f'--gtest_filter={suite}.*'；test_ut_plan 守卫断言 calls[-1] 含等号串",
+   "status": "resolved",
+   "note": "R3 落地修复，test_ut_plan.py TestVerify 断言等号形式",
+   "created": "2026-09-08",
+   "updated": "2026-09-08 21:49:16"
+  },
+  {
+   "id": "S-003",
+   "category": "S",
+   "title": "argparse choices 与 mode 实现漂移（edit 静默未生效）",
+   "severity": "P1",
+   "evidence": "R5 给 cmd_select 加 changed 模式时，argparse --mode choices 漏改，CLI 测试才兜住（invalid choice）；edit 工具曾报成功但目标文本未匹配",
+   "fix": "改 CLI 路由时 argparse choices 必须与实现分支同一次提交核对；CLI 层测试覆盖每个 mode 值",
+   "status": "open",
+   "note": "缓解：test_r5_changed CLI 层测试覆盖每个 mode；彻底修需技能发版时 choices 与实现 diff 校验脚本",
+   "created": "2026-09-08",
+   "updated": "2026-09-08 21:52:10"
+  },
+  {
+   "id": "S-004",
+   "category": "S",
+   "title": "scorer sufficiency 按去重首段集合计数，用例数被系统性低估",
+   "severity": "P1",
+   "evidence": "per_method_cases 基于 tested_names（去重 set），每方法 actual 恒 ≤1；test_sqlitehelper 10 用例对 3 方法只拿 partial 50 分（应 100）",
+   "fix": "_sufficiency_for_methods 改用完整用例名列表 case_names 计数，回退首段集合；回归测试 test_case_names_counted_not_deduped",
+   "status": "resolved",
+   "note": "R7 修复：case_names 全名计数 + 回归测试；commit 6119c07",
+   "created": "2026-09-08",
+   "updated": "2026-09-08 21:52:10"
+  },
+  {
+   "id": "S-005",
+   "category": "S",
+   "title": "score_project 空目录 UnboundLocalError",
+   "severity": "P2",
+   "evidence": "if not files: 分支 return 前引用了后面才赋值的 files 变量路径",
+   "fix": "提前 return 路径补 files = [] 或调整分支顺序",
+   "status": "resolved",
+   "note": "R4 修复",
+   "created": "2026-09-08",
+   "updated": "2026-09-08 21:49:16"
+  },
+  {
+   "id": "G-002",
+   "category": "G",
+   "title": "验证语义未写明：跑测 0 例 ≠ 通过",
+   "severity": "P0",
+   "evidence": "build-verifier/self-checker 都没写「[  PASSED  ] 缺失或 0 例必须判失败」，靠一次假绿事故才补上",
+   "fix": "build-verifier.md 增加『跑测结果解析』小节：PASSED 计数缺失/0 例/FAILED>0 三态判定 + gtest filter 等号形式示例",
+   "status": "resolved",
+   "note": "build-verifier.md §3a 跑测结果解析（三态判定+等号形式），retro S-002/G-002 关联",
+   "created": "2026-09-08",
+   "updated": "2026-09-08 21:51:24"
+  },
+  {
+   "id": "G-003",
+   "category": "G",
+   "title": "Plan 驱动工作流（ut-plan.py）入口缺失",
+   "severity": "P1",
+   "evidence": "R1-R5 建成七子命令全链后 SKILL.md 无任何入口，agent 无法发现该能力；触发词（全仓规划/变更驱动/断点续跑）不在 description",
+   "fix": "SKILL.md v3.5.0：模式表+触发条件+快速参考+检查清单四处加 Plan 驱动入口；新增 references/ut-plan-workflow.md",
+   "status": "resolved",
+   "note": "commit b82fe73",
+   "created": "2026-09-08",
+   "updated": "2026-09-08 21:49:16"
+  },
+  {
+   "id": "R-001",
+   "category": "R",
+   "title": "verify 漂移语义：无 base_commit 记录，无法判断测试对应哪个源码版本",
+   "severity": "P1",
+   "evidence": "last_verify 只有 ts 和 run 结果，块文件后续变更时无法判断 10 passed 是否还有效",
+   "fix": "plan 记 base_commit、verify 回写 last_verify.base_commit + --base 漂移检查（标注不阻断）；scorer 透传 base_drift",
+   "status": "resolved",
+   "note": "R6，commit b41744c",
+   "created": "2026-09-08",
+   "updated": "2026-09-08 21:49:17"
+  },
+  {
+   "id": "R-002",
+   "category": "R",
+   "title": "Iron Law #12 与骨架降级三态冲突：none 态拿不到方法体时禁 read 源码会卡死生成",
+   "severity": "P2",
+   "evidence": "ut-plan context 组装遇 content_bytes=0 方法时只有签名；按 Iron Law #12 不能 read 源码，生成会话只能臆造",
+   "fix": "明确三态自适应规则（file-slice→symbol-snippet→none），none 态以行为约定写用例不臆造实现；写入 ut-plan-workflow.md 硬规则 5",
+   "status": "resolved",
+   "note": "SKILL.md Iron Law #12 补 none 态澄清；ut-plan-workflow.md 硬规则 5 已有三态自适应",
+   "created": "2026-09-08",
+   "updated": "2026-09-08 21:51:54"
+  },
+  {
+   "id": "Q-001",
+   "category": "Q",
+   "title": "high 方法下限公式对重载同名方法重复计数分母",
+   "severity": "P2",
+   "evidence": "plan 里 typeString 出现 high/mid 两条（重载），sufficiency 按名字分组分母重复；评分偏严但语义可解释",
+   "fix": "scorer 按名字分组时同名方法取 max(level) 去重分母，或 plan 分块时合并同名重载的 level",
+   "status": "open",
+   "note": "",
+   "created": "2026-09-08",
+   "updated": "2026-09-08 21:49:17"
+  },
+  {
+   "id": "E-001",
+   "category": "E",
+   "title": "Kuzu/Ladybug 方言：无 signature/className 属性、CALLS 挂头文件声明节点",
+   "severity": "P1",
+   "evidence": "Method 无 signature/className 只有 parameterCount/returnType/isExported；CALLS 边 peer_file 多为 .h——直接决定 changed 模式按头文件命中块",
+   "fix": "gitnexus-guide.md 固化方言清单（单表 CodeRelation/本地分位数/IN 500/属性名表），新查询先查属性再写 Cypher",
+   "status": "resolved",
+   "note": "文档 v2.3 白盒核实章节",
+   "created": "2026-09-08",
+   "updated": "2026-09-08 21:49:17"
+  },
+  {
+   "id": "E-002",
+   "category": "E",
+   "title": "TypeString 非法分支 Debug 下 assert abort，不可测",
+   "severity": "P2",
+   "evidence": "SqliteHelper::typeString 非法输入分支在 Debug 构建触发 Q_ASSERT abort，跑测直接崩；用例设计需避开或标 skip",
+   "fix": "test-types.md 增加『Debug assert 分支』条目：识别 assert 类分支→用例标 GTEST_SKIP 或注明不测原因，防 verify 崩溃误判 failed",
+   "status": "resolved",
+   "note": "test-types.md §5.0 Debug assert 分支（识别/跳过/GTEST_SKIP 留档/清单标注）",
+   "created": "2026-09-08",
+   "updated": "2026-09-08 21:53:14"
+  },
+  {
+   "id": "T-001",
+   "category": "T",
+   "title": "『本地开发』字样误路由 Mode 0（应为 Mode 2）",
+   "severity": "P2",
+   "evidence": "SKILL.md Mode 0 触发条件已写注意项，仍是高频误路由风险",
+   "fix": "保持 description 注意项；trigger-evals 补一条『本地开发的类补个测试』应触发 Mode 2 的用例",
+   "status": "resolved",
+   "note": "trigger-evals 增 zh-local-dev-mode2 用例守护路由",
+   "created": "2026-09-08",
+   "updated": "2026-09-08 21:51:54"
+  },
+  {
+   "id": "T-002",
+   "category": "T",
+   "title": "Plan 驱动入口触发词未进 trigger-evals",
+   "severity": "P2",
+   "evidence": "SKILL.md 加了触发词（全仓规划/变更驱动选块/断点续跑），evals/trigger-evals.json 无对应用例，无法回归",
+   "fix": "trigger-evals.json should_trigger 补 plan-driven 4 条 + 不应触发补 1 条（只跑测试不生成）",
+   "status": "resolved",
+   "note": "trigger-evals.json v2.1.0：plan-driven 4 条 should + 1 条 shouldnt",
+   "created": "2026-09-08",
+   "updated": "2026-09-08 21:51:24"
+  }
+ ]
+}

@@ -58,6 +58,23 @@ timeout 120 ./${test_dir}/<module>/test_<classname> --gtest_output=xml:${PROJECT
 
 捕获运行输出和退出码。
 
+#### 3a. 跑测结果解析（P0：防假绿）
+
+仅退出码 0 **不等于**测试通过。必须同时解析输出中的 gtest 统计行：
+
+| 信号 | 判定 |
+|------|------|
+| `[  PASSED  ] N tests`，N ≥ 1 且 `[  FAILED  ]` 缺失或 0 | ✅ 通过 |
+| `[  PASSED  ]` 行缺失（或 N = 0） | ❌ **判失败**——常见根因：`--gtest_filter` 用了空格分隔（gtest 打印 usage 后静默 exit 0），或过滤器没匹配到任何用例 |
+| `[  FAILED  ] N tests`，N > 0 | ❌ 失败，按 §4 分类 |
+
+```bash
+# 正确：等号形式（空格分隔会静默退出 0，假绿）
+./test_foo --gtest_filter=FooTest.*
+```
+
+> 本条源于真机事故：空格形式 filter 导致 0 例执行却标 done，差点入库（retro S-002/G-002）。
+
 ### 4. 运行失败 → 分类
 
 | 运行失败类型 | 处理 |
