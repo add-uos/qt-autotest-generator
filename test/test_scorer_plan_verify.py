@@ -143,6 +143,36 @@ class TestLoadPlanVerifications:
         ])
         assert score.load_plan_verifications(str(plan)) == {}
 
+    def test_base_commit_and_drift_loaded(self, tmp_path):
+        plan = {"repo": "demo", "blocks": [
+            {"block_id": "B1", "status": "done",
+             "name": "Foo", "file_path": "a.h", "cluster": "c",
+             "methods": [], "level_summary": {}, "priority": 1,
+             "context_bytes": 0,
+             "last_verify": {"ts": "2026-01-01 00:00:00", "suite": "FooTest",
+                             "run": {"passed": 2, "failed": 0, "exit": 0},
+                             "base_commit": "abc1234",
+                             "base_drift": {"base": "HEAD", "file_changed": True}}}]}
+        path = tmp_path / "plan.json"
+        path.write_text(json.dumps(plan))
+        ev = score.load_plan_verifications(str(path))
+        assert ev["foo"]["base_commit"] == "abc1234"
+        assert ev["foo"]["base_drift"]["file_changed"] is True
+
+    def test_no_drift_key_when_absent(self, tmp_path):
+        plan = {"repo": "demo", "blocks": [
+            {"block_id": "B1", "status": "done",
+             "name": "Foo", "file_path": "a.h", "cluster": "c",
+             "methods": [], "level_summary": {}, "priority": 1,
+             "context_bytes": 0,
+             "last_verify": {"ts": "2026-01-01 00:00:00", "suite": "FooTest",
+                             "run": {"passed": 1, "failed": 0, "exit": 0}}}]}
+        path = tmp_path / "plan.json"
+        path.write_text(json.dumps(plan))
+        ev = score.load_plan_verifications(str(path))
+        assert "base_drift" not in ev["foo"]
+
+
 
 class TestScoreFilePlanVerify:
     def _write_test(self, tmp_path, suite="SqliteHelperTest"):
@@ -176,6 +206,15 @@ class TestScoreFilePlanVerify:
                              None, dict(score.DEFAULT_WEIGHTS), True, 70,
                              plan_verify={"sqlitehelper": ev})
         assert "修复" in s["plan_verify"]["note"]
+
+    def test_drift_flagged_in_note(self, tmp_path):
+        ev = {"block_id": "B1", "ts": "2026-09-08 19:29:25",
+              "passed": 10, "failed": 0, "status": "done",
+              "base_drift": {"base": "HEAD", "file_changed": True}}
+        s = score.score_file(self._write_test(tmp_path), None, None, None, None,
+                             None, dict(score.DEFAULT_WEIGHTS), True, 70,
+                             plan_verify={"sqlitehelper": ev})
+        assert "可能过时" in s["plan_verify"]["note"]
 
     def test_no_match_suite_leaves_none(self, tmp_path):
         s = score.score_file(self._write_test(tmp_path), None, None, None, None,

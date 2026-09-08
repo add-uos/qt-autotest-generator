@@ -323,4 +323,14 @@ REST `/api/query` 聚合拿类/方法/文件/边计数（0.7s 实测）；目录
 
 R1–R5 全部落地。v2 全链路：`plan`（一次）→ 日常迭代 `select --mode changed` → 逐块 `generate` → 生成会话写用例 → `verify` → `report`/scorer 评分。
 
+### R6 · verify 漂移检查（base_commit + --base）
+
+- `plan` 建档时记录 `base_commit`（本地 HEAD 短 SHA，非 git 仓库为 null）。
+- `verify` 回写 `last_verify.base_commit`（验证时 HEAD）；`--base <ref>` 时比对
+  块文件是否在 base..工作区变更集内（复用 R5 `detect_changes`，支持区间），
+  命中则 `last_verify.base_drift={base, file_changed:true}` 标注并告警——**不阻断**
+  （跑测验证的就是当前工作区源码）。
+- scorer `load_plan_verifications` 透传 `base_commit`/`base_drift`；漂移命中时
+  评分卡 note 追加「块文件自基准起有变更，用例可能过时」。诚实标注，不改权重。
+
 R2 完成即可做**分级合理性评审**：抽 30 个 high/low 方法人工核对，通过后再进 R3。

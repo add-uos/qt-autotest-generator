@@ -66,7 +66,7 @@ slice_body = _graph_access.slice_body
 
 # ── 常量区（可调可审） ────────────────────────────────────────────────
 
-PLAN_VERSION = "2.3"
+PLAN_VERSION = "2.4"
 
 # 分级权重（§5.2，固化）
 WEIGHTS = {"lines": 0.35, "cc": 0.25, "in_deg": 0.25, "is_public": 0.10, "params": 0.05}
@@ -347,6 +347,19 @@ def _make_block(kind, group, methods, status, part=None):  # noqa: ARG001
     }
 
 
+def _git_head(repo_root=None):
+    """取本地 HEAD 短 SHA（plan base_commit 用）；非 git 仓库返回 None。"""
+    try:
+        r = subprocess.run(["git", "rev-parse", "--short", "HEAD"],
+                           cwd=repo_root, capture_output=True, text=True,
+                           timeout=10)
+        if r.returncode == 0:
+            return r.stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    return None
+
+
 def build_plan(client, repo, module=None, content_min_lines=CONTENT_MIN_LINES,
                progress=None):
     """survey → plan 全流程 → .ut-plan.json 数据结构。"""
@@ -371,6 +384,7 @@ def build_plan(client, repo, module=None, content_min_lines=CONTENT_MIN_LINES,
     plan = {
         "version": PLAN_VERSION,
         "repo": repo,
+        "base_commit": _git_head(),
         "survey": {
             "classes": counts.get("classes", 0),
             "methods": len(records),
@@ -770,16 +784,26 @@ def _module_paths(cluster, repo_root, dest_dir=None, build_dir="build-autotests"
 
 def cmd_verify(plan_path, block_id, repo_root, test_file=None,
                build_dir="build-autotests", dest_dir=None, skip_run=False,
-               runner=_default_runner):
+               runner=_default_runner, base=None, detect_fn=None):
     """verify：拷入测试文件 → cmake 构建 → 跑测 → 回写块状态。
 
     编译+跑测通过 → done；任一步失败 → failed（last_verify 存错误摘要）。
-    返回 (ok, detail)。
+    base 给定（git ref，如 HEAD~1 或区间 A..B）时做漂移检查：块的
+    file_path 在变更集内则 last_verify.base_drift 标注并告警（不阻断——
+    跑测验证的就是当前工作区源码）。返回 (ok, detail)。
     """
     plan = load_plan(plan_path)
     block = next((b for b in plan["blocks"] if b["block_id"] == block_id), None)
     if block is None:
         raise ValueError(f"块 {block_id} 不存在")
+
+    # 漂移检查：块文件在 base..工作区变更集内则标注（不阻断）
+    base_drift = None
+    if base:
+        changed = (detect_fn or detect_changes)(repo_root, base=base)
+        drifted = any(block["file_path"] in changed.get(cat, [])
+                      for cat in ("added", "modified", "renamed"))
+        base_drift = {"base": base, "file_changed": drifted}
 
     gen_dir = os.path.join(os.path.dirname(os.path.abspath(plan_path)),
                            ".ut-gen", block_id)
@@ -836,17 +860,24 @@ def cmd_verify(plan_path, block_id, repo_root, test_file=None,
                 errs.append(f"跑测失败（exit {r.returncode}）:\n{(r.stderr or '')[-1500:]}")
                 ok = False
 
-    # 3. 状态回写（原子写盘）
+    # 3. 状态回写（原子写盘）；base_commit 记录验证时的 HEAD，供漂移比对
     block["status"] = "done" if ok else "failed"
     block["last_verify"] = {
         "ts": time.strftime("%Y-%m-%d %H:%M:%S"),
         "test_file": test_rel, "suite": suite,
         "run": run_summary,
+        "base_commit": _git_head(repo_root),
         "error": "\n".join(errs)[-2000:] if errs else None,
     }
+    if base_drift:
+        block["last_verify"]["base_drift"] = base_drift
+        if base_drift["file_changed"]:
+            print(f"ut-plan: 警告：块文件自 {base} 起有变更，用例可能过时 "
+                  f"（last_verify.base_drift 已标注）", file=sys.stderr)
     save_plan(plan, plan_path)
     return ok, {"block": block_id, "status": block["status"],
                 "test_file": test_rel, "run": run_summary,
+                "base_drift": base_drift,
                 "error": block["last_verify"]["error"]}
 
 
@@ -912,6 +943,7 @@ def main(argv=None):
     v.add_argument("--build-dir", default="build-autotests")
     v.add_argument("--dest-dir", help="拷入目录（默认 autotests/libs/<模块>）")
     v.add_argument("--skip-run", action="store_true", help="只编译不跑测")
+    v.add_argument("--base", help="漂移检查基准（git ref/区间，如 HEAD~1）")
 
     args = parser.parse_args(argv)
 
@@ -1003,7 +1035,7 @@ def main(argv=None):
                                     test_file=args.test_file,
                                     build_dir=args.build_dir,
                                     dest_dir=args.dest_dir,
-                                    skip_run=args.skip_run)
+                                    skip_run=args.skip_run, base=args.base)
         except (ValueError, subprocess.TimeoutExpired) as e:
             print(f"ut-plan: verify 失败: {e}", file=sys.stderr)
             return 2

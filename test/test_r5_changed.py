@@ -251,3 +251,97 @@ class TestSelectChanged:
         rc = up.main(["select", str(plan_path), "--mode", "changed",
                       "--repo-root", str(tmp_path)])
         assert rc == 2
+
+
+# ── R6：_git_head / base_commit / verify base 漂移检查 ───────────────
+
+def _git_repo(tmp_path):
+    import subprocess as sp
+    repo = tmp_path / "repo"
+    (repo / "src" / "dfm-base").mkdir(parents=True)
+    r = lambda *a, **kw: sp.run(["git", *a], cwd=repo, capture_output=True,
+                                text=True, check=True, **kw)
+    r("init", "-q")
+    r("config", "user.email", "t@t"); r("config", "user.name", "t")
+    (repo / "src" / "dfm-base" / "a.h").write_text("int f();\n")
+    r("add", "-A"); r("commit", "-qm", "init")
+    return repo, r
+
+
+class TestGitHead:
+    def test_head_and_non_git(self, tmp_path):
+        repo, _ = _git_repo(tmp_path)
+        head = up._git_head(str(repo))
+        assert head and len(head) >= 7
+        assert up._git_head(str(tmp_path / "nope")) is None
+
+
+class TestVerifyBase:
+    def _env(self, tmp_path, repo):
+        plan = {"version": up.PLAN_VERSION, "repo": "demo", "base_commit": None,
+                "survey": {}, "quantile": {},
+                "blocks": [dict(_blk("B1", "src/dfm-base/a.h"))],
+                "stats": {"blocks": 1, "methods": 0, "high": 0, "mid": 0, "low": 0}}
+        path = tmp_path / "plan.json"
+        up.save_plan(plan, path)
+        gen = tmp_path / ".ut-gen" / "B1"
+        gen.mkdir(parents=True)
+        (gen / "test_a.cpp").write_text("TEST(ATest, F) {}")
+        return path, gen / "test_a.cpp"
+
+    def _runner(self):
+        import test_ut_plan as tup
+        return tup.FakeRunner()
+
+    def test_happy_path_records_base_commit(self, tmp_path):
+        repo, _ = _git_repo(tmp_path)
+        plan_path, test_file = self._env(tmp_path, repo)
+        import test_ut_plan as tup
+        ok, detail = up.cmd_verify(plan_path, "B1", str(repo),
+                                   test_file=str(test_file),
+                                   runner=tup.FakeRunner())
+        assert ok
+        plan = up.load_plan(plan_path)
+        lv = plan["blocks"][0]["last_verify"]
+        assert lv["base_commit"] == up._git_head(str(repo))
+        assert detail["base_drift"] is None
+
+    def test_base_drift_flagged(self, tmp_path):
+        repo, git = _git_repo(tmp_path)
+        (repo / "src" / "dfm-base" / "a.h").write_text(
+            "int f(int x = 0);\n")  # 未提交改动
+        plan_path, test_file = self._env(tmp_path, repo)
+        import test_ut_plan as tup
+        ok, detail = up.cmd_verify(plan_path, "B1", str(repo),
+                                   test_file=str(test_file),
+                                   runner=tup.FakeRunner(), base="HEAD")
+        assert ok and detail["base_drift"]["file_changed"] is True
+        plan = up.load_plan(plan_path)
+        lv = plan["blocks"][0]["last_verify"]
+        assert lv["base_drift"] == {"base": "HEAD", "file_changed": True}
+
+    def test_no_drift_not_flagged(self, tmp_path):
+        repo, _ = _git_repo(tmp_path)
+        plan_path, test_file = self._env(tmp_path, repo)
+        import test_ut_plan as tup
+        ok, detail = up.cmd_verify(plan_path, "B1", str(repo),
+                                   test_file=str(test_file),
+                                   runner=tup.FakeRunner(), base="HEAD")
+        assert ok and detail["base_drift"]["file_changed"] is False
+
+    def test_cli_verify_base_flag(self, tmp_path, monkeypatch, capsys):
+        # runner 默认参数定义时绑定，monkeypatch 模块属性不生效——改用 spy 验证接线
+        repo, _ = _git_repo(tmp_path)
+        plan_path, test_file = self._env(tmp_path, repo)
+        called = {}
+
+        def spy(*a, **kw):
+            called["base"] = kw.get("base")
+            return True, {"block": "B1", "status": "done", "test_file": "x",
+                          "run": None, "base_drift": None, "error": None}
+
+        monkeypatch.setattr(up, "cmd_verify", spy)
+        rc = up.main(["verify", str(plan_path), "--block", "B1",
+                      "--repo-root", str(repo), "--test-file", str(test_file),
+                      "--base", "HEAD"])
+        assert rc == 0 and called["base"] == "HEAD"
