@@ -333,4 +333,18 @@ R1–R5 全部落地。v2 全链路：`plan`（一次）→ 日常迭代 `select
 - scorer `load_plan_verifications` 透传 `base_commit`/`base_drift`；漂移命中时
   评分卡 note 追加「块文件自基准起有变更，用例可能过时」。诚实标注，不改权重。
 
+### R7 · scorer plan_methods 降级 + 用例名计数修复
+
+- `load_plan_methods(path)`：按类 token 索引块内 methods（name/level）；
+  token 优先套名（last_verify.suite 去 Test 后缀小写），无 verify 记录时从
+  块名/文件名派生；析构（~前缀）剔除。
+- sufficiency 降级：无 inventory 且 plan_methods 命中类 token 时，按
+  `min_cases_for_method`（level 下限，factors 按无加成）校核用例数，
+  `details.source=plan_methods` 标注；summary 加 `sufficiency_source`。
+- **既有缺陷修复**：`_sufficiency_for_methods` 的 per_method_cases 原按
+  `tested_names`（首段去重集合）计数，每方法 actual 恒 ≤1，用例再多也只
+  能 partial（50 分）。改用完整用例名列表（case_names）计数，回退首段集合。
+- 真机验收：test_sqlitehelper.cpp sufficiency 50→100（satisfied 3/3），
+  总分 65.3→71.3（D→C）；dfm-base 项目级 116 文件合格率 4.3%→5.2%。
+
 R2 完成即可做**分级合理性评审**：抽 30 个 high/low 方法人工核对，通过后再进 R3。
