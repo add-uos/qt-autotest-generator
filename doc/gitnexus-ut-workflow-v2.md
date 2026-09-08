@@ -314,7 +314,7 @@ REST `/api/query` 聚合拿类/方法/文件/边计数（0.7s 实测）；目录
 
 | 步骤 | 交付 | 验收标准 |
 |---|---|---|
-| R1 | L1 封装：REST 直连（唯一数据通道）+ MCP 语义工具客户端 + 聚合下推（沉淀为 `graph-access.py`） | dde-file-manager 规划数据采集 <2 分钟（骨架 4.5s 已实测） |
+| ~~R1~~ ✅ | ~~L1 封装~~ 已交付 `qt-autotest-generator/scripts/graph-access.py`（REST 唯一数据通道 + 固化领域查询 + 切片/cc_proxy） | 真机验收通过：skeleton 25041 方法 **5.1s**、count 0.11s（验收线 <2 分钟）；35 个离线单测 |
 | R2 | L3：`ut-plan.py plan`（survey+plan 两阶段 → .ut-plan.json） | 25041 方法全部分级；分级分布合理（high ≤15%） |
 | R3 | `select/generate/verify`：单块闭环（挑 1 个 high 块端到端） | 用例编译通过、plan 状态正确回写 |
 | R4 | report + scorer 消费 v2 字段 | 报告可按模块（目录前缀）聚合 |
