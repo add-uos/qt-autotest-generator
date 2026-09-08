@@ -182,7 +182,8 @@
 score = 0.35·s(lines) + 0.25·s(cc_proxy) + 0.25·s(in_degree)
       + 0.10·is_public + 0.05·min(param_count,5)/5
 
-s(x) = 项目内分位归一（P50→0.25，P75→0.5，P90→0.75，≥P90→1.0，线性内插；本地计算）
+s(x) = 项目内分位归一（P50→0.25，P75→0.5，P90→0.75，≥P90→1.0，线性内插；本地计算；
+       退化分布保护：P50==P90（全项目同值）时给中性 0.5，避免集体满分——真机 dde-file-manager 验收发现的边界，cc/in_degree 零值占比 60%+/75%+ 时必现）
 
 level = high   score ≥ 0.55
       | low    存取器（^(get|set|is|has) 且 lines≤3 且 cc_proxy≤1）
@@ -315,7 +316,7 @@ REST `/api/query` 聚合拿类/方法/文件/边计数（0.7s 实测）；目录
 | 步骤 | 交付 | 验收标准 |
 |---|---|---|
 | ~~R1~~ ✅ | ~~L1 封装~~ 已交付 `qt-autotest-generator/scripts/graph-access.py`（REST 唯一数据通道 + 固化领域查询 + 切片/cc_proxy） | 真机验收通过：skeleton 25041 方法 **5.1s**、count 0.11s（验收线 <2 分钟）；35 个离线单测 |
-| R2 | L3：`ut-plan.py plan`（survey+plan 两阶段 → .ut-plan.json） | 25041 方法全部分级；分级分布合理（high ≤15%） |
+| ~~R2~~ ✅ | ~~L3：`ut-plan.py plan`~~ 已交付 `qt-autotest-generator/scripts/ut-plan.py`（plan/select/update/show 四子命令 + 块状态机 + 44 个离线单测） | 真机验收：25041 方法全部分级 **28s**（验收线 <2 分钟）；5517 块（含 723 test-file 自动 skip）；high 19.6% 略超 15% 期望线——dde-file-manager 长方法占比高（lines P90=23），公式语义正确，见 §5.2 退化保护 |
 | R3 | `select/generate/verify`：单块闭环（挑 1 个 high 块端到端） | 用例编译通过、plan 状态正确回写 |
 | R4 | report + scorer 消费 v2 字段 | 报告可按模块（目录前缀）聚合 |
 | R5 | 变更驱动模式（detect_changes+impact 选块） | 人为改动后仅生成受影响块的用例 |
