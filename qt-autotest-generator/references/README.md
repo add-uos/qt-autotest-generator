@@ -19,6 +19,7 @@
 | `environment-check.md` | 环境门禁：GitNexus 索引确认→漂移检查 | SKILL.md 所有 Mode |
 | `mcp-providers.md` | GitNexus 单栈说明 + 环境变量覆盖语义 | environment-check |
 | `dev-preflight.md` | Mode 0 开发预检：list_repos 索引确认 + 本地检出校验 + check_drift 漂移检查 | SKILL.md Mode 0, reconcile-logic |
+| `ut-plan-workflow.md` | Plan 驱动工作流：ut-plan.py 七子命令（plan/select/generate/verify/update/show/report）+ 变更驱动选块 | SKILL.md Plan 驱动入口 |
 | `gitnexus-guide.md` | GitNexus MCP 工具语义、cypher 方言、mcp-scan.py 子命令、新旧工具映射 | 所有需查图谱的子步骤 |
 | `reconcile-logic.md` | 对账逻辑：git HEAD vs base_sha→差异路由 | SKILL.md Mode 1/2 |
 | `stale-test-cleanup.md` | 过时测试清理：removed 方法→注释用例+INSTANTIATE | reconcile 后, failure-repairer 兜底 |

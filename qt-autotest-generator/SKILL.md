@@ -2,7 +2,7 @@
 name: qt-autotest-generator
 description: "Qt CMake 项目 GTest 单元测试自动生成与质量闭环。基于 GitNexus 代码图谱 MCP，支持：开发预检与图谱漂移检查（Mode 0）、函数重要性探测与分级（Mode 1）、按分级补全 GTest 用例（Mode 2，编译验证+覆盖率门禁）、覆盖率采集与汇总（Mode 3）、变异测试（Mode 4，可选，验证测试有效性）、源码缺陷导出与统计（Mode 5，可选，用例级标红清单）、测试质量审查（Mode 6，只读，审查已有/他人提交的测试）。触发于：生成单测/补全测试/扫描函数重要性/采集覆盖率/变异测试/导出源码缺陷/审查测试质量/review tests/审查 commit 里的测试/未缓存测试/dev preflight/unpushed/add gtest/coverage gap/fix test failures/mutation score/defect report 等。硬门禁：GitNexus 图谱（list_repos 确认仓库已索引，未索引硬终止不回退；Mode 6 只读审查除外，无 MCP 硬依赖）。不触发于：非 Qt 或非 CMake 项目、Qt Test/Catch2/doctest、仅运行测试/配 CI/不生成测试代码。"
 metadata:
-  version: "3.4.2"
+  version: "3.5.0"
 user-invocable: true
 argument-hint: "[项目路径 / 模块路径 / 类名]"
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash
@@ -35,6 +35,7 @@ compatibility:
 | **Mode 4 · 变异测试**（可选） | 验证已有测试能否拦住缺陷（变异得分） | `Read references/mutation-testing.md` + `scripts/mutation-score.py` |
 | **Mode 5 · 源码缺陷导出与统计** | 导出/统计单元测试发现的源码缺陷 | `Read references/defect-exporter.md` + `scripts/export-defects.py` |
 | **Mode 6 · 测试质量审查**（只读） | 审查已有/他人提交的测试质量 | `Read references/test-review.md` + `scripts/test-review.py` |
+| **Plan 驱动工作流**（可选入口） | 全仓规划/断点续跑/变更驱动（块粒度，替代逐类补全） | `Read references/ut-plan-workflow.md` + `scripts/ut-plan.py` |
 
 Mode 2 启动时若 `.ut-inventory.json` 不存在 → **自动触发 Mode 1**。
 
@@ -63,6 +64,7 @@ Mode 5 为**可选增强**，在 Mode 2 闭环中实时持久化发现的源码�
 - **Mode 4**：变异测试、mutation testing、mutation score、验证测试有效性、测试能不能发现问题、测试够不够好、变异得分、high 级方法有效性
 - **Mode 5**：导出源码缺陷、统计源码缺陷、defect report、缺陷清单、导出缺陷数据、源码缺陷标红清单
 - **Mode 6**：审查测试质量、review tests、审查这个 commit 的测试、测试写得怎么样、审查未缓存测试、uncached tests、test review、只读审查（注意：本模式只出报告，不修改/生成任何测试或源码）
+- **Plan 驱动**：全仓规划、测试规划器、变更驱动选块、断点续跑、plan driven、ut-plan、select changed、受影响块
 
 **不触发于**：非 Qt 或非 CMake 项目、Qt Test/Catch2/doctest 框架、仅运行测试/配 CI/看日志、集成测试/性能测试/UI 自动化
 
@@ -198,6 +200,7 @@ Mode 6 **只读**：不生成/不修改测试与源码、不编译、不运行�
 | 分支清单交叉验证 | `scripts/mcp-scan.py extract-branches`（self-checker §2c，图谱定位 + 本地切片反查真实分支做差集） |
 | 缺陷数据文件 | `.ut-defects.json`（本地，不入 git） |
 | 测试质量审查 | `scripts/test-review.py`（Mode 6，只读，commit/未缓存测试两场景，`--strict` 可作 CI 门禁） |
+| 全仓规划/变更驱动 | `scripts/ut-plan.py`（plan/select/generate/verify/update/show/report 七子命令，见 `references/ut-plan-workflow.md`） |
 
 ---
 
@@ -240,6 +243,7 @@ Mode 6 **只读**：不生成/不修改测试与源码、不编译、不运行�
 □ 单类失败：已记录 failure_reason + 跳过 + 继续下一个类
 □ 每类编译通过后：已更新 .ut-inventory.json 的 usecase_count
 □ 批次提交：本批次自检通过后已执行代码提交（只 commit 不 push）
+□ Plan 驱动（若走该入口）：已 Read references/ut-plan-workflow.md；REST 三环境变量已就绪；状态机流转只经 ut-plan.py（不经手工改 JSON）；changed 模式结果已用 impact 行核对
 □ 疑似源码缺陷：已标红，未自行修源码；已调 export-defects.py upsert 落盘到 .ut-defects.json
 □ 全部批次提交完成（Mode 2 结束）：最终退出前已统一生成一次 Mode 3 覆盖率报告 + Mode 5 缺陷导出（不在每笔提交后触发）
 □ Mode 4（可选）：已 Read references/mutation-testing.md；变异后 git diff --exit-code 通过；存活变异体清单已交付（回 Mode 2 补强）
