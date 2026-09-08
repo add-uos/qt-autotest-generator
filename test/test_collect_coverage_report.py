@@ -20,29 +20,37 @@ class TestParseGtestXml:
     def test_normal_xml(self, collect_coverage_report, tmp_path):
         xml = '<testsuites tests="10" failures="2" errors="1"></testsuites>'
         path = self._write_xml(tmp_path, xml)
-        total, passed, failed = collect_coverage_report.parse_gtest_xml(path)
-        assert total == 10 and passed == 7 and failed == 3
+        total, passed, failed, disabled = collect_coverage_report.parse_gtest_xml(path)
+        assert total == 10 and passed == 7 and failed == 3 and disabled == 0
+
+    def test_disabled_counted(self, collect_coverage_report, tmp_path):
+        xml = '<testsuites tests="10" failures="2" disabled="3"></testsuites>'
+        path = self._write_xml(tmp_path, xml)
+        total, passed, failed, disabled = collect_coverage_report.parse_gtest_xml(path)
+        # disabled 计入 total，但既不算通过也不算失败
+        assert total == 10 and disabled == 3
+        assert passed == 10 - 2 - 3 and failed == 2
 
     def test_missing_attributes_defaults_zero(self, collect_coverage_report, tmp_path):
         xml = '<testsuites></testsuites>'
         path = self._write_xml(tmp_path, xml)
-        total, passed, failed = collect_coverage_report.parse_gtest_xml(path)
-        assert total == 0 and passed == 0 and failed == 0
+        total, passed, failed, disabled = collect_coverage_report.parse_gtest_xml(path)
+        assert (total, passed, failed, disabled) == (0, 0, 0, 0)
 
     def test_malformed_xml(self, collect_coverage_report, tmp_path):
         path = self._write_xml(tmp_path, "<not valid xml")
-        total, passed, failed = collect_coverage_report.parse_gtest_xml(path)
-        assert total == 0 and passed == 0 and failed == 0
+        total, passed, failed, disabled = collect_coverage_report.parse_gtest_xml(path)
+        assert (total, passed, failed, disabled) == (0, 0, 0, 0)
 
     def test_empty_file(self, collect_coverage_report, tmp_path):
         path = self._write_xml(tmp_path, "")
-        total, passed, failed = collect_coverage_report.parse_gtest_xml(path)
-        assert (total, passed, failed) == (0, 0, 0)
+        total, passed, failed, disabled = collect_coverage_report.parse_gtest_xml(path)
+        assert (total, passed, failed, disabled) == (0, 0, 0, 0)
 
     def test_nonexistent_file(self, collect_coverage_report, tmp_path):
         path = str(tmp_path / "nope.xml")
-        total, passed, failed = collect_coverage_report.parse_gtest_xml(path)
-        assert (total, passed, failed) == (0, 0, 0)
+        total, passed, failed, disabled = collect_coverage_report.parse_gtest_xml(path)
+        assert (total, passed, failed, disabled) == (0, 0, 0, 0)
 
 
 # ── parse_gtest_xml_suites ────────────────────────────────────────────

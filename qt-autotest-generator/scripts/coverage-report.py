@@ -284,11 +284,14 @@ def build_ranges(rec):
     fns = sorted(set(rec["fns"]), key=lambda x: x[0])
     start_lines = sorted({ln for ln, _ in fns})
     da_lines = sorted(rec["da"].keys())
-    brda_lines = sorted({k[0] for k in rec["brda"]})
+    # brda 容错：无分支段（如 DA-only tracefile 或测试 fixture）时缺键视为空
+    brda_lines = sorted({k[0] for k in rec.get("brda", {})})
+    # max_line 只取"有计数数据"的行（DA/BRDA）：函数起始行不是覆盖数据，
+    # 不应拉伸最后一个函数的区间——da/brda 全空时 end=start（空区间，诚实表达
+    # "无计数数据可定位函数长度"）
     max_line = max(
         da_lines[-1] if da_lines else 0,
         brda_lines[-1] if brda_lines else 0,
-        start_lines[-1] if start_lines else 0,
     )
     nxt = {ln: (start_lines[i + 1] if i + 1 < len(start_lines) else max_line + 1)
            for i, ln in enumerate(start_lines)}
