@@ -300,7 +300,7 @@ REST `/api/query` 聚合拿类/方法/文件/边计数（0.7s 实测）；目录
 | 旧概念 | v2.1 处置 | 理由 |
 |---|---|---|
 | `qualified_name` 拼接归一 + 双轴调和 | **废弃** → 图谱节点 id | 归一化是历史最大 bug 源 |
-| indexer 提供的 `complexity/cognitive` | `lines + cc_proxy + truncated` 三代理 | 图谱无此属性（真机确认 0/581） |
+| indexer 提供的 `complexity/cognitive` | `lines + cc_proxy` 双代理（方法体 File.content 行切片精确计算） | 图谱无此属性（真机确认 0/581） |
 | P75 入度单因子评分 | 多因子分位归一（§5.2） | 单因子埋没冷门复杂方法 |
 | `usecase_count`（docstring 用例） | `tested.cases`（调用边聚合） | 新图谱无 docstring |
 | 一次性全量清单 | `.ut-plan.json` 块状态机 | 断点、量化、三种模式 |
