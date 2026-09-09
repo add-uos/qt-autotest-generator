@@ -86,3 +86,5 @@ python3 scripts/ut-plan.py select .ut-plan.json --mode changed --repo-root /path
    生成会话按三态自适应，none 态用例以行为约定为主、不臆造实现细节。
 6. **plan verify 证据诚实**：last_verify（含 base_commit/base_drift）只作证据标注，不改评分权重。
 7. **sufficiency 降级**：scorer 无 inventory 且 `--plan` 给定时，块 methods（name/level）作充分性校核输入（`sufficiency_source=plan_methods`）。
+8. **路由一致性受元测试守护**：argparse 子命令/choices 与 main 路由分支的一致性由 `test_ut_plan.py::TestRouteConsistency` 源码级校验（子命令双向相等、mode 路由 ⊆ choices）。改 CLI 路由必须同次提交更新两侧，跑测试即验——防止 edit 静默未生效造成的 choices/实现漂移（retro S-003）。
+9. **重载同名方法去重**：scorer 充分性分母按方法名唯一、level 取最严（`_dedupe_overloads`）——重载共享同名用例集，重复计入分母会使 total 虚高（retro Q-001）。

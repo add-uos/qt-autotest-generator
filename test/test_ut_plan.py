@@ -764,3 +764,42 @@ class TestVerify:
         with pytest.raises(ValueError, match="test_"):
             up.cmd_verify(verify_env["plan"], "B0001", verify_env["repo"],
                           runner=FakeRunner())
+
+
+class TestRouteConsistency:
+    """S-003 回归：argparse 子命令/choices 与 main 路由分支源码级一致。
+
+    防两类漂移：argparse 加了值但 main 没路由（静默 fallthrough）；
+    main 加了分支但 argparse 没加值（invalid choice）。edit 静默未
+    生效的事故由本测试兜底。
+    """
+    import re as _re
+
+    def _main_src(self):
+        import inspect
+        return inspect.getsource(up.main)
+
+    def _full_src(self):
+        import inspect
+        return inspect.getsource(up)
+
+    def test_subcommands_routed(self):
+        src = self._full_src()
+        declared = set(self._re.findall(r'add_parser\("(\w+)"', src))
+        routed = set(self._re.findall(r'args\.command == "(\w+)"', src))
+        assert declared, "argparse 子命令解析失败"
+        assert declared == routed, f"漂移：声明未路由={declared - routed} 路由未声明={routed - declared}"
+
+    def test_mode_choices_routed(self):
+        src = self._full_src()
+        declared = set(self._re.findall(r'"--mode", choices=\(([^)]*)\)', src))
+        declared = {t.strip().strip('"\'') for grp in declared for t in grp.split(",") if t.strip()}
+        routed = set(self._re.findall(r'args\.mode == "(\w+)"', src))
+        assert declared, "--mode choices 解析失败"
+        # 特例分支（如 changed）必须在 choices 里声明过（防 invalid choice）。
+        # full/delta/module 走通用路径无显式分支属合法，故只查路由 ⊆ choices。
+        assert routed <= declared, f"漂移：路由未声明={routed - declared}"
+
+    def test_status_choices_from_block_states(self):
+        # update --status 的 choices 动态取自 BLOCK_STATES，校验引用存在且含基础态
+        assert set(up.BLOCK_STATES) >= {"done", "failed", "pending"}

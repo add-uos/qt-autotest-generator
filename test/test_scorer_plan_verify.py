@@ -307,3 +307,33 @@ def _run_cli_main(argv):
         return score.main()
     finally:
         sys.argv = old
+
+
+class TestOverloadDedup:
+    """Q-001 回归：同名重载方法去重，分母按方法名唯一、level 取最严。"""
+
+    def test_dedupe_overloads_max_level(self):
+        methods = [{"name": "typeString", "level": "high", "factors": []},
+                   {"name": "typeString", "level": "mid", "factors": []},
+                   {"name": "~T", "level": "high", "factors": []}]
+        out = score._dedupe_overloads(methods)
+        names = {m["name"] for m in out}
+        assert names == {"typeString"}  # ~ 前缀仍被排除
+        assert out[0]["level"] == "high"
+
+    def test_overload_counted_once_in_denominator(self):
+        methods = [{"name": "typeString", "level": "high", "factors": []},
+                   {"name": "typeString", "level": "mid", "factors": []}]
+        sc, det = score._sufficiency_for_methods(
+            methods, set(), {"n_cases": 2},
+            case_names=["typeString_A", "typeString_B"])
+        assert det["total"] == 1            # 分母不再重复
+        assert det["satisfied"] == 0 and det["partial"] == 1  # 按 high(min=3) 校核
+
+    def test_dedup_changes_score_vs_pre_fix(self):
+        """修复前 mid 条凑 satisfied 抬分（75），修复后按 high 校核（50）。"""
+        methods = [{"name": "f", "level": "high", "factors": []},
+                   {"name": "f", "level": "mid", "factors": []}]
+        sc, det = score._sufficiency_for_methods(
+            methods, set(), {"n_cases": 2}, case_names=["f_a", "f_b"])
+        assert sc == 50.0

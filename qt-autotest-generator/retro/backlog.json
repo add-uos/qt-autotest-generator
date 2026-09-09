@@ -20,10 +20,10 @@
    "severity": "P1",
    "evidence": "R5 给 cmd_select 加 changed 模式时，argparse --mode choices 漏改，CLI 测试才兜住（invalid choice）；edit 工具曾报成功但目标文本未匹配",
    "fix": "改 CLI 路由时 argparse choices 必须与实现分支同一次提交核对；CLI 层测试覆盖每个 mode 值",
-   "status": "open",
-   "note": "缓解：test_r5_changed CLI 层测试覆盖每个 mode；彻底修需技能发版时 choices 与实现 diff 校验脚本",
+   "status": "resolved",
+   "note": "test_ut_plan.py::TestRouteConsistency 元测试落地：子命令双向相等 + mode 路由⊆choices，源码级 diff 校验；ut-plan-workflow.md 硬规则 8",
    "created": "2026-09-08",
-   "updated": "2026-09-08 21:52:10"
+   "updated": "2026-09-09 10:10:08"
   },
   {
    "id": "S-004",
@@ -104,10 +104,10 @@
    "severity": "P2",
    "evidence": "plan 里 typeString 出现 high/mid 两条（重载），sufficiency 按名字分组分母重复；评分偏严但语义可解释",
    "fix": "scorer 按名字分组时同名方法取 max(level) 去重分母，或 plan 分块时合并同名重载的 level",
-   "status": "open",
-   "note": "",
+   "status": "resolved",
+   "note": "score.py _dedupe_overloads：分母按方法名唯一、level 取 max；回归测试×3；真机 A/B 验证 test_sqlitehelper 71.3 无回归；ut-plan-workflow.md 硬规则 9",
    "created": "2026-09-08",
-   "updated": "2026-09-08 21:49:17"
+   "updated": "2026-09-09 10:10:09"
   },
   {
    "id": "E-001",
@@ -168,6 +168,18 @@
    "note": "自查当场修复，test_skill_retro.py 14 用例",
    "created": "2026-09-09",
    "updated": "2026-09-09 09:56:50"
+  },
+  {
+   "id": "S-007",
+   "category": "S",
+   "title": "_sufficiency_for_methods 存在 return 后不可达死代码（R7 改公式残留）",
+   "severity": "P2",
+   "evidence": "score.py 中 return sc, det 之后残留旧评分公式块（sc = 100.0 * satisfied / total ...），永不可执行，误导后续维护",
+   "fix": "删除死代码块；改评分公式时必须同步删除旧实现",
+   "status": "resolved",
+   "note": "本轮自查当场删除",
+   "created": "2026-09-09",
+   "updated": "2026-09-09 10:10:08"
   }
  ]
 }
