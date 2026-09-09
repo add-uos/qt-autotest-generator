@@ -1468,7 +1468,7 @@ class GitNexusAdapter:
     def read_file_text(self, file_path):
         """读文件全文：本地仓库优先 → 图谱 File.content 降级；不可得返回 None。
 
-        batch-collect 等无本地仓库场景依赖图谱降级（TEST_F 解析、
+        无本地仓库场景依赖图谱降级（TEST_F 解析、
         Qt 宏扫描）；本地可读时与旧行为完全一致。
         """
         lines = self.read_local_lines(file_path)
@@ -1942,8 +1942,8 @@ class GitNexusAdapter:
     def fetch_test_cases(self, test_modules):
         """解析 TEST_F(Suite, Case) → {file: ["Suite.Case", ...]}。
 
-        本地文件优先；无本地仓库时降级图谱 File.content（batch-collect
-        场景，修复 test_cases 全空）。GitNexus 无 docstring 属性，
+        本地文件优先；无本地仓库时降级图谱 File.content（
+        修复 test_cases 全空）。GitNexus 无 docstring 属性，
         用例注释暂缺（旧值来自图谱 docstring）。
         """
         file_to_cases = defaultdict(list)

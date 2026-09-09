@@ -154,7 +154,7 @@
 | `node_type` | string | `"Method"` / `"Function"`（自由函数） |
 | `auto_reason` | string | suggested 条目的自动建议原因（仅 `source=suggested` 时存在） |
 
-> 以上扩展字段由 `mcp-scan.py` 产出，Mode 2 消费方可忽略；`../assets/ut-inventory-editor` 的人工辅助编辑器 UI（`index.html` / `dashboard-server.py` / `batch-collect.py`，agent 不调用）依赖它们做展示。
+> 以上扩展字段由 `mcp-scan.py` 产出，Mode 2 消费方可忽略。
 
 #### 覆盖率状态字段（fetch 采集 / test-mapping 回写）
 

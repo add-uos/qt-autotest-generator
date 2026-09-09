@@ -28,28 +28,31 @@
 
 ```
 skills/
-├── qt-autotest-generator/      ← 核心 Skill：五模式单测生成引擎
+├── qt-autotest-generator/      ← 核心 Skill：八模式单测生成引擎
 │   ├── SKILL.md                   Agent 技能入口（触发条件 + 工作流）
 │   ├── README.md                  Skill 详细说明
 │   ├── INSTALL.md                 安装指南
-│   ├── scripts/                   Python/Bash 工具脚本（5300+ 行）
-│   │   ├── scan-inventory.py        Mode 1：函数重要性探测与评分
-│   │   ├── fetch-mcp-data.py        Mode 1：MCP 数据采集端到端
-│   │   ├── coverage-by-level.py     分级覆盖率统计
-│   │   ├── collect-coverage-report.py  Mode 3：覆盖率采集与汇总
+│   ├── scripts/                   Python/Bash 工具脚本（12600+ 行）
+│   │   ├── mcp-scan.py              Mode 1：GitNexus 数据面（scan/fetch/extract-branches/test-mapping）
+│   │   ├── graph-access.py          GitNexus REST 查询层（/api/query 单一通道）
+│   │   ├── ut-plan.py               Plan 驱动工作流（plan/select/generate/verify/update/show/report）
+│   │   ├── mode2-ops.py             Mode 2 辅助（plan/usecase/commit）
+│   │   ├── verify-build.py          Mode 2 编译验证·执行层固化
+│   │   ├── self-check-structural.py Mode 2 结构性自检
+│   │   ├── stale-test-cleanup.py    过时测试清理
+│   │   ├── coverage-report.py       Mode 3：覆盖率采集与汇总
 │   │   ├── mutation-score.py        Mode 4：变异测试
-│   │   ├── export-defects.py       Mode 5：源码缺陷导出
-│   │   ├── stale-test-cleanup.py   过时测试清理
-│   │   ├── setup-codebase-memory.sh MCP 本地安装
+│   │   ├── export-defects.py        Mode 5：源码缺陷导出
+│   │   ├── test-review.py           Mode 6：测试质量审查（只读）
+│   │   ├── skill-retro.py           Mode 7：技能复盘（问题沉淀与迭代）
+│   │   ├── utq.py                   inventory 快速筛查工具
 │   │   ├── generate-cmake-utils.sh  CMake 工具链生成
 │   │   ├── generate-runner.sh       测试运行脚本生成
-│   │   └── tests/                   单元测试（309 项，pytest）
-│   ├── references/                参考文档（24 篇，按需读取）
+│   │   └── tests/                   单元测试（1078 项，pytest）
+│   ├── references/                参考文档（29 篇，按需读取）
 │   ├── templates/                 代码模板 + stub-ext 库
 │   ├── examples/                  示例 Qt 项目
 │   └── evals/                     触发与质量评估
-│
-├── assets/                     ← ut-inventory-editor：独立人工可视化编辑器（agent 不调用）
 │
 ├── ut-squad/                    ← 多智能体小队：广度+深度+验证协作
 │   ├── README.md                  小队设计总纲（度量模型 + 执行流程）
@@ -84,7 +87,7 @@ skills/
 
 ## 核心组件详解
 
-### 1. qt-autotest-generator — 五模式单测生成引擎
+### 1. qt-autotest-generator — 八模式单测生成引擎
 
 这是本仓库的核心技能，单个 Agent 即可完成从分析到测试生成到覆盖率验证的全流程。支持五种模式，按需触发：
 
@@ -126,18 +129,23 @@ skills/
 建议因子  : name_pattern（含 delete/remove 等不可逆操作名）
 ```
 
-**脚本工具链**（5300+ 行 Python/Bash，309 项单元测试覆盖）：
+**脚本工具链**（12600+ 行 Python/Bash，1078 项单元测试覆盖）：
 
 | 脚本 | 用途 |
 |------|------|
-| `scan-inventory.py` | 函数重要性探测：MCP 数据 → 多因子评分 → `.ut-inventory.json` |
-| `fetch-mcp-data.py` | 端到端 MCP 采集：分页拉取 + 继承检测 + DBus 插槽 + Q_INVOKABLE + 增量 overlay |
-| `coverage-by-level.py` | 按 inventory level 统计函数+行覆盖率，门禁判定 |
-| `collect-coverage-report.py` | Mode 3 一条命令出报告（gtest + lcov + 分级 + 汇总） |
+| `mcp-scan.py` | Mode 1 数据面：GitNexus 采集 + 多因子评分 → `.ut-inventory.json`（scan/fetch/extract-branches/test-mapping） |
+| `graph-access.py` | GitNexus REST 查询层：`/api/query` 单一通道（list_repos/find_symbol/call_graph 等） |
+| `ut-plan.py` | Plan 驱动工作流：块规划/变更选块/生成验证闭环/报告（七子命令） |
+| `mode2-ops.py` | Mode 2 辅助：待测类规划（plan）/用例计数回写（usecase）/提交拼装（commit） |
+| `verify-build.py` | Mode 2 编译验证·执行层固化：跑测结果三态判定 |
+| `self-check-structural.py` | Mode 2 结构性自检：断言强度/命名/SPDX/结构 |
+| `stale-test-cleanup.py` | 过时测试清理：removed 方法 → 注释用例 + 清理 INSTANTIATE |
+| `coverage-report.py` | Mode 3 一条命令出报告（gtest + lcov + 分级 + 汇总） |
 | `mutation-score.py` | Mode 4 变异测试：AOR/ROR 变异体注入 → 编译运行 → 变异得分 |
 | `export-defects.py` | Mode 5 缺陷导出：upsert/mark-fixed/export 三操作 |
-| `stale-test-cleanup.py` | 过时测试清理：removed 方法 → 注释用例 + 清理 INSTANTIATE |
-| `setup-codebase-memory.sh` | MCP 本地安装脚本 |
+| `test-review.py` | Mode 6 测试质量审查（只读） |
+| `skill-retro.py` | Mode 7 技能复盘：实战问题沉淀 backlog/报告/eval 建议 |
+| `utq.py` | inventory 快速筛查（todo/covered/weak/info/export） |
 | `generate-cmake-utils.sh` | CMake 工具链辅助生成 |
 | `generate-runner.sh` | 测试运行脚本生成 |
 
@@ -320,7 +328,7 @@ git clone <本仓库 URL> .claude/skills/qt-autotest-generator
 
 ### 参考文档体系
 
-`qt-autotest-generator/references/` 包含 24 篇按需读取的参考文档，Agent 只在对应子步骤触发时加载，避免上下文膨胀：
+`qt-autotest-generator/references/` 包含 29 篇按需读取的参考文档，Agent 只在对应子步骤触发时加载，避免上下文膨胀：
 
 ```
 环境与门禁   : environment-check.md, mcp-providers.md, codebase-memory-guide.md
@@ -353,7 +361,7 @@ Mode 5      : defect-exporter.md, defect-schema.md
 
 ## 测试覆盖
 
-本项目自身有 **309 项 pytest 单元测试**，覆盖脚本的核心逻辑：
+本项目自身有 **1078 项 pytest 单元测试**，覆盖脚本的核心逻辑：
 
 ```bash
 cd qt-autotest-generator/scripts/tests

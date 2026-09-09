@@ -11,9 +11,6 @@ from pathlib import Path
 import pytest
 
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "qt-autotest-generator" / "scripts"
-# 外部工具（../assets/ut-inventory-editor）也写 .ut-inventory.json，纳入契约测试。
-# ut-inventory-editor 是仓库级独立人工工具，不在 qt-autotest-generator skill 目录内。
-ASSETS_SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "assets" / "ut-inventory-editor" / "scripts"
 
 # 模块名 → 文件名映射（模块名用下划线，便于测试 import）
 # 合并后：旧 fixture 名指向新合并文件，测试无需改名
@@ -134,41 +131,3 @@ def utq():
 @pytest.fixture(scope="session")
 def test_review():
     return _load_module("test_review", "test-review.py")
-
-
-@pytest.fixture(scope="session")
-def fetch_test_mapping():
-    """assets/ 编辑器侧 vendored 副本（回写 test_* 字段）。
-
-    主流程已并入 mcp-scan.py 的 update_inventory_test_mapping（Mode 1 fetch 天然
-    采集）；此 fixture 加载编辑器副本用于契约对比测试，两者行为应一致。
-    仅标准库依赖（urllib），import 安全；主入口有 __main__ 保护。
-    """
-    path = ASSETS_SCRIPTS_DIR / "fetch-test-mapping.py"
-    mod_name = "fetch_test_mapping"
-    cache_key = str(path)
-    if cache_key in sys.modules:
-        return sys.modules[cache_key]
-    spec = importlib.util.spec_from_file_location(mod_name, path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[cache_key] = mod
-    sys.modules[mod_name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-@pytest.fixture(scope="session")
-def batch_collect():
-    return _load_module_path("batch_collect",
-                             ASSETS_SCRIPTS_DIR / "batch-collect.py")
-
-
-def _load_module_path(mod_name: str, path):
-    """按绝对路径加载脚本模块（ASSETS 下连字符文件名无法 import）。"""
-    if mod_name in sys.modules:
-        return sys.modules[mod_name]
-    spec = importlib.util.spec_from_file_location(mod_name, path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[mod_name] = mod
-    spec.loader.exec_module(mod)
-    return mod

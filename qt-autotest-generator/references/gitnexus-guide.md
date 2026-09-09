@@ -91,7 +91,7 @@ cypher 结果是 **markdown 表格**：多行字符串（如 `File.content`）�
   `read_file_text`（本地优先 → 图谱降级）；
 - 方法体切片仍优先本地行切片（slice_body），图谱 content 仅作降级。
 
-无本地仓库（batch-collect 批量场景）时 `fetch_test_cases` / `collect_qt_macros`
+无本地仓库（远端批量场景）时 `fetch_test_cases` / `collect_qt_macros`
 自动走图谱降级；后者源文件 >400 时跳过（仅评分降级，不影响方法枚举）。
 
 ## 3. `scripts/mcp-scan.py` 子命令（日常主入口）
