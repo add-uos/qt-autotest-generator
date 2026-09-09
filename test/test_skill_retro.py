@@ -57,6 +57,17 @@ class TestAdd:
         with pytest.raises(ValueError, match="severity"):
             sr.cmd_add(backlog, "S", "x", severity="P3")
 
+    def test_add_no_id_reuse_after_manual_delete(self, backlog):
+        """回归：删除中间项后 add 不得复用 id（防 _find 改错记录）。"""
+        import json as _json
+        i1 = sr.cmd_add(backlog, "S", "一")
+        sr.cmd_add(backlog, "S", "二")
+        d = _json.load(open(backlog))
+        d["items"] = [i for i in d["items"] if i["id"] != i1]
+        _json.dump(d, open(backlog, "w"))
+        i3 = sr.cmd_add(backlog, "S", "三")
+        assert i3 == "S-003" and i3 != i1
+
 
 class TestLifecycle:
     def _seed(self, backlog, n=2):

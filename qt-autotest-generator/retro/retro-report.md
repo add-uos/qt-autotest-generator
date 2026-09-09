@@ -1,7 +1,7 @@
 # 技能复盘报告（qt-autotest-generator）
 
-> 生成时间：2026-09-08 21:53:14 ｜ backlog：/home/zhy/demo/utest/skills/qt-autotest-generator/retro/backlog.json
-> 共 13 项：open 2 / resolved 11
+> 生成时间：2026-09-09 09:56:50 ｜ backlog：/home/zhy/demo/utest/skills/qt-autotest-generator/retro/backlog.json
+> 共 14 项：open 2 / resolved 12
 
 ## 分类统计
 
@@ -9,7 +9,7 @@
 |---|---|---|
 | G 文档缺口 | 0 | 2 |
 | R 规则缺陷 | 0 | 2 |
-| S 脚本缺陷 | 1 | 3 |
+| S 脚本缺陷 | 1 | 4 |
 | Q 生成质量 | 1 | 0 |
 | E 工具链坑 | 0 | 2 |
 | T 触发路由 | 0 | 2 |
@@ -43,3 +43,4 @@
 - **E-002** TypeString 非法分支 Debug 下 assert abort，不可测 —— test-types.md 增加『Debug assert 分支』条目：识别 assert 类分支→用例标 GTEST_SKIP 或注明不测原因，防 verify 崩溃误判 failed
 - **T-001** 『本地开发』字样误路由 Mode 0（应为 Mode 2） —— 保持 description 注意项；trigger-evals 补一条『本地开发的类补个测试』应触发 Mode 2 的用例
 - **T-002** Plan 驱动入口触发词未进 trigger-evals —— trigger-evals.json should_trigger 补 plan-driven 4 条 + 不应触发补 1 条（只跑测试不生成）
+- **S-006** _next_id 按 count 计数：删除中间项后 add 复用 id 造成冲突 —— _next_id 改为现有最大序号+1（isdigit 校验），单测 test_add_no_id_reuse_after_manual_delete 守卫

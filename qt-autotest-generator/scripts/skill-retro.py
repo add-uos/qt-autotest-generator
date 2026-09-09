@@ -59,8 +59,12 @@ def _save(data, path):
 
 
 def _next_id(data, category):
-    n = sum(1 for it in data["items"] if it["id"].startswith(f"{category}-"))
-    return f"{category}-{n + 1:03d}"
+    """id 取现有最大序号+1（非 count）：删除中间项后不会复用 id 防冲突。"""
+    prefix = f"{category}-"
+    seqs = [int(i["id"].split("-", 1)[1])
+            for i in data["items"] if i["id"].startswith(prefix)
+            and i["id"].split("-", 1)[1].isdigit()]
+    return f"{category}-{(max(seqs) + 1 if seqs else 1):03d}"
 
 
 def cmd_add(backlog, category, title, severity="P2", evidence="", fix="",

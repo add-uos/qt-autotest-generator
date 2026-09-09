@@ -156,6 +156,18 @@
    "note": "trigger-evals.json v2.1.0：plan-driven 4 条 should + 1 条 shouldnt",
    "created": "2026-09-08",
    "updated": "2026-09-08 21:51:24"
+  },
+  {
+   "id": "S-006",
+   "category": "S",
+   "title": "_next_id 按 count 计数：删除中间项后 add 复用 id 造成冲突",
+   "severity": "P1",
+   "evidence": "自查发现：S-001/S-002 存在时手工删 S-001，再 add 分配出 S-002 与现存记录撞 id；_find 只匹配第一个，resolve 会改错记录",
+   "fix": "_next_id 改为现有最大序号+1（isdigit 校验），单测 test_add_no_id_reuse_after_manual_delete 守卫",
+   "status": "resolved",
+   "note": "自查当场修复，test_skill_retro.py 14 用例",
+   "created": "2026-09-09",
+   "updated": "2026-09-09 09:56:50"
   }
  ]
 }
