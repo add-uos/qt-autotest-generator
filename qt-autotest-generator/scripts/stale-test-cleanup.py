@@ -480,7 +480,7 @@ def main():
     parser.add_argument("--inventory", required=True,
                         help=".ut-inventory.json 路径")
     parser.add_argument("--diff-json", default=None,
-                        help="增量 diff JSON 路径（由 fetch-mcp-data.py 产出）")
+                        help="增量 diff JSON 路径（由 reconcile 流程/mcp-scan fetch 产出，含 removed 方法清单）")
     parser.add_argument("--removed-methods", default=None,
                         help="直接指定已删方法名（逗号分隔），配合 --class-name 使用")
     parser.add_argument("--class-name", default=None,

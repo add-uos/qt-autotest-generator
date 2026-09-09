@@ -1,13 +1,13 @@
 # 技能复盘报告（qt-autotest-generator）
 
-> 生成时间：2026-09-09 10:10:09 ｜ backlog：/home/zhy/demo/utest/skills/qt-autotest-generator/retro/backlog.json
-> 共 15 项：open 0 / resolved 15
+> 生成时间：2026-09-09 10:25:13 ｜ backlog：/home/zhy/demo/utest/skills/qt-autotest-generator/retro/backlog.json
+> 共 16 项：open 0 / resolved 16
 
 ## 分类统计
 
 | 分类 | open | resolved |
 |---|---|---|
-| G 文档缺口 | 0 | 2 |
+| G 文档缺口 | 0 | 3 |
 | R 规则缺陷 | 0 | 2 |
 | S 脚本缺陷 | 0 | 6 |
 | Q 生成质量 | 0 | 1 |
@@ -30,3 +30,4 @@
 - **T-002** Plan 驱动入口触发词未进 trigger-evals —— trigger-evals.json should_trigger 补 plan-driven 4 条 + 不应触发补 1 条（只跑测试不生成）
 - **S-006** _next_id 按 count 计数：删除中间项后 add 复用 id 造成冲突 —— _next_id 改为现有最大序号+1（isdigit 校验），单测 test_add_no_id_reuse_after_manual_delete 守卫
 - **S-007** _sufficiency_for_methods 存在 return 后不可达死代码（R7 改公式残留） —— 删除死代码块；改评分公式时必须同步删除旧实现
+- **G-004** 文档把内部函数写成『脚本名 函数()』形式，易误读为 CLI 子命令 —— 清理行动：删 setup-codebase-memory.sh + codebase-memory-guide.md；README/INSTALL 全面改 GitNexus 单栈口径（含验证命令改真实子命令 fetch --file-pattern 探测）；stale-test-cleanup.md 注释标注『内部函数非 CLI 子命令』。写文档时的规则：引用内部函数必须写『内部函数』字样，CLI 调用必须先核对 add_parser 子命令清单

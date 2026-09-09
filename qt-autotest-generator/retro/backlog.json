@@ -180,6 +180,18 @@
    "note": "本轮自查当场删除",
    "created": "2026-09-09",
    "updated": "2026-09-09 10:10:08"
+  },
+  {
+   "id": "G-004",
+   "category": "G",
+   "title": "文档把内部函数写成『脚本名 函数()』形式，易误读为 CLI 子命令",
+   "severity": "P2",
+   "evidence": "stale-test-cleanup.md 写『mcp-scan.py compute_diff() 产出』，无 compute 子命令（实际仅 scan/fetch/extract-branches/test-mapping）；INSTALL.md 索引不 ready 节引用已不存在的 index_repository 流程；README/INSTALL 双提供方口径未随 GitNexus 单栈迁移更新",
+   "fix": "清理行动：删 setup-codebase-memory.sh + codebase-memory-guide.md；README/INSTALL 全面改 GitNexus 单栈口径（含验证命令改真实子命令 fetch --file-pattern 探测）；stale-test-cleanup.md 注释标注『内部函数非 CLI 子命令』。写文档时的规则：引用内部函数必须写『内部函数』字样，CLI 调用必须先核对 add_parser 子命令清单",
+   "status": "resolved",
+   "note": "db5e913 后的旧栈清理专项",
+   "created": "2026-09-09",
+   "updated": "2026-09-09 10:25:13"
   }
  ]
 }

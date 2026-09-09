@@ -22,7 +22,7 @@
 从 diff 报告读取 `removed` 方法列表：
 
 ```python
-# diff["removed"] 由 mcp-scan.py compute_diff() 产出
+# diff["removed"] 由 mcp-scan.py 内部函数 compute_diff() 在 fetch/scan 流程中产出（非 CLI 子命令），随 reconcile 写入 diff JSON
 # 每项含：qualified_name, name, class_qn, level, file_path, ...
 removed_methods = diff["removed"]
 

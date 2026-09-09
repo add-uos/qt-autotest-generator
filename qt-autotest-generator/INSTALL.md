@@ -71,30 +71,20 @@ sudo apt install python3
 sudo apt install lcov
 ```
 
-### codebase-memory-mcp（知识图谱）
+### GitNexus 代码图谱 MCP（唯一数据面）
 
-本技能支持两种知识图谱 MCP 提供方，**互斥使用，不自动回退**：
+本技能基于 **GitNexus 代码图谱 MCP 单栈**，无本地索引概念：仓库由平台统一索引，技能侧不能自行触发索引。
 
-| 提供方 | 说明 |
-|--------|------|
-| `remote-codebase-memory-mcp` | 远端 MCP，Mode 1-5 的**唯一**提供方。只读查询，**远端无法触发索引**，项目须已在远端索引且 ready；图谱过时（工作区 dirty / 有未推送 commit）时硬终止并指引 |
-| `local-codebase-memory-mcp` | 本地 MCP，**仅经 Mode 0（Dev Preflight）显式使用**：探测/安装、为本机项目建立索引并同步到本地 HEAD |
-
-提供方解析在 `environment_check` 阶段完成（Mode 0 则在 `references/dev-preflight.md`），
-结果记录为内存变量 `mcp_provider`，详见 `references/mcp-providers.md`。
-
-本地开发（有未 push 代码 / 工作区有未提交改动）请显式触发 Mode 0（说「dev preflight /
-本地模式」），技能会安装并使用本地 `local-codebase-memory-mcp`：
-
-```bash
-bash scripts/setup-codebase-memory.sh
-```
+- 端点/认证经环境变量配置（见下方环境变量表），`mcp-scan.py` 读取；命令行 `--mcp-url` 可覆盖端点。
+- **单一来源不回退**：端点不可用或项目未索引 → 硬终止并给出指引（详见 `references/mcp-providers.md` §3），不降级 LSP / 文件扫描。
+- 图谱从远端 git 同步，看不到本地未 push/未提交代码；本地 HEAD 领先图谱 lastCommit 即漂移，硬终止并等待平台同步。
 
 ### 验证安装
 
 ```bash
-# 验证 codebase-memory-mcp
-codebase-memory-mcp --version  # >= 0.8.0
+# 验证 GitNexus 连通性与项目索引（端点不通/未索引时 SystemExit(2) 并输出指引；
+# file-pattern 最小化采集作轻量探测）
+python3 scripts/mcp-scan.py fetch --project <仓库名> --file-pattern 'zz_probe_*' -o /tmp/gn-probe.json
 
 # 验证 GTest
 pkg-config --modversion gtest  # 应有输出
@@ -119,7 +109,7 @@ export https_proxy="${QTAG_PROXY:-http://proxy02.uniontech.com:3128}"
 export http_proxy="${QTAG_PROXY:-http://proxy02.uniontech.com:3128}"
 ```
 
-远端 codebase-memory-mcp 若走公网同样受此代理影响；本地 codebase-memory-mcp 不受影响。
+远端 GitNexus 端点若走公网同样受此代理影响。
 
 ## 常见问题
 
@@ -131,13 +121,13 @@ CMake Error: Could not find GTest
 
 解决：确认 `libgtest-dev` 已安装且编译了库文件（见上方「Google Test」节）。
 
-### codebase-memory-mcp 索引不 ready
+### GitNexus 报项目未索引 / 图谱漂移
 
 ```
-index_status 返回 "indexing" 超过 60 秒
+SystemExit(2): 项目未在 GitNexus 平台索引
 ```
 
-解决：手动推一下 `codebase-memory-mcp index_repository --repo-path <path> --mode fast`，等待 ready。
+解决：GitNexus 由平台统一索引，技能侧无法自行触发。确认仓库名与平台登记一致，联系平台管理员；本地 HEAD 领先图谱时 push 后等待平台同步（详见 `references/mcp-providers.md` §3）。
 
 ### Qt 模块缺失
 
@@ -159,8 +149,8 @@ undefined reference to stub_ext::freeWrapper
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `QTAG_MCP_URL` | `http://10.8.12.80:13626/mcp` | 远端 MCP HTTP 端点，`mcp-scan.py` 使用 |
-| `QTAG_CBM_INSTALL_URL` | GitHub 官方 install.sh | codebase-memory-mcp 安装脚本 URL，内网可设为镜像 |
+| `QTAG_MCP_URL` | `https://codegraph.uniontech.com/api/mcp` | GitNexus MCP HTTP 端点，`mcp-scan.py` 使用 |
+| `QTAG_MCP_HEADERS` | 内置 Basic 认证头 | 额外请求头（JSON 字符串），与 `QTAG_MCP_API_KEY` 二选一 |
+| `QTAG_MCP_API_KEY` | _(空)_ | `X-API-Key` 认证头 |
 | `QTAG_PROXY` | `http://proxy02.uniontech.com:3128` | HTTP/HTTPS 代理地址 |
 | `QTAG_GIT_EMAIL` | `autotest@uniontech.com` | 自动提交 git 回退邮箱 |
-| `CBM_INSTALL_SHA256` | _(空)_ | install.sh SHA256 校验值，设置后启用完整性校验 |

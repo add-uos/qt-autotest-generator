@@ -2,12 +2,12 @@
 
 # Qt Autotest Generator
 
-> Qt CMake 项目单元测试自动生成：基于 codebase-memory-mcp 知识图谱，**函数重要性探测**（Mode 1）、**按分级补全 GTest 用例**（Mode 2，编译验证+覆盖率门禁+更新 usecase_count）、**覆盖率采集与汇总**（Mode 3，一条命令出分级报告）、**变异测试**（Mode 4，可选，验证测试有效性）、**源码缺陷导出**（Mode 5，可选，用例级缺陷标红清单）。
+> Qt CMake 项目单元测试自动生成：基于 GitNexus 代码图谱 MCP，**开发预检**（Mode 0，可选）、**函数重要性探测**（Mode 1）、**按分级补全 GTest 用例**（Mode 2，编译验证+覆盖率门禁+更新 usecase_count）、**覆盖率采集与汇总**（Mode 3，一条命令出分级报告）、**变异测试**（Mode 4，可选，验证测试有效性）、**源码缺陷导出**（Mode 5，可选，用例级缺陷标红清单）、**测试质量审查**（Mode 6，只读）、**技能复盘**（Mode 7，问题沉淀与迭代）。
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://isocpp.org/)
 [![Google Test](https://img.shields.io/badge/Google%20Test-required-green.svg)](https://github.com/google/googletest)
-[![codebase-memory-mcp](https://img.shields.io/badge/codebase--memory--mcp-%3E%3D0.8.0-orange.svg)](https://github.com/DeusData/codebase-memory-mcp)
+[![GitNexus](https://img.shields.io/badge/GitNexus-MCP-orange.svg)](references/gitnexus-guide.md)
 
 <br>
 
@@ -27,7 +27,7 @@ Qt 项目代码量大，**单测覆盖率上不去**？<br>
 
 不是不想写测试，是写不过来：类太多、方法太多、依赖太复杂、stub 太难配。手动写一个类的测试要半天，50 个类就是一个月。改了源码还得手动对账哪些测试要更新。
 
-本技能把这一环打通：基于 codebase-memory-mcp 知识图谱批量分析类结构、自动追踪依赖、按复杂度规划用例数、生成 Google Test 代码、强制编译验证、覆盖率自检、生成报告。源码变更后自动对账，只补缺失的、只修失败的。让真正干活的人，也能把测试覆盖率提上去。
+本技能把这一环打通：基于 GitNexus 代码图谱批量分析类结构、自动追踪依赖、按复杂度规划用例数、生成 Google Test 代码、强制编译验证、覆盖率自检、生成报告。源码变更后自动对账，只补缺失的、只修失败的。让真正干活的人，也能把测试覆盖率提上去。
 
 ---
 
@@ -42,11 +42,11 @@ Qt 项目代码量大，**单测覆盖率上不去**？<br>
 <tr><th align="left" nowrap width="1%">能力</th><th align="left">说明</th></tr>
 </thead>
 <tbody>
-<tr><td nowrap width="1%"><strong>六模式架构</strong></td><td><strong>Mode 0</strong>（开发预检，可选）：本地开发场景（有未 push 代码）显式使用本地图谱，完成提供方锁定与索引同步。<strong>Mode 1</strong>（函数重要性探测）：全量扫描知识图谱，多因子评分，产出 <code>.ut-inventory.json</code> 分级表。<strong>Mode 2</strong>（单元测试生成）：读取分级表，按 high→mid→low 优先级逐类生成 GTest 用例，编译验证+覆盖率门禁。Mode 2 启动时若 inventory 不存在则自动触发 Mode 1。<strong>Mode 3</strong>（覆盖率采集与汇总）：一条命令采集 gtest XML + lcov HTML + 分级覆盖率 + 汇总 JSON，不生成测试代码。<strong>Mode 4</strong>（变异测试，可选）：对 high 级方法注入变异体，计算变异得分验证测试有效性，退出 <code>git diff</code> 必为空。<strong>Mode 5</strong>（源码缺陷导出，可选）：用例级缺陷持久化到 <code>.ut-defects.json</code>（不入 git），按需导出 <code>defects-summary.md</code> 标红清单 + <code>defects.json</code>。</td></tr>
-<tr><td nowrap width="1%"><strong>知识图谱驱动</strong></td><td>基于 codebase-memory-mcp 知识图谱毫秒级拉取类结构、方法签名、调用链、依赖关系；硬门禁，无图谱不执行。<strong>支持两种提供方：远端（<code>remote-codebase-memory-mcp</code>，Mode 1-5 唯一）与本地（仅 Mode 0 显式进入），互斥使用、失败硬终止不回退</strong></td></tr>
+<tr><td nowrap width="1%"><strong>八模式架构</strong></td><td><strong>Mode 0</strong>（开发预检，可选）：list_repos 索引确认 + 本地检出校验 + <code>check_drift</code> 漂移检查。<strong>Mode 1</strong>（函数重要性探测）：全量扫描知识图谱，多因子评分，产出 <code>.ut-inventory.json</code> 分级表。<strong>Mode 2</strong>（单元测试生成）：读取分级表，按 high→mid→low 优先级逐类生成 GTest 用例，编译验证+覆盖率门禁。Mode 2 启动时若 inventory 不存在则自动触发 Mode 1。<strong>Mode 3</strong>（覆盖率采集与汇总）：一条命令采集 gtest XML + lcov HTML + 分级覆盖率 + 汇总 JSON，不生成测试代码。<strong>Mode 4</strong>（变异测试，可选）：对 high 级方法注入变异体，计算变异得分验证测试有效性，退出 <code>git diff</code> 必为空。<strong>Mode 5</strong>（源码缺陷导出，可选）：用例级缺陷持久化到 <code>.ut-defects.json</code>（不入 git），按需导出 <code>defects-summary.md</code> 标红清单 + <code>defects.json</code>。<strong>Mode 6</strong>（测试质量审查，只读）：审查已有/他人提交的测试。<strong>Mode 7</strong>（技能复盘）：实战问题沉淀到 backlog，驱动文档/规则/脚本迭代。</td></tr>
+<tr><td nowrap width="1%"><strong>知识图谱驱动</strong></td><td>基于 GitNexus 代码图谱 MCP 毫秒级拉取类结构、方法签名、调用链、依赖关系；硬门禁，无图谱不执行。<strong>GitNexus 单栈唯一后端，无本地索引概念：仓库由平台统一索引，端点不可用或项目未索引一律硬终止不回退</strong></td></tr>
 <tr><td nowrap width="1%"><strong>框架搭建</strong></td><td>自动创建 <code>{test_dir}/</code> 目录（默认 <code>autotests/</code>，若项目已有 <code>tests/</code> 则沿用）：CMake 配置、stub-ext、测试运行脚本、报告生成器</td></tr>
 <tr><td nowrap width="1%"><strong>逐类生成</strong></td><td>按复杂度规划用例数（高复杂度多写边界+异常），AAA 模式，<code>{Feature}_{Scenario}_{ExpectedResult}</code> 命名</td></tr>
-<tr><td nowrap width="1%"><strong>依赖追踪</strong></td><td>MCP <code>trace_path</code> 自动追踪出向调用链，按决策矩阵决定 stub 哪些依赖、编入哪些源码目录</td></tr>
+<tr><td nowrap width="1%"><strong>依赖追踪</strong></td><td>图谱调用链追踪（<code>trace_path</code>）自动追踪出向调用链，按决策矩阵决定 stub 哪些依赖、编入哪些源码目录</td></tr>
 <tr><td nowrap width="1%"><strong>强制验证</strong></td><td>编译+运行必须通过才报完成；失败自动分类修复，重试预算内尽力修</td></tr>
 <tr><td nowrap width="1%"><strong>覆盖率自检</strong></td><td>有 <code>.ut-inventory.json</code> 时按方法分级设差异化门禁（high 行90%+分支80%+函数100%，⚖mid 行60%+函数100%，💤low 行60%+函数100%）；无时回退单一门禁（默认 90%）。低于阈值触发自动补全</td></tr>
 <tr><td nowrap width="1%"><strong>增量对账</strong></td><td>源码变更后自动 diff，只补新增方法、只修签名变更、只清理已删方法引用</td></tr>
@@ -80,7 +80,7 @@ Claude Code、Cursor、opencode 等兼容 AgentSkills 的客户端，具体落�
 | CMake | >= 3.16 | 构建系统 |
 | Qt | 5 或 6 | Core + Widgets 模块 |
 | Google Test | 任意 | `libgtest-dev` 或源码编译 |
-| codebase-memory-mcp | >= 0.8.0 | 知识图谱 MCP。远端实例 `remote-codebase-memory-mcp`（Mode 1-5 唯一，须已索引本项目）；本地实例仅经 Mode 0 显式使用（由 `setup-codebase-memory.sh` 安装） |
+| GitNexus 代码图谱 MCP | - | 知识图谱后端，**唯一**数据面。端点经 <code>QTAG_MCP_URL</code> 等环境变量配置，项目须已在平台索引（详见 [INSTALL.md](INSTALL.md)） |
 | Python | >= 3.8 | 覆盖率采集脚本（仅用标准库） |
 | gcc/g++ | 支持 C++17 | 编译器 |
 
@@ -124,10 +124,10 @@ Claude Code、Cursor、opencode 等兼容 AgentSkills 的客户端，具体落�
 - [技能入口与工作流](SKILL.md)
 - [详细安装说明](INSTALL.md)
 - [Inventory JSON 结构](references/inventory-schema.md)
-- [MCP 提供方解析指南](references/mcp-providers.md)
+- [GitNexus 单栈说明（原 MCP 提供方解析）](references/mcp-providers.md)
 - [覆盖率分级门禁](references/coverage-tiers.md)
 - [对账逻辑](references/reconcile-logic.md)
-- [codebase-memory-mcp 使用指南](references/codebase-memory-guide.md)
+- [GitNexus MCP 使用指南](references/gitnexus-guide.md)
 - [单元测试用例设计方法论](references/test-types.md)
 - [示例项目](examples/README.md)
 
